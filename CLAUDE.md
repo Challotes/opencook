@@ -63,6 +63,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 - `src/components/PassphrasePrompt.tsx` — Reusable passphrase input with hint display
 - `src/components/UpgradeModal.tsx` — Security upgrade modal (passphrase encryption + migration)
 - `src/components/ChangePassphraseModal.tsx` — Change passphrase flow (verify → new → backup)
+- `src/components/MoveAddressModal.tsx` — Wizard modal for "Move to a new address" (key rotation + confirmed-only sweep + on-chain migration)
 - `src/components/AnimatedBalance.tsx` — Animated balance counter (count-up, green flash)
 - `src/components/EarningsSparkline.tsx` — Step-function area chart (pure SVG)
 - `src/components/icons/BootIcon.tsx` — Boot emoji icon

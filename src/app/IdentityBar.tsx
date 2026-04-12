@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatedBalance } from "@/components/AnimatedBalance";
 import { ChangePassphraseModal } from "@/components/ChangePassphraseModal";
 import { EarningsSparkline } from "@/components/EarningsSparkline";
+import { MoveAddressModal } from "@/components/MoveAddressModal";
 import { PassphrasePrompt } from "@/components/PassphrasePrompt";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useIdentityContext } from "@/contexts/IdentityContext";
@@ -100,6 +101,18 @@ export function IdentityChip(): React.JSX.Element | null {
   const [showDeposit, setShowDeposit] = useState(false);
   // Manage identity modal
   const [showManage, setShowManage] = useState(false);
+
+  // Reset Wallet flow — confirmation inline, then MoveAddressModal handles the wizard
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetError, setResetError] = useState("");
+  // Inline re-auth for the Move flow — shows passphrase prompt IN the confirmation
+  // block instead of spawning a disconnected modal elsewhere.
+  const [resetInlineAuth, setResetInlineAuth] = useState(false);
+  const [resetAuthError, setResetAuthError] = useState("");
+  const [resetAuthLoading, setResetAuthLoading] = useState(false);
+  // Move Address Modal
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [movePassphrase, setMovePassphrase] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -203,16 +216,17 @@ export function IdentityChip(): React.JSX.Element | null {
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e: MouseEvent) {
-      // Don't close the dropdown if the upgrade modal is open — the modal renders
-      // outside dropdownRef so every click inside it would otherwise trigger this.
-      if (showUpgradeModal || showChangePassModal) return;
+      // Don't close the dropdown if the upgrade modal or move modal is open — those
+      // modals render outside dropdownRef so every click inside them would otherwise
+      // trigger this handler.
+      if (showUpgradeModal || showChangePassModal || showMoveModal) return;
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         closeDropdown();
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open, showUpgradeModal, showChangePassModal, closeDropdown]);
+  }, [open, showUpgradeModal, showChangePassModal, showMoveModal, closeDropdown]);
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -226,6 +240,10 @@ export function IdentityChip(): React.JSX.Element | null {
     setPasteKeyValue("");
     resetImport();
     setImportSuccess(false);
+    setShowResetConfirm(false);
+    setResetError("");
+    setResetInlineAuth(false);
+    setResetAuthError("");
   }
 
   function closeManageModal() {
@@ -407,6 +425,16 @@ export function IdentityChip(): React.JSX.Element | null {
   function openUpgradeModal(): void {
     setShowUpgradeModal(true);
     resetImport();
+  }
+
+  function openMoveModal(pass: string): void {
+    setShowResetConfirm(false);
+    setResetError("");
+    setResetInlineAuth(false);
+    setResetAuthError("");
+    setMovePassphrase(pass);
+    setOpen(false);
+    setShowMoveModal(true);
   }
 
   async function doImport(wif: string, name?: string): Promise<void> {
@@ -728,6 +756,23 @@ export function IdentityChip(): React.JSX.Element | null {
         }}
         currentIdentity={identity}
       />
+      {showMoveModal && identity && (
+        <MoveAddressModal
+          identity={identity}
+          isProtected={isProtected}
+          passphrase={movePassphrase}
+          onComplete={(newIdentity) => {
+            updateIdentity(newIdentity);
+            setIsProtected(false);
+            localStorage.removeItem(BACKED_UP_KEY);
+            setBackedUp(false);
+          }}
+          onClose={() => {
+            setShowMoveModal(false);
+            setMovePassphrase("");
+          }}
+        />
+      )}
       {showDeposit && identity && (
         <FundAddress
           address={identity.address}
@@ -1060,6 +1105,131 @@ export function IdentityChip(): React.JSX.Element | null {
                     )}
                     {importSuccess && (
                       <p className="text-[11px] text-emerald-400 font-medium">Identity restored.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Move to a new address */}
+                {!showResetConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowResetConfirm(true);
+                      setResetError("");
+                    }}
+                    disabled={!identity}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left disabled:opacity-40"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                      className="text-zinc-600 shrink-0"
+                    >
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-zinc-200 block">
+                        Move to a new address
+                      </span>
+                      <span className="text-[10px] text-zinc-500 block mt-0.5">
+                        Rotate to a new address. Your name, earnings, and posts stay intact.
+                      </span>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="px-4 py-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-zinc-200">
+                        Move to a new address
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowResetConfirm(false);
+                          setResetError("");
+                          setResetInlineAuth(false);
+                          setResetAuthError("");
+                        }}
+                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-amber-400/80 leading-relaxed">
+                      Rotates your identity to a new BSV address. Your name, posts, earnings
+                      history, and future payouts follow the new key via an on-chain migration.
+                      Confirmed funds will be swept over; unconfirmed UTXOs stay at the old address
+                      until the mempool clears.
+                    </p>
+                    {resetError && (
+                      <p className="text-[11px] text-red-400 leading-relaxed">{resetError}</p>
+                    )}
+                    {resetInlineAuth ? (
+                      <PassphrasePrompt
+                        context="Enter your passphrase to move to a new address."
+                        error={resetAuthError}
+                        loading={resetAuthLoading}
+                        onConfirm={async (pass) => {
+                          setResetAuthLoading(true);
+                          setResetAuthError("");
+                          try {
+                            const unlocked = await unlockIdentity(pass);
+                            if (!unlocked) {
+                              setResetAuthError("Wrong passphrase");
+                              setResetAuthLoading(false);
+                              return;
+                            }
+                            setResetAuthLoading(false);
+                            openMoveModal(pass);
+                          } catch {
+                            setResetAuthError("Something went wrong — try again");
+                            setResetAuthLoading(false);
+                          }
+                        }}
+                        onCancel={() => {
+                          setResetInlineAuth(false);
+                          setResetAuthError("");
+                        }}
+                        confirmLabel="Continue"
+                        hint={storedHint}
+                      />
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowResetConfirm(false);
+                            setResetError("");
+                            setResetInlineAuth(false);
+                            setResetAuthError("");
+                          }}
+                          className="flex-1 bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-700 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isProtected && !isRecentlyAuthed()) {
+                              setResetInlineAuth(true);
+                              setResetAuthError("");
+                            } else {
+                              openMoveModal(reAuthPassphraseRef.current);
+                            }
+                          }}
+                          className="flex-1 bg-amber-500/10 text-amber-400 border border-amber-500/40 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+                        >
+                          Move to new address
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}

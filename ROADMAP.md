@@ -191,6 +191,11 @@
 - [x] SECURITY_AUDIT.md: C9 promoted to FIXED, H2 to PARTIAL, C3 index description corrected, M2 corrected to PARTIAL
 - [x] Rate limit added to /api/posts (120/min/IP — was the only unprotected route)
 - [x] ROADMAP.md, FAIRNESS.md, DECISIONS.md dates updated
+- [x] Boot button 3-second throttle (BootContext) — prevents rapid-click cascade
+- [x] "Move to a new address" wizard (MoveAddressModal) — 4-stage auto-advancing modal replacing inline dropdown flow. Downloads old key backup, sweeps confirmed UTXOs via WoC, records on-chain migration, deferred localStorage commit.
+- [x] Deferred commit in resetIdentity — prevents stranding funds if sweep/migration fails partway
+- [x] Client-side broadcaster routing: ARC for boots (structured errors), WoC for sweeps/consolidation (reliability + lower fees)
+- [x] Sweep warning UI when fund transfer fails (non-blocking, shows in Stage 2 + Stage 4 summary)
 
 ## Phase 6.5: UX Polish — PLANNED
 
@@ -199,6 +204,11 @@
 - [ ] Deploy to Railway + custom domain
 - [x] Agent chat: dynamic MD loading (reads project MDs at request time, always current)
 - [ ] Agent chat: DB query tools (live oracle — real post counts, contributor stats, boot prices)
+
+## Tech Debt — TRACKED
+
+- [ ] **IndexedDB source-tx cache** for `client-boot.ts` — source txs are immutable, an IndexedDB cache (infinite TTL) would eliminate the WoC rate-limit problem, the batching workaround, and several error paths. Enables removal of: optimistic blacklist on boots (#5), confirmed-only filter on consolidation (#7), inter-batch delays. Estimated reduction: ~780 lines → ~250 lines.
+- [ ] **Refactor `clientSideBoot` + `consolidateUtxos`** after IndexedDB cache lands. Current state has asymmetric blacklisting rules and three duplicate broadcast-result classification blocks. Architecture review (2026-04-11) flagged as frankenstein — should be a clean rewrite, not incremental patches.
 
 ## Phase 7: The Recursive Model — PLANNED
 

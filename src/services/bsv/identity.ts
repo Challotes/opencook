@@ -293,7 +293,8 @@ async function autoTransferFunds(
       `[BSVibes] autoTransferFunds: spending ${utxos.length} inputs, total ${totalSats} sats`
     );
 
-    const { Transaction, PrivateKey, P2PKH, SatoshisPerKilobyte } = await getBsvSdk();
+    const { Transaction, PrivateKey, P2PKH, SatoshisPerKilobyte, WhatsOnChainBroadcaster } =
+      await getBsvSdk();
     const oldKey = PrivateKey.fromWif(oldWif);
 
     // Fetch source tx hexes in batches to respect WoC rate limit
@@ -323,11 +324,21 @@ async function autoTransferFunds(
       change: true,
     });
 
-    await tx.fee(new SatoshisPerKilobyte(100));
+    // WhatsOnChainBroadcaster — same rationale as sweepConfirmedFunds.
+    // ARC (SDK default) has browser-specific reliability issues.
+    await tx.fee(new SatoshisPerKilobyte(10));
     await tx.sign();
 
     console.log(`[BSVibes] autoTransferFunds: broadcasting tx with ${utxos.length} inputs`);
-    const broadcastResult = await tx.broadcast();
+    const woc = new WhatsOnChainBroadcaster("main");
+    let broadcastResult: Awaited<ReturnType<typeof tx.broadcast>>;
+    try {
+      broadcastResult = await tx.broadcast(woc);
+    } catch (networkError) {
+      const msg = `Network error: ${networkError instanceof Error ? networkError.message : String(networkError)}`;
+      console.error(`[BSVibes] autoTransferFunds: ${msg}`);
+      return { txid: null, transferredSats: 0, error: msg };
+    }
 
     if (broadcastResult.status === "success") {
       const txid = tx.id("hex") as string;
@@ -445,6 +456,228 @@ export async function upgradeIdentity(
       migrationSignature,
     },
     fundTransfer,
+  };
+}
+
+/**
+ * Sweep CONFIRMED-only funds from old address to new address.
+ * Same as autoTransferFunds but filters to height > 0 UTXOs only,
+ * leaving phantom unconfirmed UTXOs behind.
+ */
+async function sweepConfirmedFunds(
+  oldWif: string,
+  oldAddress: string,
+  newAddress: string
+): Promise<{ txid: string | null; transferredSats: number; error?: string }> {
+  const WOC_BASE = "https://api.whatsonchain.com/v1/bsv/main";
+
+  try {
+    console.log(`[BSVibes] sweepConfirmedFunds: fetching UTXOs for ${oldAddress}`);
+
+    const utxoRes = await fetch(`${WOC_BASE}/address/${oldAddress}/unspent`);
+    if (!utxoRes.ok) {
+      const msg = `UTXO fetch failed: HTTP ${utxoRes.status} for ${oldAddress}`;
+      console.error(`[BSVibes] sweepConfirmedFunds: ${msg}`);
+      return { txid: null, transferredSats: 0, error: msg };
+    }
+
+    const utxoData = await utxoRes.json();
+    if (!Array.isArray(utxoData) || utxoData.length === 0) {
+      console.log(
+        `[BSVibes] sweepConfirmedFunds: no UTXOs found at ${oldAddress} — nothing to transfer`
+      );
+      return { txid: null, transferredSats: 0 };
+    }
+
+    const allUtxos = utxoData as Array<{
+      tx_pos: number;
+      tx_hash: string;
+      value: number;
+      height: number;
+    }>;
+
+    const unconfirmedCount = allUtxos.filter((u) => u.height === 0).length;
+    if (unconfirmedCount > 0) {
+      console.log(
+        `[BSVibes] sweepConfirmedFunds: excluding ${unconfirmedCount} unconfirmed UTXO(s) (height=0) — these are likely phantom UTXOs causing the stuck wallet`
+      );
+    }
+
+    const utxos = allUtxos
+      .filter((u) => u.height > 0)
+      .map((u) => ({ tx_hash: u.tx_hash, tx_pos: u.tx_pos, value: u.value }));
+
+    if (utxos.length === 0) {
+      console.log(
+        `[BSVibes] sweepConfirmedFunds: no confirmed UTXOs after filtering — starting fresh on new address`
+      );
+      return { txid: null, transferredSats: 0 };
+    }
+
+    const totalSats = utxos.reduce((sum, u) => sum + u.value, 0);
+    if (totalSats === 0) {
+      return { txid: null, transferredSats: 0 };
+    }
+
+    console.log(
+      `[BSVibes] sweepConfirmedFunds: spending ${utxos.length} confirmed inputs, total ${totalSats} sats`
+    );
+
+    const { Transaction, PrivateKey, P2PKH, SatoshisPerKilobyte, WhatsOnChainBroadcaster } =
+      await getBsvSdk();
+    const oldKey = PrivateKey.fromWif(oldWif);
+
+    const txHashes = utxos.map((u) => u.tx_hash);
+    console.log(
+      `[BSVibes] sweepConfirmedFunds: fetching ${new Set(txHashes).size} unique source txs via proxy`
+    );
+    const sourceTxHexMap = await fetchSourceTxsBatched(txHashes, WOC_BASE);
+
+    const tx = new Transaction();
+
+    for (const utxo of utxos) {
+      const hex = sourceTxHexMap.get(utxo.tx_hash);
+      if (!hex) throw new Error(`Missing source tx hex for ${utxo.tx_hash}`);
+      const sourceTx = Transaction.fromHex(hex);
+      tx.addInput({
+        sourceTransaction: sourceTx,
+        sourceOutputIndex: utxo.tx_pos,
+        unlockingScriptTemplate: new P2PKH().unlock(oldKey),
+      });
+    }
+
+    tx.addOutput({
+      lockingScript: new P2PKH().lock(newAddress),
+      change: true,
+    });
+
+    // WhatsOnChainBroadcaster at 10 sat/kb — same strategy as consolidateUtxos.
+    // ARC (the SDK default) has been unreliable from the browser (connection
+    // timeouts, CORS overhead). Sweep is a simple self-transfer that uses none
+    // of ARC's structured error features. WoC relays directly to miners.
+    await tx.fee(new SatoshisPerKilobyte(10));
+    await tx.sign();
+
+    console.log(
+      `[BSVibes] sweepConfirmedFunds: broadcasting tx with ${utxos.length} confirmed inputs`
+    );
+    const woc = new WhatsOnChainBroadcaster("main");
+    let broadcastResult: Awaited<ReturnType<typeof tx.broadcast>>;
+    try {
+      broadcastResult = await tx.broadcast(woc);
+    } catch (networkError) {
+      const msg = `Network error: ${networkError instanceof Error ? networkError.message : String(networkError)}`;
+      console.error(`[BSVibes] sweepConfirmedFunds: ${msg}`);
+      return { txid: null, transferredSats: 0, error: msg };
+    }
+
+    if (broadcastResult.status === "success") {
+      const txid = tx.id("hex") as string;
+      console.log(
+        `[BSVibes] sweepConfirmedFunds: SUCCESS — transferred ${totalSats} sats. txid: ${txid}`
+      );
+      return { txid, transferredSats: totalSats };
+    }
+
+    const broadcastError = `Broadcast failed: ${
+      typeof broadcastResult === "object"
+        ? JSON.stringify(broadcastResult)
+        : String(broadcastResult)
+    }`;
+    console.error(`[BSVibes] sweepConfirmedFunds: ${broadcastError}`);
+    return { txid: null, transferredSats: 0, error: broadcastError };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[BSVibes] sweepConfirmedFunds: exception —", msg, e);
+    return { txid: null, transferredSats: 0, error: msg };
+  }
+}
+
+/**
+ * Reset identity: generate a fresh keypair, sweep CONFIRMED-only funds to the
+ * new address, and store the new identity as plaintext (no passphrase required).
+ *
+ * This is a recovery escape hatch for wallets stuck due to phantom unconfirmed
+ * UTXOs (orphan-mempool state poisoning). Encrypted users are reset to plaintext
+ * — they can re-upgrade afterwards.
+ */
+export async function resetIdentity(
+  currentWif: string,
+  currentName: string,
+  options?: { deferCommit?: boolean }
+): Promise<{
+  identity: Identity;
+  migration: {
+    oldPubkey: string;
+    newPubkey: string;
+    migrationMessage: string;
+    migrationSignature: string;
+  };
+  fundTransfer: {
+    txid: string | null;
+    transferredSats: number;
+    error?: string;
+  };
+  commit: () => void;
+}> {
+  const { PrivateKey } = await getBsvSdk();
+
+  // Generate new keypair
+  const newKey = PrivateKey.fromRandom();
+  const newWif = newKey.toWif();
+  const newAddress = newKey.toPublicKey().toAddress().toString();
+  const newPubkey = newKey.toPublicKey().toString();
+
+  // Old key signs migration message
+  const oldKey = PrivateKey.fromWif(currentWif);
+  const oldPubkey = oldKey.toPublicKey().toString();
+  const oldAddress = oldKey.toPublicKey().toAddress().toString();
+
+  const migrationMessage = JSON.stringify({
+    app: "bsvibes",
+    type: "migration",
+    from_pubkey: oldPubkey,
+    to_pubkey: newPubkey,
+    ts: Date.now(),
+  });
+
+  const msgBytes = Array.from(new TextEncoder().encode(migrationMessage));
+  const sig = oldKey.sign(msgBytes);
+  const migrationSignature = sig.toDER("hex") as string;
+
+  // Sweep confirmed-only funds (leaves phantom UTXOs behind)
+  const fundTransfer = await sweepConfirmedFunds(currentWif, oldAddress, newAddress);
+
+  const identity: Identity = { name: currentName, address: newAddress, wif: newWif };
+
+  // Deferred commit: caller invokes commit() only after all downstream steps
+  // (migrateIdentity, etc.) succeed. Prevents the bug where localStorage
+  // updates to the new key but the sweep/migration failed — stranding funds.
+  const commit = () => {
+    const store: StoredIdentity = { wif: newWif, name: currentName, address: newAddress };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      localStorage.removeItem(ENCRYPTED_KEY);
+    } catch (err) {
+      console.warn("[BSVibes] resetIdentity commit failed", err);
+    }
+    _sessionIdentity = identity;
+    _cachedWif = newWif;
+    _cachedPrivateKey = newKey;
+  };
+
+  if (!options?.deferCommit) commit();
+
+  return {
+    identity,
+    migration: {
+      oldPubkey,
+      newPubkey,
+      migrationMessage,
+      migrationSignature,
+    },
+    fundTransfer,
+    commit,
   };
 }
 

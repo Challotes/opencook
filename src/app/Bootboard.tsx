@@ -41,14 +41,15 @@ function HistoryRow({
   onFundNeeded?: (address: string, balance?: number) => void;
 }) {
   const { identity } = useIdentityContext();
-  const { bootingPostId } = useBootContext();
+  const { bootingPostId, throttled } = useBootContext();
   const { boot } = useBoot({ onBooted, onFundNeeded });
 
   const isThisBooting = bootingPostId === entry.post_id;
   const anyBooting = bootingPostId !== null;
+  const isBlocked = anyBooting || throttled;
 
   function handleReboot() {
-    if (!identity || anyBooting) return;
+    if (!identity || isBlocked) return;
     boot(entry.post_id, identity);
   }
 
@@ -57,11 +58,11 @@ function HistoryRow({
       <button
         type="button"
         onClick={handleReboot}
-        disabled={anyBooting || !identity}
+        disabled={isBlocked || !identity}
         className={`shrink-0 flex items-center rounded-full px-1 py-0.5 transition-all disabled:cursor-not-allowed border ${
           isThisBooting
             ? "text-amber-400 border-amber-500/40"
-            : anyBooting
+            : isBlocked
               ? "opacity-50 text-zinc-600 border-zinc-800"
               : "text-zinc-600 border-zinc-800 hover:border-zinc-700 hover:text-amber-400 hover:bg-zinc-800/50 disabled:opacity-30"
         }`}

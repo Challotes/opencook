@@ -8,6 +8,8 @@ interface BootContextValue {
   bootingPostId: number | null;
   bootStatus: BootStatus;
   bootError: string | null;
+  /** Whether the throttle is currently active (boots disabled) */
+  throttled: boolean;
   /** Call when a boot starts — claims the global lock */
   claimBoot: (postId: number) => boolean;
   /** Update status while a boot is in progress */
@@ -21,14 +23,29 @@ interface BootContextValue {
   dismissConsolidationWarning: () => void;
 }
 
+/** Cooldown after each boot. Eliminates rapid-click edge cases (orphan races,
+ *  mempool conflicts, double-spend attempts) at zero code complexity. */
+const BOOT_THROTTLE_MS = 3000;
+
 const BootContext = createContext<BootContextValue | null>(null);
 
 export function BootProvider({ children }: { children: React.ReactNode }) {
   const [bootingPostId, setBootingPostId] = useState<number | null>(null);
   const [bootStatus, setBootStatus] = useState<BootStatus>("idle");
   const [bootError, setBootError] = useState<string | null>(null);
+  const [throttled, setThrottled] = useState(false);
   const [consolidationWarningDismissed, setConsolidationWarningDismissed] = useState(false);
   const failTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startThrottle = useCallback(() => {
+    setThrottled(true);
+    if (throttleTimerRef.current) clearTimeout(throttleTimerRef.current);
+    throttleTimerRef.current = setTimeout(() => {
+      setThrottled(false);
+      throttleTimerRef.current = null;
+    }, BOOT_THROTTLE_MS);
+  }, []);
 
   const claimBoot = useCallback((postId: number): boolean => {
     // Reject if another boot is already running
@@ -36,8 +53,6 @@ export function BootProvider({ children }: { children: React.ReactNode }) {
       if (prev !== null) return prev; // no change — already claimed
       return postId;
     });
-    // We need to read the value synchronously — use a ref approach via the setter result
-    // React state updates are async, so we track claim success via a ref
     return true; // caller checks bootingPostId before calling
   }, []);
 
@@ -53,19 +68,24 @@ export function BootProvider({ children }: { children: React.ReactNode }) {
     setBootingPostId(null);
     setBootStatus("idle");
     setBootError(null);
-  }, []);
+    startThrottle();
+  }, [startThrottle]);
 
-  const failBoot = useCallback((message: string) => {
-    setBootStatus("failed");
-    setBootError(message);
-    setBootingPostId(null);
-    if (failTimerRef.current) clearTimeout(failTimerRef.current);
-    failTimerRef.current = setTimeout(() => {
-      setBootStatus("idle");
-      setBootError(null);
-      failTimerRef.current = null;
-    }, 5000);
-  }, []);
+  const failBoot = useCallback(
+    (message: string) => {
+      setBootStatus("failed");
+      setBootError(message);
+      setBootingPostId(null);
+      if (failTimerRef.current) clearTimeout(failTimerRef.current);
+      failTimerRef.current = setTimeout(() => {
+        setBootStatus("idle");
+        setBootError(null);
+        failTimerRef.current = null;
+      }, 5000);
+      startThrottle();
+    },
+    [startThrottle]
+  );
 
   const dismissConsolidationWarning = useCallback(() => {
     setConsolidationWarningDismissed(true);
@@ -77,6 +97,7 @@ export function BootProvider({ children }: { children: React.ReactNode }) {
         bootingPostId,
         bootStatus,
         bootError,
+        throttled,
         claimBoot,
         setStatus,
         releaseBoot,

@@ -512,8 +512,26 @@ async function _clientSideBootInner(
       };
     }
 
-    if (broadcastResult.status === "success") {
+    // Detect "txn-already-known" (code 257): our exact tx is already in the
+    // mempool from a prior submission. Deterministic signing means the txid
+    // matches, so this is OUR tx — treat as success. Exclude "conflict" (258)
+    // which means a DIFFERENT tx spent our inputs first.
+    const desc = (
+      (broadcastResult as { description?: string }).description ?? JSON.stringify(broadcastResult)
+    ).toLowerCase();
+    const alreadyKnown =
+      broadcastResult.status !== "success" &&
+      !desc.includes("conflict") &&
+      (desc.includes("257") ||
+        desc.includes("already-known") ||
+        desc.includes("already in the mempool") ||
+        desc.includes("already known"));
+
+    if (broadcastResult.status === "success" || alreadyKnown) {
       const txid = tx.id("hex") as string;
+      if (alreadyKnown) {
+        console.log(`[clientSideBoot] Already in mempool (idempotent success): ${txid}`);
+      }
 
       // ── 0-conf chain: register change as immediately spendable ─
       if (hasChangeOutput) {
@@ -688,11 +706,31 @@ export async function consolidateUtxos(
       };
     }
 
-    if (broadcastResult.status === "success") {
-      const txid = tx.id("hex") as string;
-      console.log(`[consolidateUtxos] Success: ${spendable.length} UTXOs → 1, txid=${txid}`);
+    // Detect "txn-already-known" (code 257) — our exact tx already in mempool
+    // from a prior submission. Deterministic signing means matching txid = our tx.
+    // Exclude "conflict" (258) which means a DIFFERENT tx spent our inputs.
+    const desc = (
+      (broadcastResult as { description?: string }).description ?? JSON.stringify(broadcastResult)
+    ).toLowerCase();
+    const alreadyKnown =
+      broadcastResult.status !== "success" &&
+      !desc.includes("conflict") &&
+      (desc.includes("257") ||
+        desc.includes("already-known") ||
+        desc.includes("already in the mempool") ||
+        desc.includes("already known"));
 
-      // Only blacklist on success — safe because the tx is confirmed in mempool
+    if (broadcastResult.status === "success" || alreadyKnown) {
+      const txid = tx.id("hex") as string;
+      if (alreadyKnown) {
+        console.log(
+          `[consolidateUtxos] Already in mempool (idempotent success): ${spendable.length} UTXOs → 1, txid=${txid}`
+        );
+      } else {
+        console.log(`[consolidateUtxos] Success: ${spendable.length} UTXOs → 1, txid=${txid}`);
+      }
+
+      // Blacklist on success (or already-known) — tx is in the mempool
       for (const utxo of spendable) {
         _spent.add(utxoKey(utxo.tx_hash, utxo.tx_pos));
       }

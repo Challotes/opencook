@@ -65,7 +65,7 @@ function BootButton({
   onFreeBootUsed,
 }: BootButtonProps) {
   const { identity } = useIdentityContext();
-  const { bootingPostId, bootStatus, consolidationWarningDismissed } = useBootContext();
+  const { bootingPostId, bootStatus, throttled, consolidationWarningDismissed } = useBootContext();
   const { boot } = useBoot({ onBooted, onFundNeeded, onFreeBootUsed });
   const [optimisticBoots, setOptimisticBoots] = useState(0);
 
@@ -80,8 +80,8 @@ function BootButton({
   const isThisBooting = bootingPostId === postId;
   // Is any boot in progress (including this one)?
   const anyBooting = bootingPostId !== null;
-  // Should this button be dimmed (another post is booting)?
-  const isDimmed = anyBooting && !isThisBooting;
+  // Should this button be dimmed (another post is booting OR throttled)?
+  const isDimmed = (anyBooting && !isThisBooting) || throttled;
 
   const showExtended =
     isThisBooting &&
@@ -91,7 +91,7 @@ function BootButton({
     isThisBooting && bootStatus === "preparing" && !consolidationWarningDismissed;
 
   async function handleBoot() {
-    if (!identity || !postPubkey || anyBooting) return;
+    if (!identity || !postPubkey || anyBooting || throttled) return;
 
     setOptimisticBoots((prev) => prev + 1);
     const result = await boot(postId, identity);
@@ -114,7 +114,7 @@ function BootButton({
       <button
         type="button"
         onClick={handleBoot}
-        disabled={anyBooting || !canBoot}
+        disabled={anyBooting || throttled || !canBoot}
         className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 transition-all border disabled:cursor-not-allowed ${
           isDimmed
             ? "opacity-50 text-zinc-600 border-zinc-800"

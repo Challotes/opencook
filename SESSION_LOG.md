@@ -2,6 +2,50 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-04-11 — Architecture Retrospective + Reset Wallet + Boot Throttle
+
+Category: bug fix, UX, retrospective
+
+Stopped digging. After 9 commits cascading through ORPHAN retries, dust threshold tuning, optimistic blacklisting, asymmetric reverts, confirmed-only filters, idempotent-broadcast handling, and a proposed 50-line DOUBLE_SPEND_ATTEMPTED handler, dispatched architecture-reviewer for an honest retrospective. Verdict was blunt: the necessary fixes were #1 (ORPHAN retry), #2 (dust 10→2), and #8 (already-known) — the rest was defense-in-paranoia patching damage created by earlier defensive layers. Each individual fix passed code review in isolation but the cumulative complexity grew into a frankenstein. The proposed DOUBLE_SPEND handler would have extended the pattern.
+
+Key insight: a single user wallet (1KPix...) ended up multi-hop poisoned by orphan-mempool ghosts from before any fixes existed. Code-level recovery is unreliable for that depth of contamination. The right fix isn't more error handling — it's an operational escape hatch.
+
+Shipped instead:
+1. **Reset Wallet button** — uses existing migration.ts pipeline to rotate to a fresh key, sweep confirmed UTXOs to the new address, abandon the poisoned old address. One click, fixes any user wallet that gets stuck.
+2. **3-second boot button throttle** — disables the boot button for 3s after each click in BootContext. Eliminates the entire "user clicks faster than network propagates" class of bugs (orphan races, mempool conflicts, double-spends) at zero code complexity.
+
+Rejected:
+- DOUBLE_SPEND_ATTEMPTED handler (50 lines, doesn't help current poisoned state, prevents bugs that upstream fixes already prevent)
+- Reverting #5 and #7 from prior commits — git history is already pushed, commits are intermingled with necessary fixes, reverts would add churn without fixing active bugs
+- Stepping back to a pre-saga commit and re-applying selectively — same intermingling problem, plus forces force-push which violates Hard Rule #1 on git
+
+Marked as tech debt in DECISIONS.md and ROADMAP.md (not removed, not bugs, just unnecessarily defensive):
+- #5 Optimistic UTXO blacklisting on boots — covers a 50ms window already serialized by the mutex
+- #7 Confirmed-only filter for consolidation — symptom patch for ghost UTXOs from prior crashes
+
+Future refactor (added to ROADMAP Tech Debt section):
+- IndexedDB source-tx cache (infinite TTL since source txs are immutable). Would eliminate WoC rate-limit batching workarounds AND let us remove #5 and #7 cleanly. Estimated: ~780 lines of client-boot.ts → ~250 lines.
+
+User's poisoned 1KPix wallet recovery path: click Reset Wallet button → key rotation → fresh address → working state restored. Old address abandoned with its phantom UTXOs (they'll drop from WoC's index in 24-48h naturally).
+
+Continued work (2026-04-11/12):
+
+**MoveAddressModal wizard** — replaced the inline dropdown reset flow with a proper full-screen centered modal (src/components/MoveAddressModal.tsx). 4-stage auto-advancing wizard: (1) Save old key backup, (2) Create new address + sweep confirmed funds, (3) Record on-chain migration, (4) Done summary. Progressive checklist — completed steps stay visible. Amber spinner on active stage. Error handling per-stage with retry/cancel. Backdrop not closeable during active operation. Designer-reviewed at every step: label changed from "Reset Wallet" to "Move to a new address", red→zinc color, amber confirmation button, inline re-auth for encrypted users.
+
+**Deferred localStorage commit** — found and fixed the bug that lost 45,558 sats during testing: `resetIdentity()` was writing the new key to localStorage immediately inside the function, before the caller could verify sweep/migration succeeded. Added `{ deferCommit: true }` option that returns a `commit()` closure. MoveAddressModal calls `commit()` only in Stage 4 after all stages pass. Auditor-reviewed.
+
+**ARC → WhatsOnChain broadcaster switch** — investigated why sweeps kept failing (ARC connection timeouts from browser). Root cause: `sweepConfirmedFunds` and `autoTransferFunds` used the SDK default broadcaster (ARC) which has browser-specific reliability issues (CORS, timeouts). Server-side ARC is fine. Switched both to WhatsOnChainBroadcaster at 10 sat/kb — same as consolidateUtxos. clientSideBoot stays on ARC (benefits from structured errors for orphan retry). Architecture-reviewed.
+
+**Sweep warning UI** — when fund sweep fails (e.g., network issue), Stage 2 shows warning triangle icon + "New address ready — transfer pending" instead of false success. Stage 4 Done summary also shows amber block: "Funds weren't transferred — still on your old address. Use your backup file to recover them." Designer-reviewed.
+
+**Click-outside guard** — fixed bug where browser download dialog stealing focus triggered the dropdown's click-outside handler, silently closing the modal mid-operation. Added `resetLoading` (then `showMoveModal`) to the guard.
+
+**Inline re-auth** — fixed confusion where encrypted users clicking "Move to new address" saw a passphrase prompt at the TOP of the modal while looking at the BOTTOM. Replaced global `requireReAuth` with inline `PassphrasePrompt` rendered inside the confirmation block. Designer-diagnosed.
+
+Files changed: src/components/MoveAddressModal.tsx (new), src/app/IdentityBar.tsx (major rewrite of reset flow), src/services/bsv/identity.ts (deferCommit + WoC broadcaster), src/contexts/BootContext.tsx (throttle), src/app/PostList.tsx (throttle), src/app/Bootboard.tsx (throttle), DECISIONS.md, ROADMAP.md, CLAUDE.md, SESSION_LOG.md.
+
+Verified: TypeScript clean, 27/27 tests pass, Biome 0 errors. Move to new address tested manually — wizard flow works, sweep via WoC succeeds, old key backup downloads, migration records on-chain.
+
 ## 2026-04-09 — Boot Button Loading States
 
 Category: UX, feature
