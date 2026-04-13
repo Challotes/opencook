@@ -138,11 +138,14 @@ async function fetchUtxos(address: string, neededSats?: number): Promise<ClientU
 
   const wocUtxos = data as WocUtxo[];
 
-  // Deduplicate: pending change UTXOs take priority (they have sourceTransaction)
+  // Deduplicate and filter: pending change UTXOs take priority (they have sourceTransaction).
+  // Exclude unconfirmed WoC UTXOs (height === 0) — they may be from stuck/orphan txs
+  // that would block any tx that includes them until the parent confirms. Pending change
+  // entries (height === undefined) pass through for 0-conf chaining from own boots.
   const pendingKeys = new Set(_pendingChange.map((u) => utxoKey(u.tx_hash, u.tx_pos)));
   const filtered = wocUtxos.filter((u) => {
     const key = utxoKey(u.tx_hash, u.tx_pos);
-    return !pendingKeys.has(key) && !_spent.has(key);
+    return !pendingKeys.has(key) && !_spent.has(key) && u.height > 0;
   });
 
   // Clean up spent set: if WoC no longer returns a spent UTXO, it's confirmed spent
