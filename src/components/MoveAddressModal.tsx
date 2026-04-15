@@ -15,7 +15,7 @@ interface MoveAddressModalProps {
   onClose: () => void;
 }
 
-type Stage = "saving" | "creating" | "recording" | "done" | "error";
+type Stage = "saving" | "saved-confirm" | "creating" | "recording" | "done" | "error";
 type ErrorStage = "saving" | "creating" | "recording";
 
 interface StepState {
@@ -186,13 +186,21 @@ export function MoveAddressModal({
         downloadBackup(backupPayload, `bsvibes-${identity.name}-old-${oldDate}.html`);
       }
 
-      setCompletedSteps(1);
-      await runCreating();
+      // Don't auto-advance. Force an explicit "Got it" click so if the
+      // browser silently failed the download (popup blocker, disk full,
+      // CSP deny) the user isn't advanced to the irreversible stage 2
+      // sweep broadcast believing their key is saved.
+      setStage("saved-confirm");
     } catch (e) {
       setStage("error");
       setErrorStage("saving");
       setErrorMessage(e instanceof Error ? e.message : "Failed to save backup. Please try again.");
     }
+  }
+
+  function confirmSaved(): void {
+    setCompletedSteps(1);
+    void runCreating();
   }
 
   async function runCreating(): Promise<void> {
@@ -277,7 +285,13 @@ export function MoveAddressModal({
 
   // activeStep: 1=saving, 2=creating, 3=recording (0 = done / error)
   const activeStep =
-    stage === "saving" ? 1 : stage === "creating" ? 2 : stage === "recording" ? 3 : 0;
+    stage === "saving" || stage === "saved-confirm"
+      ? 1
+      : stage === "creating"
+        ? 2
+        : stage === "recording"
+          ? 3
+          : 0;
 
   const isDone = stage === "done";
   const isError = stage === "error";
@@ -342,6 +356,28 @@ export function MoveAddressModal({
               heading="Saving your current key"
               description="Downloading a recovery file for your old address\u2026"
             />
+          ) : stage === "saved-confirm" ? (
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <CheckIcon />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-zinc-100">
+                    Your file should have downloaded
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                    Move it somewhere safe (phone, cloud, USB). It&apos;s the only way to recover
+                    funds on your old address if the transfer below fails.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={confirmSaved}
+                className="w-full bg-amber-500/10 text-amber-300 border border-amber-500/40 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+              >
+                Got it — continue
+              </button>
+            </div>
           ) : stage === "error" && errorStage === "saving" ? (
             <ErrorStep
               heading="Save failed"

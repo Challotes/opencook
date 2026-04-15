@@ -32,6 +32,11 @@ export function IdentityChip(): React.JSX.Element | null {
   // Security state
   const [isProtected, setIsProtected] = useState(false);
   const [backedUp, setBackedUp] = useState<boolean | null>(null);
+  // After download fires we wait for the user to explicitly acknowledge
+  // ("Got it") before flipping backedUp. Prevents the silent "advanced
+  // believing backup was saved" failure mode when the browser didn't
+  // actually save the file (popup blocker, disk full, CSP deny, etc).
+  const [justDownloaded, setJustDownloaded] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showChangePassModal, setShowChangePassModal] = useState(false);
   const [backupConfirmed, setBackupConfirmed] = useState(false);
@@ -347,7 +352,9 @@ export function IdentityChip(): React.JSX.Element | null {
       },
       `bsvibes-${identity.name}-${new Date().toISOString().slice(0, 10)}.html`
     );
-    markBackedUp();
+    setJustDownloaded(true);
+    setShowManage(false);
+    setOpen(true);
     setTimeout(() => setDownloading(false), 1000);
   }
 
@@ -380,7 +387,9 @@ export function IdentityChip(): React.JSX.Element | null {
         },
         `bsvibes-${identity.name}-${new Date().toISOString().slice(0, 10)}.html`
       );
-      markBackedUp();
+      setJustDownloaded(true);
+      setShowManage(false);
+      setOpen(true);
     } catch {
       console.error("BSVibes: save encrypted failed");
     } finally {
@@ -1373,10 +1382,15 @@ export function IdentityChip(): React.JSX.Element | null {
               </button>
             </div>
 
-            {/* ── One-time backup banner — persists until the user saves,
-                 then gone forever. Coinbase/Phantom pattern: no recurring
-                 guilt, single clear CTA above everything else. ── */}
-            {backedUp === false && (
+            {/* ── One-time backup banner — persists until the user saves
+                 AND acknowledges, then gone forever. Coinbase/Phantom
+                 pattern: no recurring guilt, single clear CTA above
+                 everything else.
+                 After download fires, the banner flips to a "Got it"
+                 confirmation — only on explicit click does backedUp get
+                 marked, so if the browser silently failed to save, the
+                 banner re-appears. ── */}
+            {backedUp === false && !justDownloaded && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -1421,6 +1435,46 @@ export function IdentityChip(): React.JSX.Element | null {
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
+            )}
+            {backedUp === false && justDownloaded && (
+              <div className="px-3 py-2.5 bg-emerald-500/10 border-b border-emerald-500/30 flex items-start gap-3">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  className="text-emerald-400 shrink-0 mt-0.5"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <span className="text-[11px] font-medium text-emerald-300 block">
+                    Your file should have downloaded
+                  </span>
+                  <span className="text-[10px] text-emerald-300/80 block mt-0.5 mb-2 leading-relaxed">
+                    Move it somewhere safe (phone, cloud, USB). It&apos;s the only way back into
+                    your account.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      markBackedUp();
+                      setJustDownloaded(false);
+                    }}
+                    className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-lg px-3 py-1 text-[11px] font-medium hover:bg-emerald-500/30 transition-colors"
+                  >
+                    Got it
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* ── Balance + Add funds + currency toggle ── */}
