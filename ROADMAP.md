@@ -207,6 +207,15 @@
 ## Phase 6.5: UX Polish — PLANNED
 
 - [ ] **`/api/broadcast` proxy with TAAL failover** — eliminates GorillaPool ARC as a single point of failure for browser tx paths (paid boots, sweep, consolidate, auto-transfer). Primary: GorillaPool. Fallback on 5xx: TAAL ARC. All client broadcasters wired via `new ARC('/api/broadcast')`. Motivated by GorillaPool ARC outages on 2026-04-08 (misdiagnosed as DNS, later confirmed by 2026-04-14 repeat) and 2026-04-14 (nginx 502 upstream, surfaces in browser as misleading CORS error). Lock in at build time: 10s timeout, structured ARC error passthrough (client's 257/258 classification depends on it), rate limit keyed on pubkey not IP. ~2–3h work.
+- [ ] **Near-instant payment UI via SSE + optimistic updates** — when a boot happens, recipient sees earnings/activity/balance update in ~300ms instead of 15–60s polling. Sender sees own-action effects in <50ms. Showcases BSV speed + agentic fairness as a visible product moment, not a status poll.
+  - **SSE endpoint `/api/events?address=...`** using a module-singleton Node `EventEmitter`. Wrap the emit site in a `publishPayout(recipientAddress, payload)` helper so swapping to Redis / Postgres LISTEN-NOTIFY later is one file. Node runtime only (edge kills the singleton).
+  - **Emit from `/api/boot-confirm`** right after the `payouts` INSERT succeeds. Payload: `{ boot_event_id, post_id, total, your_share, recipients, ts }`. Dedup on the client by `boot_event_id` so retried confirmations don't fire fireworks twice.
+  - **Client**: `EventSource` per open tab, auto-reconnect is free. On event: refetch `/api/earnings` + `/api/balance`, trigger confetti/pulse on balance chip, animate split diagram from post → recipient.
+  - **Optimistic own-boot path**: after successful broadcast we already have `rawTx` + txid. Parse own outputs locally, update balance chip and activity immediately. WoC poll reconciles silently on next tick.
+  - **Keep the 30s polling** as SSE fallback. SSE is enhancement; polling is ground truth. See DECISIONS.md "Real-time updates".
+  - **Ops**: 15s heartbeat comment to survive serverless idle timeouts; in-process emitter works only on single-instance deploys (fine at current scale, revisit on horizontal scale); Railway long-lived Node preferred over Vercel edge for SSE.
+  - **Failure handling**: broadcast fail → no optimistic update (we already branch on success); tx replaced/orphaned → WoC poll corrects the optimistic balance; SSE drop → poll fills the gap; boot-confirm fail after broadcast → same issue as today, unchanged.
+  - ~3–4h work (endpoint, event bus, client wire-up, fireworks animation). Do after `/api/broadcast` so the broadcast proxy's error codes are stable before SSE consumes them.
 - [ ] Notification system (bell icon — "anon_x7f2 featured your post", daily earnings summary)
 - [ ] Content moderation (report mechanism, basic filtering)
 - [ ] Deploy to Railway + custom domain
