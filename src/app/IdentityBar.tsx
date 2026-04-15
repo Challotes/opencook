@@ -196,22 +196,32 @@ export function IdentityChip(): React.JSX.Element | null {
       .catch(() => setEarnedSats(0));
   }, [identity?.address]);
 
-  // Background earnings poll (30s) — drives the chip flash for real earnings only
+  // Background earnings poll (30s) — drives the chip flash for real earnings.
+  // When the dropdown is open we also refresh the activity feed and earnings
+  // history so recent boots/payouts appear live instead of waiting for the next
+  // close→reopen cycle. When closed, we stay on the summary=1 fast path.
   useEffect(() => {
     if (!identity?.address) return;
     const poll = () => {
       if (document.visibilityState !== "visible") return;
-      fetch(`/api/earnings?address=${encodeURIComponent(identity.address)}&summary=1`)
+      const url = open
+        ? `/api/earnings?address=${encodeURIComponent(identity.address)}`
+        : `/api/earnings?address=${encodeURIComponent(identity.address)}&summary=1`;
+      fetch(url)
         .then((res) => res.json())
         .then((data) => {
           if (typeof data.totalEarned === "number") setEarnedSats(data.totalEarned);
+          if (open) {
+            if (Array.isArray(data.recentActivity)) setActivity(data.recentActivity);
+            if (Array.isArray(data.earningsHistory)) setEarningsHistory(data.earningsHistory);
+          }
         })
         .catch(() => {});
     };
     const interval = setInterval(poll, 30_000);
     poll(); // initial fetch
     return () => clearInterval(interval);
-  }, [identity?.address]);
+  }, [identity?.address, open]);
 
   useEffect(() => {
     if (!open) return;
