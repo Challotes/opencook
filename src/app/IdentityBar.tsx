@@ -1317,7 +1317,7 @@ export function IdentityChip(): React.JSX.Element | null {
               protection status can be seen in the modal. */}
           {!(showWarningDot && backedUp === false) && (
             <span
-              className={`w-2 h-2 rounded-full ${isProtected ? "bg-emerald-500" : "bg-amber-500"}`}
+              className={`w-2 h-2 rounded-full ${isProtected ? "bg-amber-400" : "bg-red-500"}`}
             />
           )}
           <span className="text-zinc-300">{identity.name}</span>
@@ -1340,17 +1340,19 @@ export function IdentityChip(): React.JSX.Element | null {
 
         {open && (
           <div
-            className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-80 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden max-h-[85vh] overflow-y-auto"
-            style={{ backgroundColor: "#18181b" }}
+            className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-80 border border-amber-400/20 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] z-50 overflow-hidden max-h-[85vh] overflow-y-auto"
+            style={{ backgroundColor: "#0f0f0f" }}
           >
+            {/* Gold top stripe */}
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
             {/* ── Header: name + address + close ── */}
-            <div className="px-3 py-2.5 border-b border-zinc-800">
+            <div className="px-3 py-2.5 border-b border-amber-400/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${isProtected ? "bg-emerald-500" : "bg-amber-500"}`}
+                    className={`w-2 h-2 rounded-full shrink-0 ${isProtected ? "bg-amber-400" : "bg-red-500"}`}
                   />
-                  <span className="text-sm font-medium text-zinc-200">{identity.name}</span>
+                  <span className="text-sm font-semibold text-white">{identity.name}</span>
                   {isProtected && (
                     <svg
                       width="12"
@@ -1361,7 +1363,7 @@ export function IdentityChip(): React.JSX.Element | null {
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="text-emerald-500/70 shrink-0"
+                      className="text-amber-400 shrink-0"
                       aria-label="Identity protected"
                     >
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -1554,13 +1556,13 @@ export function IdentityChip(): React.JSX.Element | null {
             )}
 
             {/* ── All-time earnings (hero section, collapsible chart, default open) ── */}
-            <div className="px-3 py-2.5 border-b border-zinc-800 space-y-2">
+            <div className="px-3 py-2.5 border-b border-amber-400/10 space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-wide font-medium block mb-0.5">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium block mb-0.5">
                     All-time earnings
                   </span>
-                  <span className="text-lg text-emerald-400 font-semibold tabular-nums">
+                  <span className="text-xl text-amber-400 font-bold tabular-nums">
                     {earnedSats !== null && earnedSats > 0
                       ? isGoat
                         ? `${earnedSats.toLocaleString()} sats`
@@ -1576,7 +1578,7 @@ export function IdentityChip(): React.JSX.Element | null {
                     e.stopPropagation();
                     toggleCurrency();
                   }}
-                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 hover:bg-zinc-800 transition-colors"
+                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-amber-400/25 text-zinc-300 hover:text-white hover:border-amber-400/50 hover:bg-amber-400/5 transition-colors"
                   title={isGoat ? "Switch to dollar mode" : "Switch to sats mode"}
                 >
                   {isGoat ? <span>🐐 Goat</span> : <span>💵 Noob</span>}
@@ -1616,9 +1618,9 @@ export function IdentityChip(): React.JSX.Element | null {
             </div>
 
             {/* ── Activity (2 visible, expand to see all) ── */}
-            <div className="px-3 py-2.5 border-b border-zinc-800 space-y-2">
+            <div className="px-3 py-2.5 border-b border-amber-400/10 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-400 uppercase tracking-wide font-medium">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">
                   Activity
                 </span>
                 {activity.length > 2 && (
@@ -1660,7 +1662,7 @@ export function IdentityChip(): React.JSX.Element | null {
                           )}
                         </span>
                         <span
-                          className={`font-mono shrink-0 ${a.direction === "in" ? "text-emerald-400" : "text-zinc-500"}`}
+                          className={`font-mono shrink-0 ${a.direction === "in" ? "text-amber-400" : "text-zinc-500"}`}
                         >
                           {isFree ? (
                             <span className="text-zinc-600 text-[10px] font-sans">FREE</span>
@@ -1681,13 +1683,13 @@ export function IdentityChip(): React.JSX.Element | null {
             </div>
 
             {/* ── Balance (demoted — secondary to earnings) ── */}
-            <div className="px-3 py-2 border-b border-zinc-800">
+            <div className="px-3 py-2 border-b border-amber-400/10">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-400 uppercase tracking-wide font-medium">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">
                   Balance
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-zinc-400 tabular-nums">
+                  <span className="text-sm text-white font-semibold tabular-nums">
                     {isGoat
                       ? `${(balanceSats ?? 0).toLocaleString()} sats`
                       : satsToDollars(balanceSats ?? 0, bsvPrice)}
@@ -1700,7 +1702,7 @@ export function IdentityChip(): React.JSX.Element | null {
                       setOpen(false);
                       setShowDeposit(true);
                     }}
-                    className="text-[11px] text-zinc-100 underline underline-offset-2 decoration-zinc-600 hover:decoration-zinc-400 transition-colors"
+                    className="text-[11px] text-amber-400 hover:text-amber-300 underline-offset-2 hover:underline transition-colors"
                   >
                     Add funds
                   </button>
@@ -1760,7 +1762,7 @@ export function IdentityChip(): React.JSX.Element | null {
               <button
                 type="button"
                 onClick={() => setShowManage(true)}
-                className="w-full flex items-center justify-center gap-2 rounded-lg border border-zinc-700 py-2 text-xs text-zinc-300 hover:border-zinc-500 hover:text-white transition-all"
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-400/10 border border-amber-400/25 py-2 text-sm text-amber-300 font-medium hover:bg-amber-400/15 hover:border-amber-400/40 transition-all"
               >
                 <svg
                   width="13"

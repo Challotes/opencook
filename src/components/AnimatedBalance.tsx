@@ -103,7 +103,7 @@ export function AnimatedBalance({
       <span
         className={`
           font-medium tabular-nums transition-all duration-300
-          ${flash ? "text-emerald-300 scale-110" : "text-emerald-400 scale-100"}
+          ${flash ? "text-amber-300 scale-110" : "text-amber-400 scale-100"}
           ${className}
         `}
         style={{ display: "inline-block", transformOrigin: "center" }}
@@ -114,7 +114,7 @@ export function AnimatedBalance({
       {/* Agentic fairness label */}
       {label && (
         <span
-          className="absolute top-full right-0 mt-1 whitespace-nowrap text-[9px] text-emerald-500/80 font-medium transition-opacity duration-500"
+          className="absolute top-full right-0 mt-1 whitespace-nowrap text-[9px] text-amber-400/80 font-medium transition-opacity duration-500"
           aria-live="polite"
         >
           {label}

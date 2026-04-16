@@ -91,13 +91,13 @@ export function EarningsSparkline({
       >
         <defs>
           <linearGradient id="earn-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#10b981" stopOpacity="0.03" />
+            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.03" />
           </linearGradient>
         </defs>
         <path d={areaPath} fill="url(#earn-fill)" />
-        <path d={d} fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinejoin="miter" />
-        <circle cx={lastX} cy={toY(points[points.length - 1].cumulative)} r="2.5" fill="#10b981" />
+        <path d={d} fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeLinejoin="miter" />
+        <circle cx={lastX} cy={toY(points[points.length - 1].cumulative)} r="2.5" fill="#f59e0b" />
       </svg>
     </div>
   );
