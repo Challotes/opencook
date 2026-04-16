@@ -2,6 +2,40 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-04-15/16 — Manage Identity Redesign (Stages 1–3 + 1b) + resilience planning
+
+Category: UX, bug fixes, planning
+
+Large session spanning the identity card redesign + adjacent resilience work.
+
+**MD synchronization pass.** Two parallel audit agents cross-checked CLAUDE.md, DECISIONS.md, ROADMAP.md, FAIRNESS.md, SECURITY_AUDIT.md against code. Promoted C6 and H5 from implied-partial to FIXED (deferred-commit landed 2026-04-12 covers C6; `actions.ts:36-37` covers H5). Amended C3 with the 2026-04-14 rawTx + local parsing upgrade. Extended H6 to cover `/api/balance` + `/api/unspent` proxies. CLAUDE.md key-files, IdentityBar description, and boot-payment flow updated.
+
+**Identity pill — two-dots fix.** Static protection dot now hidden while the pulsing backup warning is visible (they were both amber and fought for attention). Backup warning takes precedence as the urgent, time-sensitive signal.
+
+**Manage Identity redesign — three parallel specialists.** Designer (bopen-tools:designer), researcher (bopen-tools:researcher), architect (bopen-tools:architecture-reviewer) audited the card in parallel. Unanimous cuts: "Paste recovery key" textarea (redundant with file import), "Hide" toggle (dead micro-state), unify "Secure identity" + "Change passphrase" labels. Disagreement resolved on the AI-help button: researcher surveyed 10 products (Apple/Google/GitHub/Phantom/HandCash/MetaMask/Revolut/Cash App/…) — every one keeps AI outside the account menu; architect red-teamed WIF-exfiltration risk, bad-advice-on-irreversible-actions risk, third-party LLM privacy leak. User decided: skip the AI button. Adopt Coinbase/Phantom one-time backup nag pattern. Rename "Manage identity" → "You".
+
+**Stage 1 — Bug fixes.** `MoveAddressModal` retry-from-creating now reuses `resetResultRef.current` instead of regenerating the key — previously a retry generated a fresh key while the prior sweep tx still pointed at the now-abandoned address, stranding funds across retries. Removed 8 seconds of cosmetic `delay()` padding. Unified backup-warning color to amber across chip + modal (was amber/red split).
+
+**Stage 1b — Remaining fixes.** `/api/tx-hex` retries 404s up to 3× with 2s backoff (~6s budget) to ride out WoC's 2–10s mempool indexing lag on 0-conf chain ancestors. Backup download now requires explicit "Got it" acknowledgement before `backedUp` flips — new green confirmation banner in the dropdown for the main flow, new `saved-confirm` stage in `MoveAddressModal` that gates the auto-advance to the irreversible sweep. Silent download failures no longer masquerade as success.
+
+**Stage 2 — Dead-code cuts.** Removed Paste-recovery-key textarea (~60 lines) and Hide toggle + all orphaned state/handlers. Sparkline temporarily removed but restored per user preference.
+
+**Stage 3 — Merge + reframe.** Passphrase row unified to single "Passphrase" label with dynamic secondary text. `+ Add funds` button added to the balance zone (deposit now one click from chip). Modal header renamed "Manage identity" → "You". Coinbase/Phantom amber backup banner added to the top of the dropdown with pulsing dot + single CTA — disappears forever once saved and acknowledged.
+
+**Resilience planning (no code this session).**
+- `/api/broadcast` proxy + TAAL failover — extended to include server-wallet reuse, shared WoC read cache module, broadcast timeout, queue-depth metric, low-balance alert. Architect flagged that the server wallet currently hits ARC/WoC directly — none of the client-side mitigations apply; browser is now better-armored than the backend it talks to.
+- Split mutexes (posts vs boots), backpressure on `logPostOnChain`, WoC retry/backoff in double-spend recovery — all captured in ROADMAP Phase 6.5.
+- Near-instant payment UI via SSE + optimistic updates — full build-spec captured. Architect's verdict: ~300ms incoming, <50ms own (vs 15–60s polling today). Deferred to after `/api/broadcast` so error codes stabilize first.
+- DECISIONS.md locks in "SSE is enhancement, polling is ground truth" and "Server wallet shares the client's resilience stack" to prevent future drift.
+
+**Live activity feed.** Extended the 30s earnings poll: `summary=1` fast path when dropdown closed, full feed (activity + sparkline) when open. Recent boots appear live instead of waiting for close→reopen.
+
+**GorillaPool ARC outage (2026-04-14).** Browser broadcasts hit a CORS-looking error that was actually an nginx 502 upstream. Confirmed with agents: not blocked, not a CORS policy change — genuine outage (second within a week). TAAL ARC was healthy the whole time. Locked in `/api/broadcast` proxy as the architectural fix in ROADMAP.
+
+Files changed: `src/app/IdentityBar.tsx`, `src/components/MoveAddressModal.tsx`, `src/app/api/tx-hex/route.ts`, CLAUDE.md, DECISIONS.md, ROADMAP.md, SECURITY_AUDIT.md.
+
+Verified: tsc clean, 27/27 tests pass, biome clean at each commit.
+
 ## 2026-04-14 — WoC Proxy Fleet + Local TX Parsing in boot-confirm
 
 Category: reliability, rate-limit mitigation, architecture
