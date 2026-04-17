@@ -54,7 +54,8 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 - `src/app/Header.tsx` — Top bar with logo, genesis nav, identity chip
 - `src/app/PostList.tsx` — Post rendering, BootButton, Genesis anchor
 - `src/app/PostForm.tsx` — Compose box (enter-to-post, voice-to-text, agent chat trigger)
-- `src/app/IdentityBar.tsx` — Identity chip + You modal. Earnings-first hierarchy: all-time earnings (hero, collapsible chart default-open) → activity (2 visible, "View all" toggle) → balance (demoted, inline "Add funds" link). Protected state shown as inline checkmark next to name (X-verified pattern); unprotected keeps full red banner. Earnings poll 30s — full feed when dropdown open, summary only when closed. One-time backup banner with "Got it" acknowledgement. Manage button opens You modal (backup, import, passphrase, move address, recovery key).
+- `src/app/IdentityBar.tsx` — Identity chip + You modal. Amber brand theme (#f59e0b). Earnings-first hierarchy: all-time earnings (hero) → activity (2 visible, "View all" toggle) → balance (demoted, inline "Add funds" link). Protected state = inline checkmark (X-verified pattern); unprotected = red banner → opens MoveAddressModal (combined passphrase + move flow). You modal is a clean launcher: each row opens its own modal (passphrase, restore, move) except recovery key (inline). Earnings poll 30s — full feed when dropdown open, summary only when closed.
+- `src/components/RestoreModal.tsx` — Standalone restore-from-device modal (extracted from IdentityBar). Handles plain WIF, encrypted WIF, pending restore confirmation, auto-backup of current identity.
 - `src/app/Bootboard.tsx` — Pay-to-feature spotlight (live timer, shake/glow animations)
 - `src/app/Manifesto.tsx` — Vision TLDR block above Genesis
 - `src/app/Genesis.tsx` — Founding conversation (always visible, NOT collapsible)
@@ -65,7 +66,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 - `src/components/PassphrasePrompt.tsx` — Reusable passphrase input with hint display
 - `src/components/UpgradeModal.tsx` — Security upgrade modal (passphrase encryption + migration)
 - `src/components/ChangePassphraseModal.tsx` — Change passphrase flow (verify → new → backup)
-- `src/components/MoveAddressModal.tsx` — Wizard modal for "Move to a new address" (key rotation + sweep all UTXOs + on-chain migration)
+- `src/components/MoveAddressModal.tsx` — Combined "move + protect" wizard. Collects passphrase first → backup old key → upgradeIdentity (encrypted new key + sweep) → migrateIdentity → download new backup. Sweep failure blocks rotation with retry/proceed options. Pre-rotation chain verification warns if posts would be orphaned. Also serves as the "Not protected" flow (every rotation produces an encrypted key).
 - `src/components/AnimatedBalance.tsx` — Animated balance counter (count-up, green flash)
 - `src/components/EarningsSparkline.tsx` — Step-function area chart (pure SVG)
 - `src/components/icons/BootIcon.tsx` — Boot emoji icon

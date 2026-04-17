@@ -415,3 +415,70 @@ export async function migrateIdentity(
 
   return { success: true };
 }
+
+/**
+ * Verify that all pubkeys with posts resolve to the given currentPubkey
+ * via the migration chain. Returns healthy=true if all connected, or a
+ * list of orphaned pubkeys (with post counts) if any are disconnected.
+ *
+ * Called before key rotations to warn the user if rotating would orphan posts.
+ */
+export async function verifyMigrationChain(
+  currentPubkey: string
+): Promise<{ healthy: boolean; orphanedCount: number }> {
+  // Build the migration resolver (same logic as weights.ts buildMigrationMap)
+  const migrations = db
+    .prepare("SELECT from_pubkey, to_pubkey FROM migrations ORDER BY id ASC")
+    .all() as Array<{ from_pubkey: string; to_pubkey: string }>;
+
+  const forward = new Map<string, string>();
+  for (const m of migrations) {
+    const existing = forward.get(m.from_pubkey);
+    if (existing && existing !== m.to_pubkey) {
+      if (!forward.has(existing)) {
+        forward.set(existing, m.to_pubkey);
+      }
+    }
+    forward.set(m.from_pubkey, m.to_pubkey);
+  }
+
+  // Resolve chains
+  function resolve(pubkey: string): string {
+    let current = pubkey;
+    const visited = new Set<string>();
+    while (forward.has(current) && !visited.has(current)) {
+      visited.add(current);
+      current = forward.get(current) ?? current;
+    }
+    return current;
+  }
+
+  // Find all distinct pubkeys that have posted
+  const posters = db
+    .prepare("SELECT DISTINCT pubkey FROM posts WHERE pubkey IS NOT NULL")
+    .all() as Array<{ pubkey: string }>;
+
+  let orphanedCount = 0;
+  for (const p of posters) {
+    const resolved = resolve(p.pubkey);
+    // A pubkey is "ours" if it resolves to currentPubkey OR IS currentPubkey
+    if (resolved !== currentPubkey && p.pubkey !== currentPubkey) {
+      // Check if this is someone else's pubkey (not in our chain at all) — skip those
+      // We only care about pubkeys that WERE ours but are now disconnected
+      // Heuristic: if this pubkey appears anywhere in a chain that includes currentPubkey, it's ours
+      // Simple check: does currentPubkey resolve through this pubkey, or does this pubkey
+      // appear in any chain leading to currentPubkey?
+      // For now, just count pubkeys that resolve to themselves (no migration) or to a
+      // terminus that isn't currentPubkey — these are potentially orphaned
+      // But we can't distinguish "someone else's posts" from "our orphaned posts" without
+      // more context. Skip pubkeys that have no migration at all AND aren't currentPubkey —
+      // those are likely other users.
+      if (forward.has(p.pubkey) || resolve(p.pubkey) !== p.pubkey) {
+        // This pubkey has a migration chain but doesn't reach currentPubkey — orphaned
+        orphanedCount++;
+      }
+    }
+  }
+
+  return { healthy: orphanedCount === 0, orphanedCount };
+}

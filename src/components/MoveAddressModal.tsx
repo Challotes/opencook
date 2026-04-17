@@ -1,21 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { migrateIdentity } from "@/app/actions";
+import { useRef, useState } from "react";
+import { migrateIdentity, verifyMigrationChain } from "@/app/actions";
 import { type BackupData, downloadBackup, getStoredHint } from "@/services/bsv/backup-template";
 import { encryptWif } from "@/services/bsv/crypto";
-import { resetIdentity } from "@/services/bsv/identity";
+import { commitUpgrade, sweepFunds, upgradeIdentity } from "@/services/bsv/identity";
 import type { Identity } from "@/types";
 
 interface MoveAddressModalProps {
   identity: Identity;
   isProtected: boolean;
-  passphrase: string; // already collected from inline re-auth before modal opens
+  passphrase: string; // old passphrase for backup encryption (empty if unprotected)
   onComplete: (newIdentity: Identity) => void;
   onClose: () => void;
 }
 
-type Stage = "saving" | "saved-confirm" | "creating" | "recording" | "done" | "error";
+type Stage =
+  | "passphrase"
+  | "saving"
+  | "saved-confirm"
+  | "creating"
+  | "sweep-failed"
+  | "recording"
+  | "done"
+  | "error";
 type ErrorStage = "saving" | "creating" | "recording";
 
 interface StepState {
@@ -133,27 +141,44 @@ export function MoveAddressModal({
   onComplete,
   onClose,
 }: MoveAddressModalProps): React.JSX.Element {
-  const [stage, setStage] = useState<Stage>("saving");
+  const [stage, setStage] = useState<Stage>("passphrase");
   const [errorStage, setErrorStage] = useState<ErrorStage | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [sweepWarning, setSweepWarning] = useState(false);
+  const [chainWarning, setChainWarning] = useState("");
+
+  // New passphrase for the rotated key
+  const [newPass, setNewPass] = useState("");
+  const [confirmNewPass, setConfirmNewPass] = useState("");
+  const [newHint, setNewHint] = useState("");
+  const [passError, setPassError] = useState("");
 
   // Track which steps have completed — drives the progress dots and step list
   const [completedSteps, setCompletedSteps] = useState(0);
 
-  // Store resetIdentity result so Stage 3 can use it
-  const resetResultRef = useRef<Awaited<ReturnType<typeof resetIdentity>> | null>(null);
-
-  // Run on mount — starts the wizard automatically
-  const hasStarted = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional run-once on mount; runSaving is defined below and re-creating it as a dep would cause an infinite loop
-  useEffect(() => {
-    if (hasStarted.current) return;
-    hasStarted.current = true;
-    void runSaving();
-  }, []);
+  // Store upgradeIdentity result so later stages can use it
+  const upgradeResultRef = useRef<Awaited<ReturnType<typeof upgradeIdentity>> | null>(null);
 
   // ── Stage runners ──────────────────────────────────────────────────────────
+
+  function submitPassphrase(): void {
+    setPassError("");
+    if (newPass.length < 8) {
+      setPassError("Passphrase must be at least 8 characters");
+      return;
+    }
+    if (newPass !== confirmNewPass) {
+      setPassError("Passphrases don't match");
+      return;
+    }
+    if (!newHint.trim()) {
+      setPassError(
+        "Add a memory clue — if you forget your passphrase, this is your only reminder."
+      );
+      return;
+    }
+    void runSaving();
+  }
 
   async function runSaving(): Promise<void> {
     setStage("saving");
@@ -186,10 +211,6 @@ export function MoveAddressModal({
         downloadBackup(backupPayload, `bsvibes-${identity.name}-old-${oldDate}.html`);
       }
 
-      // Don't auto-advance. Force an explicit "Got it" click so if the
-      // browser silently failed the download (popup blocker, disk full,
-      // CSP deny) the user isn't advanced to the irreversible stage 2
-      // sweep broadcast believing their key is saved.
       setStage("saved-confirm");
     } catch (e) {
       setStage("error");
@@ -198,7 +219,24 @@ export function MoveAddressModal({
     }
   }
 
-  function confirmSaved(): void {
+  async function confirmSaved(): Promise<void> {
+    // Pre-rotation chain verification
+    if (!chainWarning) {
+      try {
+        const { PrivateKey } = await import("@bsv/sdk");
+        const currentPubkey = PrivateKey.fromWif(identity.wif).toPublicKey().toString();
+        const chain = await verifyMigrationChain(currentPubkey);
+        if (!chain.healthy) {
+          setChainWarning(
+            `${chain.orphanedCount} of your previous identities may lose their connection to your posts.`
+          );
+          return;
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
+    setChainWarning("");
     setCompletedSteps(1);
     void runCreating();
   }
@@ -206,18 +244,29 @@ export function MoveAddressModal({
   async function runCreating(): Promise<void> {
     setStage("creating");
     try {
-      // Reuse a prior resetIdentity result if one exists. Retrying this stage
-      // used to call resetIdentity() again, which generates a FRESH key and
-      // broadcasts a NEW sweep tx — the previous sweep's outputs then point
-      // at an abandoned address, stranding funds across retries. By reusing
-      // the first successful result, the retry path only needs to re-attempt
-      // on-chain recording (stage 3) rather than regenerating the identity.
-      if (!resetResultRef.current) {
-        const result = await resetIdentity(identity.wif, identity.name, { deferCommit: true });
-        resetResultRef.current = result;
-        if (result.fundTransfer.error) {
-          setSweepWarning(true);
-        }
+      // Reuse a prior result if one exists — retry reuses the same key
+      if (!upgradeResultRef.current) {
+        const result = await upgradeIdentity(
+          newPass,
+          identity.wif,
+          identity.name,
+          newHint.trim() || undefined
+        );
+        upgradeResultRef.current = result;
+      }
+
+      const result = upgradeResultRef.current;
+
+      // Sweep failure blocks the rotation — user must retry or explicitly proceed
+      if (result.fundTransfer.error) {
+        setSweepWarning(true);
+        setErrorMessage(result.fundTransfer.error);
+        setStage("sweep-failed");
+        return;
+      }
+
+      if (result.fundTransfer.noFunds) {
+        setSweepWarning(false);
       }
 
       setCompletedSteps(2);
@@ -231,9 +280,43 @@ export function MoveAddressModal({
     }
   }
 
+  async function retrySweep(): Promise<void> {
+    if (!upgradeResultRef.current) return;
+    setStage("creating");
+    setErrorMessage("");
+    try {
+      const result = upgradeResultRef.current;
+      const oldAddress = identity.address;
+      const newAddress = result.identity.address;
+      const sweepResult = await sweepFunds(identity.wif, oldAddress, newAddress);
+
+      upgradeResultRef.current = { ...result, fundTransfer: sweepResult };
+
+      if (sweepResult.error) {
+        setSweepWarning(true);
+        setErrorMessage(sweepResult.error);
+        setStage("sweep-failed");
+        return;
+      }
+
+      setSweepWarning(false);
+      setCompletedSteps(2);
+      await runRecording();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Sweep retry failed. Please try again.");
+      setStage("sweep-failed");
+    }
+  }
+
+  function proceedWithoutFunds(): void {
+    setSweepWarning(true);
+    setCompletedSteps(2);
+    void runRecording();
+  }
+
   async function runRecording(): Promise<void> {
     setStage("recording");
-    const result = resetResultRef.current;
+    const result = upgradeResultRef.current;
     if (!result) {
       setStage("error");
       setErrorStage("recording");
@@ -250,11 +333,30 @@ export function MoveAddressModal({
         result.migration.migrationMessage
       );
 
-      // Only NOW commit the new key to localStorage + session caches.
-      // All three stages succeeded — safe to switch identity permanently.
-      // This prevents the bug where localStorage updates to the new key
-      // but the sweep/migration failed, stranding funds on the old address.
-      result.commit();
+      // Commit encrypted key to localStorage
+      commitUpgrade(result.encStore, result.identity);
+
+      // Download new encrypted backup
+      const newIdentity = result.identity;
+      let encryptedWif: string;
+      try {
+        const parsedStore = JSON.parse(result.encStore) as { encrypted?: string };
+        encryptedWif = parsedStore.encrypted ?? (await encryptWif(newIdentity.wif, newPass));
+      } catch {
+        encryptedWif = await encryptWif(newIdentity.wif, newPass);
+      }
+      const newBackup: BackupData = {
+        name: newIdentity.name,
+        address: newIdentity.address,
+        wif_encrypted: encryptedWif,
+        createdAt: new Date().toISOString(),
+        note: "Use your passphrase to restore.",
+      };
+      if (newHint.trim()) newBackup.hint = newHint.trim();
+      downloadBackup(
+        newBackup,
+        `bsvibes-${newIdentity.name}-${new Date().toISOString().slice(0, 10)}.html`
+      );
 
       setCompletedSteps(3);
       setStage("done");
@@ -273,8 +375,7 @@ export function MoveAddressModal({
     if (errorStage === "saving") {
       await runSaving();
     } else if (errorStage === "creating") {
-      // runCreating() now reuses resetResultRef.current if set — safe to retry
-      // without regenerating the key or re-broadcasting the sweep.
+      // runCreating() now reuses upgradeResultRef.current if set — safe to retry
       await runCreating();
     } else if (errorStage === "recording") {
       await runRecording();
@@ -283,11 +384,12 @@ export function MoveAddressModal({
 
   // ── Derived display values ─────────────────────────────────────────────────
 
-  // activeStep: 1=saving, 2=creating, 3=recording (0 = done / error)
+  const isPassphraseStage = stage === "passphrase";
+  // activeStep: 1=saving, 2=creating/sweep-failed, 3=recording (0 = done / error / passphrase)
   const activeStep =
     stage === "saving" || stage === "saved-confirm"
       ? 1
-      : stage === "creating"
+      : stage === "creating" || stage === "sweep-failed"
         ? 2
         : stage === "recording"
           ? 3
@@ -295,7 +397,8 @@ export function MoveAddressModal({
 
   const isDone = stage === "done";
   const isError = stage === "error";
-  const isRunning = !isDone && !isError;
+  const isSweepFailed = stage === "sweep-failed";
+  const isRunning = !isDone && !isError && !isSweepFailed && !isPassphraseStage;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -304,21 +407,27 @@ export function MoveAddressModal({
       {/* Backdrop — no click-through during active stages */}
       <div
         className="absolute inset-0 bg-black/70"
-        onClick={isDone ? onClose : undefined}
+        onClick={isDone || isSweepFailed ? onClose : undefined}
         aria-hidden="true"
       />
 
       {/* Card */}
-      <div className="relative bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+      <div className="relative bg-[#0f0f0f] border border-amber-400/20 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-100">Moving to a new address</h2>
+            <h2 className="text-sm font-semibold text-zinc-100">
+              {isPassphraseStage ? "Protect your new address" : "Moving to a new address"}
+            </h2>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              {isDone ? "All done." : "Don\u2019t close this window."}
+              {isPassphraseStage
+                ? "Set a passphrase for your new key"
+                : isDone
+                  ? "All done."
+                  : "Don\u2019t close this window."}
             </p>
           </div>
-          {isDone && (
+          {(isDone || isPassphraseStage) && (
             <button
               type="button"
               onClick={onClose}
@@ -330,144 +439,253 @@ export function MoveAddressModal({
           )}
         </div>
 
-        {/* 3-dot progress indicator */}
-        <div className="flex justify-center gap-2 mb-5">
-          {[1, 2, 3].map((step) => (
-            <div
-              key={step}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                completedSteps >= step
-                  ? "bg-amber-500"
-                  : activeStep === step && isRunning
-                    ? "bg-amber-400 animate-pulse"
-                    : "bg-zinc-700"
-              }`}
+        {/* Passphrase entry — shown before the wizard starts */}
+        {isPassphraseStage ? (
+          <div className="space-y-3">
+            <input
+              type="password"
+              placeholder="New passphrase (min 8 characters)"
+              value={newPass}
+              onChange={(e) => {
+                setNewPass(e.target.value);
+                setPassError("");
+              }}
+              className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
             />
-          ))}
-        </div>
-
-        {/* Step list */}
-        <div className="space-y-3">
-          {/* Step 1 — Saving */}
-          {completedSteps >= 1 && stage !== "error" ? (
-            <CompletedStep {...COMPLETED_STEPS.saving} />
-          ) : stage === "saving" ? (
-            <ActiveStep
-              heading="Saving your current key"
-              description="Downloading a recovery file for your old address\u2026"
+            <input
+              type="password"
+              placeholder="Confirm passphrase"
+              value={confirmNewPass}
+              onChange={(e) => {
+                setConfirmNewPass(e.target.value);
+                setPassError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitPassphrase();
+              }}
+              className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
             />
-          ) : stage === "saved-confirm" ? (
-            <div className="space-y-2.5">
-              <div className="flex items-start gap-2.5">
-                <CheckIcon />
-                <div className="flex-1">
-                  <p className="text-xs font-semibold text-zinc-100">
-                    Your file should have downloaded
-                  </p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                    Move it somewhere safe (phone, cloud, USB). It&apos;s the only way to recover
-                    funds on your old address if the transfer below fails.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={confirmSaved}
-                className="w-full bg-amber-500/10 text-amber-300 border border-amber-500/40 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+            <div className="border-l-2 border-amber-500/60 pl-2.5 space-y-1">
+              <label
+                htmlFor="move-hint"
+                className="text-[11px] text-amber-400/80 font-medium block"
               >
-                Got it — continue
-              </button>
-            </div>
-          ) : stage === "error" && errorStage === "saving" ? (
-            <ErrorStep
-              heading="Save failed"
-              errorMessage={errorMessage}
-              onRetry={() => void handleRetry()}
-              onClose={onClose}
-              partialWarning={false}
-            />
-          ) : null}
-
-          {/* Step 2 — Creating */}
-          {completedSteps >= 1 &&
-            (completedSteps >= 2 && stage !== "error" ? (
-              <CompletedStep
-                heading={
-                  sweepWarning
-                    ? "New address ready \u2014 transfer pending"
-                    : COMPLETED_STEPS.creating.heading
-                }
-                description={
-                  sweepWarning
-                    ? "Couldn\u2019t move your funds right now (network issue). They\u2019re safe on your old address."
-                    : COMPLETED_STEPS.creating.description
-                }
-                variant={sweepWarning ? "warn" : undefined}
+                Memory clue
+              </label>
+              <input
+                id="move-hint"
+                type="text"
+                placeholder={`e.g. "blue house + 2019"`}
+                value={newHint}
+                maxLength={100}
+                onChange={(e) => {
+                  setNewHint(e.target.value);
+                  setPassError("");
+                }}
+                className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
               />
-            ) : stage === "creating" ? (
-              <ActiveStep
-                heading="Creating your new address"
-                description="Generating a fresh keypair and sweeping confirmed funds\u2026"
-              />
-            ) : stage === "error" && errorStage === "creating" ? (
-              <ErrorStep
-                heading="Creation failed"
-                errorMessage={errorMessage}
-                onRetry={() => void handleRetry()}
-                onClose={onClose}
-                partialWarning={false}
-              />
-            ) : null)}
-
-          {/* Step 3 — Recording */}
-          {completedSteps >= 2 &&
-            (completedSteps >= 3 && stage !== "error" ? (
-              <CompletedStep {...COMPLETED_STEPS.recording} />
-            ) : stage === "recording" ? (
-              <ActiveStep
-                heading="Recording the move"
-                description="Writing an on-chain migration record linking both addresses\u2026"
-              />
-            ) : stage === "error" && errorStage === "recording" ? (
-              <ErrorStep
-                heading="Recording failed"
-                errorMessage={errorMessage}
-                onRetry={() => void handleRetry()}
-                onClose={onClose}
-                partialWarning={true}
-              />
-            ) : null)}
-
-          {/* Done state */}
-          {isDone && (
-            <div className="space-y-3 pt-1">
-              <p className="text-[11px] text-zinc-300 leading-relaxed">
-                You&apos;re on a fresh address. Your identity is intact \u2014 same name, same
-                history.
+              <p className="text-[10px] text-zinc-600">
+                If you forget your passphrase, this is your only reminder. Stored as plain text.
               </p>
-              {sweepWarning && (
-                <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
-                  <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                    Funds weren&apos;t transferred \u2014 still on your old address. Use your backup
-                    file to recover them.
-                  </p>
-                </div>
-              )}
-              <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
-                <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                  Save your new recovery key from the identity menu before you close this.
-                </p>
-              </div>
+            </div>
+            {passError && <p className="text-[11px] text-red-400">{passError}</p>}
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/40 rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+                className="flex-1 bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-3 py-2 text-xs font-medium hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitPassphrase}
+                disabled={newPass.length < 8 || newPass !== confirmNewPass || !newHint.trim()}
+                className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Continue
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            {/* 3-dot progress indicator */}
+            <div className="flex justify-center gap-2 mb-5">
+              {[1, 2, 3].map((step) => (
+                <div
+                  key={step}
+                  className={`w-2 h-2 rounded-full transition-colors ${
+                    completedSteps >= step
+                      ? "bg-amber-500"
+                      : activeStep === step && isRunning
+                        ? "bg-amber-400 animate-pulse"
+                        : "bg-zinc-800"
+                  }`}
+                />
+              ))}
+            </div>
+
+            {/* Step list */}
+            <div className="space-y-3">
+              {/* Step 1 — Saving */}
+              {completedSteps >= 1 && stage !== "error" ? (
+                <CompletedStep {...COMPLETED_STEPS.saving} />
+              ) : stage === "saving" ? (
+                <ActiveStep
+                  heading="Saving your current key"
+                  description="Downloading a recovery file for your old address\u2026"
+                />
+              ) : stage === "saved-confirm" ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <CheckIcon />
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-zinc-100">
+                        Your file should have downloaded
+                      </p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                        Move it somewhere safe (phone, cloud, USB). It&apos;s the only way to
+                        recover funds on your old address if the transfer below fails.
+                      </p>
+                    </div>
+                  </div>
+                  {chainWarning && (
+                    <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
+                      <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                        {chainWarning} Tap continue again to proceed anyway.
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void confirmSaved()}
+                    className="w-full bg-amber-500/10 text-amber-300 border border-amber-500/40 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+                  >
+                    Got it — continue
+                  </button>
+                </div>
+              ) : stage === "error" && errorStage === "saving" ? (
+                <ErrorStep
+                  heading="Save failed"
+                  errorMessage={errorMessage}
+                  onRetry={() => void handleRetry()}
+                  onClose={onClose}
+                  partialWarning={false}
+                />
+              ) : null}
+
+              {/* Step 2 — Creating / Sweep */}
+              {completedSteps >= 1 &&
+                (completedSteps >= 2 && stage !== "error" && stage !== "sweep-failed" ? (
+                  <CompletedStep
+                    heading={
+                      sweepWarning
+                        ? "New address ready \u2014 transfer skipped"
+                        : COMPLETED_STEPS.creating.heading
+                    }
+                    description={
+                      sweepWarning
+                        ? "You chose to proceed without transferring funds. They\u2019re safe on your old address \u2014 use your backup file."
+                        : COMPLETED_STEPS.creating.description
+                    }
+                    variant={sweepWarning ? "warn" : undefined}
+                  />
+                ) : stage === "creating" ? (
+                  <ActiveStep
+                    heading="Creating your new address"
+                    description="Generating a fresh keypair and sweeping funds\u2026"
+                  />
+                ) : stage === "sweep-failed" ? (
+                  <div className="flex items-start gap-2.5">
+                    <WarnIcon />
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-amber-400">Fund transfer failed</p>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">
+                        {errorMessage || "Couldn\u2019t move your funds to the new address."}
+                      </p>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        Your funds are safe on your old address. You can retry the transfer or
+                        proceed without moving funds.
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => void retrySweep()}
+                          className="flex-1 bg-amber-400/10 text-amber-300 border border-amber-400/30 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-400/15 transition-colors"
+                        >
+                          Retry transfer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={proceedWithoutFunds}
+                          className="flex-1 bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition-colors"
+                        >
+                          Proceed without
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : stage === "error" && errorStage === "creating" ? (
+                  <ErrorStep
+                    heading="Creation failed"
+                    errorMessage={errorMessage}
+                    onRetry={() => void handleRetry()}
+                    onClose={onClose}
+                    partialWarning={false}
+                  />
+                ) : null)}
+
+              {/* Step 3 — Recording */}
+              {completedSteps >= 2 &&
+                (completedSteps >= 3 && stage !== "error" ? (
+                  <CompletedStep {...COMPLETED_STEPS.recording} />
+                ) : stage === "recording" ? (
+                  <ActiveStep
+                    heading="Recording the move"
+                    description="Writing an on-chain migration record linking both addresses\u2026"
+                  />
+                ) : stage === "error" && errorStage === "recording" ? (
+                  <ErrorStep
+                    heading="Recording failed"
+                    errorMessage={errorMessage}
+                    onRetry={() => void handleRetry()}
+                    onClose={onClose}
+                    partialWarning={true}
+                  />
+                ) : null)}
+
+              {/* Done state */}
+              {isDone && (
+                <div className="space-y-3 pt-1">
+                  <p className="text-[11px] text-zinc-300 leading-relaxed">
+                    You&apos;re on a fresh address. Your identity is intact \u2014 same name, same
+                    history.
+                  </p>
+                  {sweepWarning && (
+                    <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
+                      <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                        Funds weren&apos;t transferred \u2014 still on your old address. Use your
+                        backup file to recover them.
+                      </p>
+                    </div>
+                  )}
+                  <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
+                    <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                      Your new recovery file has been downloaded. Move it somewhere safe.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full bg-amber-500/10 text-amber-400 border border-amber-500/40 rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+                  >
+                    Continue
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -501,14 +719,14 @@ function ErrorStep({ heading, errorMessage, onRetry, onClose, partialWarning }: 
           <button
             type="button"
             onClick={onRetry}
-            className="bg-zinc-800 text-zinc-200 border border-zinc-700 rounded-lg px-2.5 py-1 text-[11px] font-medium hover:bg-zinc-700 transition-colors"
+            className="bg-amber-400/10 text-amber-300 border border-amber-400/30 rounded-lg px-2.5 py-1 text-[11px] font-medium hover:bg-amber-400/15 transition-colors"
           >
             Retry
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="bg-zinc-800 text-zinc-500 border border-zinc-700 rounded-lg px-2.5 py-1 text-[11px] font-medium hover:bg-zinc-700 transition-colors"
+            className="bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-2.5 py-1 text-[11px] font-medium hover:bg-zinc-800 transition-colors"
           >
             Cancel
           </button>

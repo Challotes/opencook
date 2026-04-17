@@ -6,19 +6,14 @@ import { ChangePassphraseModal } from "@/components/ChangePassphraseModal";
 import { EarningsSparkline } from "@/components/EarningsSparkline";
 import { MoveAddressModal } from "@/components/MoveAddressModal";
 import { PassphrasePrompt } from "@/components/PassphrasePrompt";
+import { RestoreModal } from "@/components/RestoreModal";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { satsToDollars, useBsvPrice } from "@/hooks/useBsvPrice";
 import { useCurrencyMode } from "@/hooks/useCurrencyMode";
 import { downloadBackup, getStoredHint } from "@/services/bsv/backup-template";
-import { decryptWif, encryptWif } from "@/services/bsv/crypto";
-import {
-  importIdentity,
-  isIdentityEncrypted,
-  signPost,
-  unlockIdentity,
-} from "@/services/bsv/identity";
-import { cleanupMigrations } from "./actions";
+import { encryptWif } from "@/services/bsv/crypto";
+import { isIdentityEncrypted, unlockIdentity } from "@/services/bsv/identity";
 import { FundAddress } from "./FundAddress";
 
 const BACKED_UP_KEY = "bsvibes_identity_backed_up";
@@ -72,20 +67,7 @@ export function IdentityChip(): React.JSX.Element | null {
   const [reAuthError, setReAuthError] = useState("");
   const [reAuthLoading, setReAuthLoading] = useState(false);
 
-  // Import / restore state
-  const [showImport, setShowImport] = useState(false);
-  const [importError, setImportError] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importSuccess, setImportSuccess] = useState(false);
-  const [encryptedImportData, setEncryptedImportData] = useState<{
-    wif_encrypted: string;
-    name?: string;
-    hint?: string;
-  } | null>(null);
-  const [encryptedImportError, setEncryptedImportError] = useState("");
-  const [decryptingImport, setDecryptingImport] = useState(false);
-  const [pendingRestoreWif, setPendingRestoreWif] = useState<string | null>(null);
-  const [pendingRestoreName, setPendingRestoreName] = useState<string | undefined>(undefined);
+  // Import state moved to RestoreModal
 
   // Advanced section (Show/Copy/Paste key)
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -108,20 +90,13 @@ export function IdentityChip(): React.JSX.Element | null {
   const [showDeposit, setShowDeposit] = useState(false);
   // Manage identity modal
   const [showManage, setShowManage] = useState(false);
+  // Restore modal
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
 
-  // Reset Wallet flow — confirmation inline, then MoveAddressModal handles the wizard
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetError, setResetError] = useState("");
-  // Inline re-auth for the Move flow — shows passphrase prompt IN the confirmation
-  // block instead of spawning a disconnected modal elsewhere.
-  const [resetInlineAuth, setResetInlineAuth] = useState(false);
-  const [resetAuthError, setResetAuthError] = useState("");
-  const [resetAuthLoading, setResetAuthLoading] = useState(false);
-  // Move Address Modal
+  // Move Address Modal — row click goes straight to modal (no inline expand)
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [movePassphrase, setMovePassphrase] = useState("");
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Helpers defined early for use in effects ──────────────────────────────
@@ -133,13 +108,6 @@ export function IdentityChip(): React.JSX.Element | null {
     setShowAdvanced(false);
     setKeyRevealed(false);
     setCopied(false);
-    setShowImport(false);
-    setImportError("");
-    setImportSuccess(false);
-    setEncryptedImportData(null);
-    setEncryptedImportError("");
-    setPendingRestoreWif(null);
-    setPendingRestoreName(undefined);
   }, []);
 
   const loadStoredHint = useCallback(() => {
@@ -251,12 +219,6 @@ export function IdentityChip(): React.JSX.Element | null {
     setShowAdvanced(false);
     setKeyRevealed(false);
     setCopied(false);
-    resetImport();
-    setImportSuccess(false);
-    setShowResetConfirm(false);
-    setResetError("");
-    setResetInlineAuth(false);
-    setResetAuthError("");
   }
 
   function closeManageModal() {
@@ -424,236 +386,16 @@ export function IdentityChip(): React.JSX.Element | null {
     requireReAuth(() => setKeyRevealed((v) => !v));
   }
 
-  // ── Import / Restore ───────────────────────────────────────────────────
+  // ── Modal launchers ────────────────────────────────────────────────────
 
-  function resetImport(): void {
-    setShowImport(false);
-    setImportError("");
-    setImportSuccess(false);
-    setEncryptedImportData(null);
-    setEncryptedImportError("");
-    setPendingRestoreWif(null);
-    setPendingRestoreName(undefined);
-  }
-
-  // B5 fix: close import when upgrade modal opens
   function openUpgradeModal(): void {
     setShowUpgradeModal(true);
-    resetImport();
   }
 
   function openMoveModal(pass: string): void {
-    setShowResetConfirm(false);
-    setResetError("");
-    setResetInlineAuth(false);
-    setResetAuthError("");
     setMovePassphrase(pass);
-    setOpen(false);
+    setShowManage(false);
     setShowMoveModal(true);
-  }
-
-  async function doImport(wif: string, name?: string): Promise<void> {
-    setImporting(true);
-    setImportError("");
-    try {
-      if (isProtected && identity) {
-        const passForBackup = reAuthPassphraseRef.current;
-        reAuthPassphraseRef.current = "";
-        const date = new Date().toISOString().slice(0, 10);
-        if (passForBackup) {
-          const encBackup = await encryptWif(identity.wif, passForBackup);
-          downloadBackup(
-            {
-              name: identity.name,
-              address: identity.address,
-              wif_encrypted: encBackup,
-              createdAt: new Date().toISOString(),
-              note: "Previous identity saved before switching.",
-              hint: getStoredHint(),
-            },
-            `bsvibes-${identity.name}-${date}.html`
-          );
-        } else {
-          // B1 fix: within grace window but passphrase ref is empty — still prompt before replacing
-          // We'll set pending restore and show a "download your current key first" prompt
-          setPendingRestoreWif(wif);
-          setPendingRestoreName(name);
-          setImporting(false);
-          return;
-        }
-        setPendingRestoreWif(wif);
-        setPendingRestoreName(name);
-        setImporting(false);
-        return;
-      }
-
-      if (!isProtected && identity) {
-        downloadBackup(
-          {
-            name: identity.name,
-            address: identity.address,
-            wif: identity.wif,
-            createdAt: new Date().toISOString(),
-            note: "Previous identity saved before switching.",
-            hint: getStoredHint(),
-          },
-          `bsvibes-${identity.name}-${new Date().toISOString().slice(0, 10)}.html`
-        );
-      }
-
-      await performImport(wif, name);
-    } catch (e) {
-      setImportError(e instanceof Error ? e.message : "Restore failed");
-      setImporting(false);
-    }
-  }
-
-  async function performImport(wif: string, name?: string): Promise<void> {
-    try {
-      const imported = await importIdentity(wif, name);
-      updateIdentity(imported);
-
-      const cleanupTs = Date.now();
-      const cleanupMsg = `cleanup:${imported.pubkey}:${cleanupTs}`;
-      signPost(cleanupMsg)
-        .then((sig) => {
-          if (sig) return cleanupMigrations(imported.pubkey, sig.signature, cleanupTs);
-        })
-        .catch((err) => {
-          console.warn("[BSVibes] doImport: cleanupMigrations failed (non-critical)", err);
-        });
-
-      setImportSuccess(true);
-      setTimeout(() => {
-        resetImport();
-        setOpen(false);
-      }, 1200);
-    } catch (e) {
-      setImportError(e instanceof Error ? e.message : "Restore failed");
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  async function confirmPendingRestore(): Promise<void> {
-    if (!pendingRestoreWif) return;
-    const wif = pendingRestoreWif;
-    const name = pendingRestoreName;
-    setPendingRestoreWif(null);
-    setPendingRestoreName(undefined);
-    setImporting(true);
-    await performImport(wif, name);
-  }
-
-  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const text = (ev.target?.result as string) ?? "";
-      let parsed: { wif?: string; wif_encrypted?: string; name?: string; hint?: string } | null =
-        null;
-
-      const trimmed = text.trimStart();
-      if (
-        trimmed.startsWith("<!DOCTYPE") ||
-        trimmed.startsWith("<html") ||
-        text.includes("BACKUP_DATA")
-      ) {
-        // B3 fix: use unique markers for robust extraction
-        const markerMatch = text.match(
-          /@BACKUP_DATA_START[\s\S]*?const BACKUP_DATA\s*=\s*(\{[\s\S]*?\});\s*\/\/\s*@BACKUP_DATA_END/
-        );
-        if (markerMatch) {
-          try {
-            parsed = JSON.parse(markerMatch[1]);
-          } catch {
-            // Fall back to legacy regex
-            const legacyMatch = text.match(/const BACKUP_DATA\s*=\s*(\{[\s\S]*?\});/);
-            if (legacyMatch) {
-              try {
-                parsed = JSON.parse(legacyMatch[1]);
-              } catch {
-                /* fall through */
-              }
-            }
-          }
-        } else {
-          // Legacy recovery files without markers
-          const legacyMatch = text.match(/const BACKUP_DATA\s*=\s*(\{[\s\S]*?\});/);
-          if (legacyMatch) {
-            try {
-              parsed = JSON.parse(legacyMatch[1]);
-            } catch {
-              /* fall through */
-            }
-          }
-        }
-        if (!parsed) {
-          setImportError("Could not read this recovery file — it may be corrupted");
-          return;
-        }
-      } else if (trimmed.startsWith("{")) {
-        try {
-          parsed = JSON.parse(trimmed);
-        } catch {
-          setImportError(
-            "Could not read file — make sure it is a BSVibes recovery file (.html or .json)"
-          );
-          return;
-        }
-      } else {
-        setImportError(
-          "Could not read file — make sure it is a BSVibes recovery file (.html or .json)"
-        );
-        return;
-      }
-
-      if (!parsed) {
-        setImportError("File does not contain a valid recovery key");
-        return;
-      }
-
-      if (parsed.wif_encrypted) {
-        setEncryptedImportData({
-          wif_encrypted: parsed.wif_encrypted,
-          name: parsed.name,
-          hint: parsed.hint,
-        });
-        setEncryptedImportError("");
-        return;
-      }
-
-      if (parsed.wif) {
-        await doImport(parsed.wif, parsed.name);
-        return;
-      }
-
-      setImportError("File does not contain a valid recovery key");
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  }
-
-  async function handleDecryptAndImport(passphrase: string): Promise<void> {
-    if (!encryptedImportData) return;
-    setDecryptingImport(true);
-    setEncryptedImportError("");
-    try {
-      const wif = await decryptWif(encryptedImportData.wif_encrypted, passphrase);
-      if (!wif) {
-        setEncryptedImportError("Wrong passphrase — try again");
-        setDecryptingImport(false);
-        return;
-      }
-      const name = encryptedImportData.name;
-      setEncryptedImportData(null);
-      await doImport(wif, name);
-    } catch {
-      setEncryptedImportError("Something went wrong — try again");
-    } finally {
-      setDecryptingImport(false);
-    }
   }
 
   // ── Loading / identity guards ──────────────────────────────────────────
@@ -773,7 +515,8 @@ export function IdentityChip(): React.JSX.Element | null {
           passphrase={movePassphrase}
           onComplete={(newIdentity) => {
             updateIdentity(newIdentity);
-            setIsProtected(false);
+            setIsProtected(true);
+            setReAuthTime(Date.now());
             localStorage.removeItem(BACKED_UP_KEY);
             setBackedUp(false);
           }}
@@ -791,6 +534,20 @@ export function IdentityChip(): React.JSX.Element | null {
         />
       )}
 
+      {showRestoreModal && identity && (
+        <RestoreModal
+          isOpen={showRestoreModal}
+          onClose={() => setShowRestoreModal(false)}
+          onSuccess={(imported) => {
+            updateIdentity(imported);
+            setShowRestoreModal(false);
+          }}
+          currentIdentity={identity}
+          isProtected={isProtected}
+          reAuthPassphrase={reAuthPassphraseRef.current}
+        />
+      )}
+
       {/* ── Manage Identity modal ── */}
       {showManage && (
         <div
@@ -805,10 +562,11 @@ export function IdentityChip(): React.JSX.Element | null {
           />
           <div className="relative z-10 w-full flex items-center justify-center">
             <div
-              className="w-full max-w-sm rounded-xl border border-zinc-700 shadow-2xl overflow-hidden"
-              style={{ backgroundColor: "#18181b" }}
+              className="w-full max-w-sm rounded-xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden"
+              style={{ backgroundColor: "#0f0f0f" }}
             >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+              <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+              <div className="flex items-center justify-between px-4 py-3 border-b border-amber-400/10">
                 <p className="text-sm font-semibold text-zinc-100">You</p>
                 <button
                   type="button"
@@ -832,7 +590,7 @@ export function IdentityChip(): React.JSX.Element | null {
                 </button>
               </div>
 
-              <div className="divide-y divide-zinc-800/60">
+              <div className="divide-y divide-amber-400/10">
                 {/* Save recovery file */}
                 {reAuthAction !== null ? (
                   <div className="px-4 py-3">
@@ -854,7 +612,7 @@ export function IdentityChip(): React.JSX.Element | null {
                     type="button"
                     onClick={handleSaveFile}
                     disabled={downloading}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left disabled:opacity-40"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-400/5 transition-colors text-left disabled:opacity-40"
                   >
                     <svg
                       width="18"
@@ -901,7 +659,7 @@ export function IdentityChip(): React.JSX.Element | null {
                     if (isProtected) setShowChangePassModal(true);
                     else openUpgradeModal();
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-400/5 transition-colors text-left"
                 >
                   <svg
                     width="18"
@@ -913,7 +671,7 @@ export function IdentityChip(): React.JSX.Element | null {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
-                    className={isProtected ? "text-emerald-500" : "text-amber-400"}
+                    className="text-amber-400"
                   >
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     {isProtected && <path d="m9 12 2 2 4-4" />}
@@ -948,275 +706,118 @@ export function IdentityChip(): React.JSX.Element | null {
                   </svg>
                 </button>
 
-                {/* Restore from another device */}
-                {!showImport ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowImport(true)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left"
+                {/* Restore from another device — opens RestoreModal */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeManageModal();
+                    if (isProtected && !isRecentlyAuthed()) {
+                      requireReAuth(() => setShowRestoreModal(true));
+                    } else {
+                      setShowRestoreModal(true);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-400/5 transition-colors text-left"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className="text-zinc-400"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.75"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                      className="text-zinc-400"
-                    >
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-zinc-200 block">
-                        Restore from another device
-                      </span>
-                      <span className="text-[10px] text-zinc-500 block mt-0.5">
-                        Import a recovery file
-                      </span>
-                    </div>
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                      className="text-zinc-600 shrink-0"
-                    >
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                ) : (
-                  <div className="px-4 py-3 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-zinc-200">
-                        Restore from another device
-                      </span>
-                      <button
-                        type="button"
-                        onClick={resetImport}
-                        className="text-[10px] text-red-400/80 hover:text-red-300 transition-colors font-medium"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-amber-400/80 leading-relaxed">
-                      This will replace your current identity. Make sure your current recovery file
-                      is saved first.
-                    </p>
-                    {pendingRestoreWif !== null ? (
-                      <div className="space-y-2 bg-zinc-800/40 rounded-lg p-2.5 border border-zinc-700/60">
-                        <p className="text-[11px] text-zinc-300 leading-relaxed font-medium">
-                          Your recovery file has been saved.
-                        </p>
-                        <p className="text-[11px] text-zinc-500 leading-relaxed">
-                          Continue with restore? This will replace your current identity.
-                        </p>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPendingRestoreWif(null);
-                              setPendingRestoreName(undefined);
-                              setImporting(false);
-                            }}
-                            className="flex-1 bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-700 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={confirmPendingRestore}
-                            disabled={importing}
-                            className="flex-1 bg-white text-black rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            {importing ? "Restoring..." : "Continue"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : encryptedImportData !== null ? (
-                      <PassphrasePrompt
-                        context="This recovery file is encrypted. Enter the passphrase you used when creating it."
-                        error={encryptedImportError}
-                        loading={decryptingImport}
-                        onConfirm={handleDecryptAndImport}
-                        onCancel={() => {
-                          setEncryptedImportData(null);
-                          setEncryptedImportError("");
-                        }}
-                        confirmLabel="Restore"
-                        hint={encryptedImportData.hint}
-                      />
-                    ) : (
-                      <>
-                        <p className="text-[11px] text-zinc-500 leading-relaxed">
-                          Choose your recovery file.
-                        </p>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".html,.json,text/html,application/json"
-                          onChange={handleImportFile}
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={importing}
-                          className="w-full bg-zinc-800 text-zinc-300 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-medium hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {importing ? "Restoring..." : "Choose recovery file"}
-                        </button>
-                      </>
-                    )}
-                    {importError && (
-                      <p className="text-[11px] text-red-400 leading-relaxed">{importError}</p>
-                    )}
-                    {importSuccess && (
-                      <p className="text-[11px] text-emerald-400 font-medium">Identity restored.</p>
-                    )}
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium text-zinc-200 block">
+                      Restore from another device
+                    </span>
+                    <span className="text-[10px] text-zinc-500 block mt-0.5">
+                      Import a recovery file
+                    </span>
                   </div>
-                )}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className="text-zinc-600 shrink-0"
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
 
-                {/* Move to a new address */}
-                {!showResetConfirm ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowResetConfirm(true);
-                      setResetError("");
-                    }}
-                    disabled={!identity}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left disabled:opacity-40"
+                {/* Move to a new address — goes straight to MoveAddressModal */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeManageModal();
+                    if (isProtected && !isRecentlyAuthed()) {
+                      requireReAuth(() => openMoveModal(reAuthPassphraseRef.current));
+                    } else {
+                      openMoveModal(reAuthPassphraseRef.current);
+                    }
+                  }}
+                  disabled={!identity}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-400/5 transition-colors text-left disabled:opacity-40"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className="text-zinc-600 shrink-0"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.75"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                      className="text-zinc-600 shrink-0"
-                    >
-                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                      <path d="M3 3v5h5" />
-                    </svg>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-zinc-200 block">
-                        Move to a new address
-                      </span>
-                      <span className="text-[10px] text-zinc-500 block mt-0.5">
-                        Rotate to a new address. Your name, earnings, and posts stay intact.
-                      </span>
-                    </div>
-                  </button>
-                ) : (
-                  <div className="px-4 py-3 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-zinc-200">
-                        Move to a new address
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowResetConfirm(false);
-                          setResetError("");
-                          setResetInlineAuth(false);
-                          setResetAuthError("");
-                        }}
-                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors font-medium"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-amber-400/80 leading-relaxed">
-                      Rotates your identity to a new BSV address. Your name, posts, earnings
-                      history, and future payouts follow the new key via an on-chain migration.
-                      Confirmed funds will be swept over; unconfirmed UTXOs stay at the old address
-                      until the mempool clears.
-                    </p>
-                    {resetError && (
-                      <p className="text-[11px] text-red-400 leading-relaxed">{resetError}</p>
-                    )}
-                    {resetInlineAuth ? (
-                      <PassphrasePrompt
-                        context="Enter your passphrase to move to a new address."
-                        error={resetAuthError}
-                        loading={resetAuthLoading}
-                        onConfirm={async (pass) => {
-                          setResetAuthLoading(true);
-                          setResetAuthError("");
-                          try {
-                            const unlocked = await unlockIdentity(pass);
-                            if (!unlocked) {
-                              setResetAuthError("Wrong passphrase");
-                              setResetAuthLoading(false);
-                              return;
-                            }
-                            setResetAuthLoading(false);
-                            openMoveModal(pass);
-                          } catch {
-                            setResetAuthError("Something went wrong — try again");
-                            setResetAuthLoading(false);
-                          }
-                        }}
-                        onCancel={() => {
-                          setResetInlineAuth(false);
-                          setResetAuthError("");
-                        }}
-                        confirmLabel="Continue"
-                        hint={storedHint}
-                      />
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowResetConfirm(false);
-                            setResetError("");
-                            setResetInlineAuth(false);
-                            setResetAuthError("");
-                          }}
-                          className="flex-1 bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-700 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isProtected && !isRecentlyAuthed()) {
-                              setResetInlineAuth(true);
-                              setResetAuthError("");
-                            } else {
-                              openMoveModal(reAuthPassphraseRef.current);
-                            }
-                          }}
-                          className="flex-1 bg-amber-500/10 text-amber-400 border border-amber-500/40 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-500/20 transition-colors"
-                        >
-                          Move to new address
-                        </button>
-                      </div>
-                    )}
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium text-zinc-200 block">
+                      Move to a new address
+                    </span>
+                    <span className="text-[10px] text-zinc-500 block mt-0.5">
+                      Rotate to a new address. Your name, earnings, and posts stay intact.
+                    </span>
                   </div>
-                )}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className="text-zinc-600 shrink-0"
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
 
                 {/* Show recovery key (advanced) */}
                 {!showAdvanced ? (
                   <button
                     type="button"
                     onClick={() => requireReAuth(() => setShowAdvanced(true))}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-400/5 transition-colors text-left"
                   >
                     <svg
                       width="18"
@@ -1235,7 +836,7 @@ export function IdentityChip(): React.JSX.Element | null {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-medium text-zinc-400">Show recovery key</span>
-                        <span className="text-[9px] font-medium text-zinc-500 bg-zinc-800 border border-zinc-700/60 rounded px-1 py-px uppercase tracking-wide">
+                        <span className="text-[9px] font-medium text-amber-400/60 bg-amber-400/5 border border-amber-400/20 rounded px-1 py-px uppercase tracking-wide">
                           Advanced
                         </span>
                       </div>
@@ -1273,7 +874,7 @@ export function IdentityChip(): React.JSX.Element | null {
                         Cancel
                       </button>
                     </div>
-                    <div className="bg-zinc-800/60 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-zinc-400 break-all leading-relaxed">
+                    <div className="bg-amber-400/5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-amber-300/70 break-all leading-relaxed">
                       {keyRevealed
                         ? identity.wif
                         : `${"\u2022".repeat(12)}${identity.wif.slice(-4)}`}
@@ -1282,7 +883,7 @@ export function IdentityChip(): React.JSX.Element | null {
                       <button
                         type="button"
                         onClick={handleRevealKey}
-                        className="w-full bg-zinc-800 text-zinc-300 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-700 transition-colors"
+                        className="w-full bg-amber-400/10 text-amber-300 border border-amber-400/30 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-400/15 transition-colors"
                       >
                         Show key
                       </button>
@@ -1291,7 +892,7 @@ export function IdentityChip(): React.JSX.Element | null {
                       <button
                         type="button"
                         onClick={handleCopy}
-                        className="w-full bg-zinc-800 text-zinc-300 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-700 transition-colors"
+                        className="w-full bg-amber-400/10 text-amber-300 border border-amber-400/30 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-400/15 transition-colors"
                       >
                         {copied ? "Copied" : "Copy key"}
                       </button>
@@ -1529,7 +1130,10 @@ export function IdentityChip(): React.JSX.Element | null {
               <div className="border-b border-zinc-800">
                 <button
                   type="button"
-                  onClick={openUpgradeModal}
+                  onClick={() => {
+                    setOpen(false);
+                    openMoveModal("");
+                  }}
                   className="w-full flex items-center gap-2 px-3 py-2 bg-red-950/20 hover:bg-red-950/40 transition-colors cursor-pointer text-left"
                 >
                   <span className="relative flex h-2 w-2 shrink-0">
@@ -1639,12 +1243,12 @@ export function IdentityChip(): React.JSX.Element | null {
                 </p>
               ) : (
                 <div className="space-y-1">
-                  {(activityExpanded ? activity : activity.slice(0, 2)).map((a) => {
+                  {(activityExpanded ? activity : activity.slice(0, 2)).map((a, i) => {
                     const isFree = a.amount === 0;
                     const isBoot = a.label.toLowerCase().includes("boot");
                     return (
                       <div
-                        key={`${a.created_at}-${a.label}`}
+                        key={`${a.created_at}-${a.label}-${i}`}
                         className="flex items-center justify-between text-[11px]"
                       >
                         <span className="text-zinc-500 truncate mr-2">

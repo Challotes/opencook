@@ -22,6 +22,9 @@ export type { Identity };
 import { generateAnonName } from "@/lib/utils";
 import { decryptWif, encryptWif, isEncrypted } from "./crypto";
 
+// Rotation lock — prevents concurrent Move + Upgrade from racing
+let _rotationInProgress = false;
+
 /**
  * Cached BSV SDK module promise — imported once, reused everywhere.
  */
@@ -257,14 +260,13 @@ async function autoTransferFunds(
   oldWif: string,
   oldAddress: string,
   newAddress: string
-): Promise<{ txid: string | null; transferredSats: number; error?: string }> {
-  const WOC_BASE = "https://api.whatsonchain.com/v1/bsv/main";
-
+): Promise<{ txid: string | null; transferredSats: number; error?: string; noFunds?: boolean }> {
   try {
     console.log(`[BSVibes] autoTransferFunds: fetching UTXOs for ${oldAddress}`);
 
-    // Fetch UTXOs from old address
-    const utxoRes = await fetch(`${WOC_BASE}/address/${oldAddress}/unspent`);
+    // Use the cached proxy instead of hitting WoC directly — gets retry,
+    // stale fallback, and rate-limit protection. fresh=1 bypasses cache TTL.
+    const utxoRes = await fetch(`/api/unspent?address=${encodeURIComponent(oldAddress)}&fresh=1`);
     if (!utxoRes.ok) {
       const msg = `UTXO fetch failed: HTTP ${utxoRes.status} for ${oldAddress}`;
       console.error(`[BSVibes] autoTransferFunds: ${msg}`);
@@ -276,36 +278,29 @@ async function autoTransferFunds(
       console.log(
         `[BSVibes] autoTransferFunds: no UTXOs found at ${oldAddress} — nothing to transfer`
       );
-      return { txid: null, transferredSats: 0 }; // No funds — not an error
+      return { txid: null, transferredSats: 0, noFunds: true };
     }
 
-    console.log(`[BSVibes] autoTransferFunds: found ${utxoData.length} UTXOs`);
-
-    // Sweep all UTXOs — no cap
     const utxos = utxoData as Array<{ tx_hash: string; tx_pos: number; value: number }>;
-
     const totalSats = utxos.reduce((sum, u) => sum + u.value, 0);
     if (totalSats === 0) {
-      return { txid: null, transferredSats: 0 };
+      return { txid: null, transferredSats: 0, noFunds: true };
     }
 
     console.log(
-      `[BSVibes] autoTransferFunds: spending ${utxos.length} inputs, total ${totalSats} sats`
+      `[BSVibes] autoTransferFunds: found ${utxos.length} UTXOs, total ${totalSats} sats`
     );
 
     const { Transaction, PrivateKey, P2PKH, SatoshisPerKilobyte } = await getBsvSdk();
     const oldKey = PrivateKey.fromWif(oldWif);
 
-    // Fetch source tx hexes in batches to respect WoC rate limit
     const txHashes = utxos.map((u) => u.tx_hash);
     console.log(
       `[BSVibes] autoTransferFunds: fetching ${new Set(txHashes).size} unique source txs via proxy`
     );
-    const sourceTxHexMap = await fetchSourceTxsBatched(txHashes, WOC_BASE);
+    const sourceTxHexMap = await fetchSourceTxsBatched(txHashes, "");
 
-    // Build transaction: selected UTXOs → new address
     const tx = new Transaction();
-
     for (const utxo of utxos) {
       const hex = sourceTxHexMap.get(utxo.tx_hash);
       if (!hex) throw new Error(`Missing source tx hex for ${utxo.tx_hash}`);
@@ -317,15 +312,11 @@ async function autoTransferFunds(
       });
     }
 
-    // Single output to new address (change flag so fee is auto-deducted)
     tx.addOutput({
       lockingScript: new P2PKH().lock(newAddress),
       change: true,
     });
 
-    // ARC (SDK default) at 100 sat/kb — GorillaPool's mining minimum.
-    // Txs go directly to the miner. Previously switched to WoC due to a
-    // misdiagnosed ARC outage (was actually a local DNS cache issue).
     await tx.fee(new SatoshisPerKilobyte(100));
     await tx.sign();
 
@@ -396,6 +387,39 @@ export async function upgradeIdentity(
     txid: string | null;
     transferredSats: number;
     error?: string;
+    noFunds?: boolean;
+  };
+}> {
+  if (_rotationInProgress) {
+    throw new Error("An identity change is already in progress");
+  }
+  _rotationInProgress = true;
+  try {
+    return await _upgradeIdentityInner(passphrase, oldWif, currentName, hint);
+  } finally {
+    _rotationInProgress = false;
+  }
+}
+
+async function _upgradeIdentityInner(
+  passphrase: string,
+  oldWif: string,
+  currentName: string,
+  hint?: string
+): Promise<{
+  identity: Identity;
+  encStore: string;
+  migration: {
+    oldPubkey: string;
+    newPubkey: string;
+    migrationMessage: string;
+    migrationSignature: string;
+  };
+  fundTransfer: {
+    txid: string | null;
+    transferredSats: number;
+    error?: string;
+    noFunds?: boolean;
   };
 }> {
   const { PrivateKey } = await getBsvSdk();
@@ -456,23 +480,23 @@ export async function upgradeIdentity(
 }
 
 /**
- * Sweep CONFIRMED-only funds from old address to new address.
  * Sweep all UTXOs from old address to new address.
  * At 100 sat/kb (GorillaPool's minimum), all txs confirm in the next block,
- * so unconfirmed UTXOs are safe to include. Previously filtered to confirmed-only
- * when fee rate was 10 sat/kb (below miner minimum, txs never confirmed).
+ * so unconfirmed UTXOs are safe to include.
+ *
+ * Exported so MoveAddressModal can retry independently on failure.
  */
-async function sweepFunds(
+export async function sweepFunds(
   oldWif: string,
   oldAddress: string,
   newAddress: string
-): Promise<{ txid: string | null; transferredSats: number; error?: string }> {
-  const WOC_BASE = "https://api.whatsonchain.com/v1/bsv/main";
-
+): Promise<{ txid: string | null; transferredSats: number; error?: string; noFunds?: boolean }> {
   try {
     console.log(`[BSVibes] sweepFunds: fetching UTXOs for ${oldAddress}`);
 
-    const utxoRes = await fetch(`${WOC_BASE}/address/${oldAddress}/unspent`);
+    // Use the cached proxy instead of hitting WoC directly — gets retry,
+    // stale fallback, and rate-limit protection. fresh=1 bypasses cache TTL.
+    const utxoRes = await fetch(`/api/unspent?address=${encodeURIComponent(oldAddress)}&fresh=1`);
     if (!utxoRes.ok) {
       const msg = `UTXO fetch failed: HTTP ${utxoRes.status} for ${oldAddress}`;
       console.error(`[BSVibes] sweepFunds: ${msg}`);
@@ -482,20 +506,13 @@ async function sweepFunds(
     const utxoData = await utxoRes.json();
     if (!Array.isArray(utxoData) || utxoData.length === 0) {
       console.log(`[BSVibes] sweepFunds: no UTXOs found at ${oldAddress} — nothing to transfer`);
-      return { txid: null, transferredSats: 0 };
+      return { txid: null, transferredSats: 0, noFunds: true };
     }
 
-    const utxos = (utxoData as Array<{ tx_pos: number; tx_hash: string; value: number }>).map(
-      (u) => ({ tx_hash: u.tx_hash, tx_pos: u.tx_pos, value: u.value })
-    );
-
-    if (utxos.length === 0) {
-      return { txid: null, transferredSats: 0 };
-    }
-
+    const utxos = utxoData as Array<{ tx_hash: string; tx_pos: number; value: number }>;
     const totalSats = utxos.reduce((sum, u) => sum + u.value, 0);
     if (totalSats === 0) {
-      return { txid: null, transferredSats: 0 };
+      return { txid: null, transferredSats: 0, noFunds: true };
     }
 
     console.log(`[BSVibes] sweepFunds: spending ${utxos.length} inputs, total ${totalSats} sats`);
@@ -507,10 +524,9 @@ async function sweepFunds(
     console.log(
       `[BSVibes] sweepFunds: fetching ${new Set(txHashes).size} unique source txs via proxy`
     );
-    const sourceTxHexMap = await fetchSourceTxsBatched(txHashes, WOC_BASE);
+    const sourceTxHexMap = await fetchSourceTxsBatched(txHashes, "");
 
     const tx = new Transaction();
-
     for (const utxo of utxos) {
       const hex = sourceTxHexMap.get(utxo.tx_hash);
       if (!hex) throw new Error(`Missing source tx hex for ${utxo.tx_hash}`);
@@ -527,9 +543,6 @@ async function sweepFunds(
       change: true,
     });
 
-    // ARC (SDK default) at 100 sat/kb — GorillaPool's mining minimum.
-    // Txs go directly to the miner. Previously switched to WoC due to a
-    // misdiagnosed ARC outage (was actually a local DNS cache issue).
     await tx.fee(new SatoshisPerKilobyte(100));
     await tx.sign();
 
@@ -580,6 +593,38 @@ export async function resetIdentity(
     txid: string | null;
     transferredSats: number;
     error?: string;
+    noFunds?: boolean;
+  };
+  commit: () => void;
+}> {
+  if (_rotationInProgress) {
+    throw new Error("An identity change is already in progress");
+  }
+  _rotationInProgress = true;
+  try {
+    return await _resetIdentityInner(currentWif, currentName, options);
+  } finally {
+    _rotationInProgress = false;
+  }
+}
+
+async function _resetIdentityInner(
+  currentWif: string,
+  currentName: string,
+  options?: { deferCommit?: boolean }
+): Promise<{
+  identity: Identity;
+  migration: {
+    oldPubkey: string;
+    newPubkey: string;
+    migrationMessage: string;
+    migrationSignature: string;
+  };
+  fundTransfer: {
+    txid: string | null;
+    transferredSats: number;
+    error?: string;
+    noFunds?: boolean;
   };
   commit: () => void;
 }> {

@@ -2,6 +2,34 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-04-17 (cont.) — Amber Rebrand + Sweep Hardening + Modal Restructure (Stage 6)
+
+Category: security, UX, architecture, bug fixes
+
+Large session covering amber brand rollout, critical sweep bug investigation and fix, modal architecture restructure, and migration chain safety.
+
+**Amber brand rebrand.** Single accent color (#f59e0b / amber-400) across identity card dropdown, You modal, UpgradeModal, ChangePassphraseModal, MoveAddressModal. `#0f0f0f` backgrounds, gold top stripe, amber borders/buttons. Emerald removed entirely from identity flows. AnimatedBalance chip flash updated to amber.
+
+**Sweep bug investigation.** User lost 17,306 sats at `1GqXaU66...` when Move + Upgrade in quick succession silently failed to transfer funds. Three-agent parallel investigation found: (1) `sweepFunds` and `autoTransferFunds` hit WoC directly with no retry — a 429 or empty response = silent fund loss; (2) "no UTXOs" treated as clean success (no error flag) — user saw a clean "done" screen while funds were stranded; (3) sweep failure didn't block rotation — commit proceeded regardless. On-chain investigation confirmed no outbound tx was ever broadcast from the address.
+
+**Sweep hardening.** Both sweep functions switched to `/api/unspent` proxy (retry + cache + stale fallback). "No UTXOs" now returns `noFunds: true` flag. Sweep failure enters `sweep-failed` stage in MoveAddressModal with "Retry transfer" / "Proceed without" buttons. `sweepFunds` exported for independent retry. Rotation lock (`_rotationInProgress`) prevents concurrent Move + Upgrade.
+
+**Modal restructure.** You modal converted from mixed inline/popup to clean launcher. Restore flow extracted to standalone `RestoreModal.tsx`. Move row goes straight to MoveAddressModal (no inline expansion). Only recovery key stays inline (read-only). Architect agent confirmed: mixed patterns are the worst option — no learnable rule for users.
+
+**Merged Move + Passphrase.** MoveAddressModal now collects passphrase as first stage, calls `upgradeIdentity` instead of `resetIdentity`. Every rotation produces an encrypted key. "Not protected" banner opens MoveAddressModal directly. Downloads encrypted backup automatically on completion. Plaintext key rotation removed from primary UI.
+
+**Pre-rotation chain verification.** New `verifyMigrationChain` server action checks all posting pubkeys resolve to current key before any rotation. Warns user if chain is broken with "proceed anyway" escape hatch. Added to UpgradeModal, ChangePassphraseModal, and MoveAddressModal.
+
+**Migration chain repair.** Investigated user's earnings drop (590 → 11 sats per split). Found 7 orphaned posting pubkeys (91 posts) disconnected from current key due to broken migration chain from earlier testing. Inserted 3 bridge migrations to reconnect. Chain verified healthy.
+
+**Mandatory memory clue.** Passphrase hint field now required (not optional) in UpgradeModal and ChangePassphraseModal. Submit button disabled until filled. Label changed from "recommended" to mandatory.
+
+**Activity key fix.** Added array index to React key in activity list to prevent duplicate-key console errors when multiple payouts share the same timestamp.
+
+Files changed: `src/app/IdentityBar.tsx`, `src/app/actions.ts`, `src/services/bsv/identity.ts`, `src/components/MoveAddressModal.tsx`, `src/components/UpgradeModal.tsx`, `src/components/ChangePassphraseModal.tsx`, `src/components/RestoreModal.tsx` (new), CLAUDE.md, ROADMAP.md.
+
+Verified: tsc clean, 27/27 tests pass, biome clean.
+
 ## 2026-04-17 — Identity Dropdown Polish (Stage 5) — Earnings-First Hierarchy
 
 Category: UX, design polish
