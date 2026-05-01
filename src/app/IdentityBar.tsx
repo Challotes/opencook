@@ -806,7 +806,7 @@ export function IdentityChip(): React.JSX.Element | null {
                       Restore key from file
                     </span>
                     <span className="text-[10px] text-zinc-500 block mt-0.5">
-                      Move to a saved key — posts and earnings stay on this one
+                      Imports posts and earnings from a saved key
                     </span>
                   </div>
                   <svg
