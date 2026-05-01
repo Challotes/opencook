@@ -97,6 +97,10 @@ export function IdentityChip(): React.JSX.Element | null {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const gateInputRef = useRef<HTMLInputElement>(null);
+  // Tracks whether MoveAddressModal reached "done" stage (vs Cancel mid-flow).
+  // Read in onClose to decide whether to clear the You modal's manage gate
+  // (rotation = new passphrase, old re-auth is stale) or just dismiss the wizard.
+  const moveCompletedRef = useRef(false);
 
   // ── Helpers defined early for use in effects ──────────────────────────────
 
@@ -505,16 +509,22 @@ export function IdentityChip(): React.JSX.Element | null {
             setIsProtected(true);
             localStorage.setItem(BACKED_UP_KEY, "1");
             setBackedUp(true);
+            moveCompletedRef.current = true;
           }}
           onClose={() => {
-            // Fired by the Continue button on the done screen, the X icon, or
-            // a backdrop click on done/sweep-failed. Close the wizard and the
-            // parent You modal, and clear the cached re-auth passphrase.
+            // Fires from: Cancel mid-wizard, Continue on done, X icon, or
+            // backdrop click. The You modal stays open in both cases —
+            // matches RestoreModal's behavior, lets the user see their
+            // updated identity state. On successful rotation we re-lock
+            // the You modal (the new passphrase is active; the cached old
+            // re-auth is stale).
             setShowMoveModal(false);
             setMovePassphrase("");
-            setShowManage(false);
-            setManageAuthed(false);
-            reAuthPassphraseRef.current = "";
+            if (moveCompletedRef.current) {
+              setManageAuthed(false);
+              reAuthPassphraseRef.current = "";
+            }
+            moveCompletedRef.current = false;
           }}
         />
       )}
