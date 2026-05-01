@@ -142,7 +142,7 @@
 - [x] Identity import with automatic migration cleanup (signed challenge required)
 - [x] Full tester audit: all identity/upgrade paths verified
 - [x] Migration return value checked — upgrade aborts if migration fails (prevents orphaned posts)
-- [x] Full identity dropdown redesign: radical simplification (43→24 state vars, extracted UpgradeModal, shared PassphrasePrompt)
+- [x] Full identity dropdown redesign: radical simplification (43→24 state vars, extracted UpgradeModal, shared PassphrasePrompt). *UpgradeModal subsequently deleted in Stage 8 batch 1 (2026-05-01) — orphaned after Stage 6 modal restructure consolidated everything into MoveAddressModal.*
 - [x] Self-contained HTML recovery files with embedded decryption (replaces JSON backups)
 - [x] Private & Offline banner in recovery files
 - [x] Re-auth grace window (60s) for sensitive actions (Copy/Show/Save/Restore)

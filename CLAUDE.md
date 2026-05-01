@@ -154,7 +154,7 @@ BootButton/useBoot → bootPost server action → server wallet builds split tx 
   - "fund your address" → "deposit slot"
   - "key rotation" → "stronger lock"
   - "PIN" → "passphrase" (minimum 8 chars, not a 4-digit PIN)
-  - **Exception:** Technical recovery artifacts (backup files, passphrase change flows, upgrade modals) may use precise terms like "key" and "WIF" where clarity for recovery outweighs friendliness. The user is already in a technical context at that point.
+  - **Exception:** Technical recovery artifacts (backup files, passphrase change flows, the Show recovery key panel) may use precise terms like "key" and "WIF" where clarity for recovery outweighs friendliness. The user is already in a technical context at that point.
 - 2-click onboarding: visit site → type idea → click Post. Done.
 - No wallet downloads, no seed phrases, no "buy crypto first"
 
