@@ -40,7 +40,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 
 ### Server Actions & Data
 
-- `src/app/actions.ts` — Server actions (all signature-verified): createPost, getPosts, getBootboard, bootPost, migrateIdentity, cleanupMigrations, verifyMigrationChain (pre-rotation orphan check)
+- `src/app/actions.ts` — Server actions. Reads (no signature): getPosts, getNewPosts, getUpdatedPosts, getOlderPosts, getBootboard, verifyMigrationChain (pre-rotation orphan check). Mutations (signature-verified): createPost, bootPost, migrateIdentity, cleanupMigrations.
 - `src/lib/db.ts` — SQLite setup (WAL, foreign keys, auto-migration, indexes, boot_grants + payouts tables)
 - `src/lib/rate-limit.ts` — In-memory sliding window rate limiter
 - `src/lib/utils.ts` — Shared utilities (generateAnonName, cn helper)

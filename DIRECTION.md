@@ -170,4 +170,4 @@ The innovation lives or dies on one demo: **a user posts an idea, someone boots 
 - Not a crypto wallet app
 - Not a social media platform (yet — it may evolve into one)
 - Not a fundraising tool
-- Not built on bOpen.ai — bOpen is the toolkit, the product is BS Vibes
+- Not built on bOpen.ai — bOpen is the toolkit, the product is BSVibes

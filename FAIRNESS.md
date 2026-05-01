@@ -180,6 +180,19 @@ No `contributor_balances` table — true no-custody means no stored balances.
 - Uses `@bsv/sdk` Transaction with N P2PKH outputs
 - OP_FALSE OP_RETURN for audit trail (BSV standard, provably unspendable)
 
+### Migration Chain Resolution
+
+Posts are signed by the pubkey active *at the time of posting*. When a user rotates their key (security upgrade, recovery on a new device, or "Move to a new key"), an OP_RETURN migration record links `from_pubkey → to_pubkey` and is mirrored into the `migrations` table.
+
+`weights.ts` walks the chain forward when calculating contribution weights — every post under a historical pubkey contributes to the *current* terminal pubkey's weight. The terminal pubkey is also the address that receives the payout split. Result: rotating keys does not lose contribution history, and a single user with five historical addresses still receives one combined share.
+
+Resolution rules:
+- A pubkey with no outgoing migration is its own terminal (active key).
+- Forks (`A → B` and `A → C` recorded for the same `from_pubkey`) are bridged via `C7`'s repair logic — the older `from_pubkey → to_pubkey` is preserved and a `B → C` bridging migration is inserted so neither branch's posts orphan. See SECURITY_AUDIT.md C7.
+- `verifyMigrationChain` (server action, called pre-rotation by MoveAddressModal) walks the chain to confirm all of the user's posting pubkeys still resolve to the current key — warns the user if the chain is broken before any new rotation cements the state.
+
+The migration table is small (one row per rotation, signed by the old key with replay protection) so the walk is cheap. Resolution is computed on demand and cached for 30s alongside the rest of the weight calculation.
+
 ## What This Model Does NOT Measure (Yet)
 
 This is a simple post-count + engagement model. It's a starting demo. Real value contributions that future versions should consider:
