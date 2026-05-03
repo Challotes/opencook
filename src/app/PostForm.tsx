@@ -208,7 +208,7 @@ export function PostForm({
           <button
             type="button"
             onClick={submitForm}
-            className="absolute right-3 bottom-[7px] sm:bottom-[11px] bg-amber-500 text-black rounded-full p-2 transition-colors hover:bg-amber-400"
+            className="absolute right-3 bottom-[5px] sm:bottom-[11px] bg-amber-500 text-black rounded-full p-2 transition-colors hover:bg-amber-400"
             title="Post"
           >
             <svg
@@ -229,7 +229,7 @@ export function PostForm({
           <button
             type="button"
             onClick={toggleMic}
-            className={`absolute right-3 bottom-[7px] sm:bottom-[11px] rounded-full p-2 transition-colors ${
+            className={`absolute right-3 bottom-[5px] sm:bottom-[11px] rounded-full p-2 transition-colors ${
               isListening
                 ? "bg-red-500 text-white hover:bg-red-600"
                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
