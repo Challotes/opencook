@@ -2,6 +2,32 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-05-04 (cont. 2) — GitHub surface: pill tease + modal footer
+
+Category: UX, positioning, brand surface
+
+User: "i am thinking we add github somewhere here whats your thoughts." Conversation evolved through three placement candidates with designer + marketer agents involved at each step.
+
+**Iteration history:**
+1. **Round 1** — Designer recommended header (icon-only beside chip); marketer recommended manifesto inline-text (contextually anchored to the open-source pitch). Disagreed on placement.
+2. **User redirected:** "next to the ask ai" — agents converged on PostForm footer row (above the fold for everyone landing on the site).
+3. **User refined further:** "what if we included the github icon in the pill, the agent chat opened and the github link logo is then clickable, visible within the chat?" — designer initially flagged that embedding a clickable icon would break the affordance, but user's refined version (icon decorative-only inside the pill, real link in modal footer) solved it cleanly.
+4. **Both agents validated round 3** — pill tease + modal footer is the durable design. Discoverable via pill (above the fold), meaningful via modal footer (room for tagline).
+5. **Visibility tuning:** initial design too quiet (text-zinc-700 on pill, text-zinc-600 footer). User pushed back: "i still cant see the github logo." Bumped to text-zinc-300 / 14x14 pill, text-zinc-300 / 16x16 centered footer.
+6. **Manifesto path bug noticed:** user clicked "Chat with the agent" in the manifesto and noticed the GitHub icon disappeared. Was hidden during `highlight` state (the amber pulse). Wrong call — the manifesto path is the highest-intent moment for the open-source signal. Fixed: icon now shows in both normal and highlight states (amber-tinted in highlight to harmonize with the pulse).
+
+**Shipped (1 file, 3 doc updates):**
+- `src/app/AgentChat.tsx` (pill button at lines 159-185) — added `group` class, decorative octocat SVG (14x14, `text-zinc-300` normal / `text-amber-200/70` highlight) after "Ask AI" label.
+- `src/app/AgentChat.tsx` (modal footer after input row) — new `<div className="border-t border-zinc-800/50 px-4 py-2.5 flex justify-center">` containing an `<a>` to `github.com/Challotes/bsvibes-` with octocat (16x16) + "The code is open." + `↗` arrow, `text-xs text-zinc-300 hover:text-zinc-100`.
+- DECISIONS.md gains "GitHub link: pill tease + modal footer" entry with full rationale + anti-patterns (rejected: header link, peer icon next to pill, manifesto-only, live star count widget, embedded clickable icon).
+- CLAUDE.md `AgentChat.tsx` paragraph rewritten to describe the dual-surface structure + the anti-pattern guard.
+
+**Verification:** `tsc --noEmit` clean (0 errors), `biome check src/app/AgentChat.tsx` clean (after fixing one nested-ternary formatting nit).
+
+**Tagline copy selected:** "The code is open." Marketer's pick over "Built in the open" (generic) and "Open source by design — every fork proves this works" (too long for modal context).
+
+**Deferred:** marketer also recommended layering a manifesto closing line ("The code is open. The fairness rules are the moat.") for the user who reads but doesn't click into the modal. User chose dual-surface only for now (option a). Manifesto line remains a future-decision option.
+
 ## 2026-05-04 (cont.) — Close You modal on rotation/restore success
 
 Category: UX, friction reduction

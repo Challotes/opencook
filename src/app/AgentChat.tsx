@@ -161,7 +161,7 @@ export function AgentChat({ highlight }: { highlight?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 transition-all mt-1 ${
+        className={`group flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 transition-all mt-1 ${
           highlight
             ? "text-amber-300 border-amber-500 bg-amber-500/10 scale-110 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
             : "text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 hover:bg-zinc-900"
@@ -171,6 +171,24 @@ export function AgentChat({ highlight }: { highlight?: boolean }) {
           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${highlight ? "bg-amber-400 animate-ping" : "bg-cyan-400/70 animate-pulse"}`}
         />
         Ask AI
+        {/* Decorative GitHub tease — devs notice, casuals don't. The actual
+            link lives in the modal footer; this is a hint, not a CTA.
+            Shown in BOTH normal and highlight states — the manifesto's
+            "Chat with the agent" CTA puts the pill into highlight, and
+            that's exactly when the open-source signal is most contextually
+            relevant (the user just read the Vision pitch). */}
+        <svg
+          viewBox="0 0 16 16"
+          width="14"
+          height="14"
+          fill="currentColor"
+          aria-hidden="true"
+          className={`transition-colors ${
+            highlight ? "text-amber-200/70" : "text-zinc-300 group-hover:text-zinc-100"
+          }`}
+        >
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+        </svg>
       </button>
     );
   }
@@ -282,6 +300,32 @@ export function AgentChat({ highlight }: { highlight?: boolean }) {
               disabled={isStreaming}
               className="w-full bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
             />
+          </div>
+
+          {/* Open-source footer — quiet trust signal for users investigating
+              the project. The pill's GitHub tease (decorative) brings them
+              here; this is the actual repo link. Center-aligned with a
+              half-opacity divider so it reads as a footer tier subordinate
+              to the input row above. */}
+          <div className="border-t border-zinc-800/50 px-4 py-2.5 flex justify-center">
+            <a
+              href="https://github.com/Challotes/bsvibes-"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-xs text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                width="16"
+                height="16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              The code is open.
+              <span className="text-zinc-600">↗</span>
+            </a>
           </div>
         </div>
       </div>
