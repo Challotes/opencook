@@ -21,6 +21,18 @@ body {
   display: none;
 }
 
+/* iOS Safari auto-zooms on inputs with font-size < 16px and doesn't auto-zoom-out.
+   Force 16px on mobile to prevent the zoom-and-stay-zoomed bug. !important is
+   needed to beat Tailwind's text-sm / text-xs utilities applied on inputs.
+   Desktop (sm: breakpoint and up) is unaffected. */
+@media screen and (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 @keyframes shake {
   0%,
   100% {

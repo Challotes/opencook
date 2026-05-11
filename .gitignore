@@ -47,3 +47,5 @@ local.db-shm
 
 # claude code local config
 .claude/
+
+certificates

@@ -613,3 +613,117 @@ Per memory `project_launch_plan_lifecycle.md`, the agent will handle this at lau
 6. **LAUNCH_PLAN.md gets deleted via `git rm`** with Nige's confirmation per Hard Rule #2
 
 **End of synthesis. Ready for build.**
+
+---
+
+# Sequencing revision (2026-05-11) — split Bucket 3 + reorder
+
+> Real-world iPhone testing on 2026-05-11 surfaced that multiple "Add to Home Screen" actions on iOS create isolated storage sandboxes — each silently generates a new identity. This is a **data-loss risk in the current pre-implementation state**: users may create multiple identities without realizing, lose earnings to silent sandbox creation. The launch plan as designed solves this via the welcome gate (Bucket 3) + save-first flow, but the gate isn't built yet.
+>
+> Architect + designer confirmed (2026-05-11) the right response is to **split Bucket 3 and prioritize the identity flow ahead of mobile polish**.
+
+## The split
+
+**Bucket 3a — Identity flow (~1.5–2 days, NO Bucket 4 dependency)**
+
+The pieces that solve the silent multi-identity problem and don't need server-side broadcast work:
+
+- `useStandaloneMode()` hook (display-mode + navigator.standalone + reactive listener)
+- `useInstallPlatform()` hook (Android/iOS Safari/non-Safari/desktop branching)
+- `beforeinstallprompt` capture + `InstallContext`
+- `InstallPitch` component (inline section in You modal + persistent bottom banner)
+- Install pitch trigger logic (gated behind recovery file save)
+- iPad-disguised-as-macOS UA detection
+- `HomeScreenWelcomeGate` component
+- Welcome gate detection (synchronous pre-hydration check in `IdentityProvider`)
+- First earning event toast (wired to `/api/earnings` polling — see architect refinement below)
+- iOS post-install ITP toast (sequenced after welcome gate)
+- Manual QA on iPhone
+
+**Bucket 3b — Notifications (~1 day, REQUIRES Bucket 4's `publishPayout()` helper)**
+
+- Service worker registration (push-only, no fetch handler)
+- Push subscription endpoint (`/api/push/subscribe`, `/api/push/send`)
+- Notification triggers wired into `publishPayout()`
+- Notification permission prompt (after welcome-gate completion)
+
+## Revised sequence
+
+```
+NOW  →  3a  — Identity flow (~1.5–2 days, no Bucket 4 dep)
+       →  1   — Mobile polish (~1.25 days)
+       →  2   — In-app browser splash (~half day)
+       →  4   — Server resilience + publishPayout() helper (~1 day)
+       →  3b  — Notifications (~1 day, needs Bucket 4)
+       →  5   — Deploy (~half day)
+```
+
+Total effort unchanged (~5.75 days focused work). Order changed to fix the urgent data-loss-adjacent bug first.
+
+## Architect's refinements
+
+### A. First earning toast wires to `/api/earnings` polling, NOT `boot-confirm` emit-site
+
+**Original plan (3a entry #4):** Toast fires from `/api/boot-confirm` flow when recipient is the user.
+
+**Why this was wrong:** the `boot-confirm` route is Bucket 4's territory — it's the same emit-site `publishPayout()` will own. Wiring a new client-side trigger directly to `boot-confirm` creates rework when Bucket 4 lands.
+
+**Refined approach:** the toast trigger reads from the existing `/api/earnings` polling response (already polled every 30s per CLAUDE.md). On poll: if total earnings > 0 AND `bsvibes_first_earning_save_offered` localStorage flag is unset → fire toast → set flag (whether user taps Save or Later).
+
+**Why this is better:**
+- Zero new emit-site in `boot-confirm`
+- Server-emit-site-agnostic — when Bucket 4 adds SSE/push via `publishPayout()`, the toast code doesn't change
+- 30s detection latency is acceptable for a first-earning save prompt (not a real-time signal)
+
+### B. Synchronous pre-hydration check is safe to ship in 3a
+
+`IdentityProvider`'s lazy initializer needs the welcome-gate inversion (`isStandaloneMode() && !hasIdentity()` → defer auto-generation). This is purely client-side localStorage + matchMedia. No interaction with broadcast paths. Safe to land without any Bucket 4 work.
+
+### C. Drop the "first-launch flag"
+
+Per architect's C3 finding in the first review round: gating welcome gate on a localStorage "first-launch flag" means it fires only once ever per device, even if storage is wiped later. **Detection condition is purely `isStandaloneMode() && !hasIdentity()`.** If those are true, gate fires — first launch or fifth.
+
+## Designer's per-component shape specs
+
+**Key insight:** none of the 3a components are bottom-sheet modals in the Bucket 1 sense. They live in entirely different shape categories. Bucket 1's modal refactor has **zero overlap** with 3a, so there is no refactor risk regardless of order.
+
+| Component | Shape | Tailwind anchor | Rationale |
+|-----------|-------|----------------|-----------|
+| `HomeScreenWelcomeGate` | **Full-screen takeover** | `fixed inset-0 z-[90] flex flex-col items-center justify-center bg-[#0f0f0f] px-6 py-12` | No backdrop, no close X, not dismissable. Routing decision, not a dialog. No underlying content to see. |
+| `InstallPitch` inline section | Shape-agnostic section inside the You modal | inherits You modal's container | Inherits whatever Bucket 1 makes the You modal. Zero refactor risk. |
+| `InstallPitch` bottom banner | Fixed bottom strip | `fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-sm px-4 py-3 flex items-center justify-between` | Strip, not a modal. Untouched by Bucket 1. |
+| `ITPToast` | Pill — match `GoatModeToast` exactly | `fixed bottom-24 left-1/2 -translate-x-1/2 rounded-full border bg-zinc-900 px-4 py-2 text-sm shadow-lg` | Toast pattern already proven in codebase. 8s auto-dismiss, single "Got it" tap target. |
+| First earning toast | Pill-card — wider than GoatModeToast | `fixed bottom-24 left-1/2 -translate-x-1/2 rounded-2xl` + internal `flex gap-2 mt-2` button row | Has two buttons (Save now / Later) — breaks the single-pill-as-button pattern. `rounded-2xl` gives breathing room. |
+
+## Status table — entries that change
+
+The locked decisions from the Final synthesis (2026-05-10) carry forward unchanged. Two table rows update to reflect the architect's refinement:
+
+| # | Decision | Updated final answer |
+|---|----------|----------------------|
+| 4 | First earning event toast | Trigger: first earning > 0 sats detected via `/api/earnings` polling response (NOT a new emit-site in `boot-confirm`). Fires once ever per device gated by `bsvibes_first_earning_save_offered` localStorage flag. Copy + buttons unchanged. |
+| 5 | Welcome gate detection | Detection condition: `isStandaloneMode() && !hasIdentity()`. No first-launch flag. Synchronous pre-hydration check in `IdentityProvider` lazy initializer. |
+
+All other Status table rows (1, 2, 3, 6, 7, 8, 9, 10, 11, 12) unchanged.
+
+## Build sequence within 3a
+
+Sized for one focused chunk per agent-consult-then-build cycle. Per memory `feedback_consult_before_implementation`, each chunk gets an architect or designer consult on approach before code lands.
+
+1. `useStandaloneMode()` hook — 30 min
+2. `useInstallPlatform()` hook — 1 hour
+3. `InstallContext` + `beforeinstallprompt` capture — 1 hour
+4. `HomeScreenWelcomeGate` component — 2 hours
+5. Welcome gate detection (sync pre-hydration check in `IdentityProvider`) — 30 min
+6. `InstallPitch` component (inline section + bottom banner) — 2 hours
+7. Install pitch trigger logic (gated behind recovery file save) — 1 hour
+8. First earning event toast (wired to `/api/earnings` polling) — 1 hour
+9. iOS post-install ITP toast — 1 hour
+10. iPad UA detection edge — 15 min
+11. Manual QA on iPhone — 2 hours
+
+**Total: ~12 hours focused work.**
+
+After 3a completes, the user's data-loss-adjacent multi-identity bug is fixed — every `Add to Home Screen` either silently restores (via Bucket 3 install pitch sequencing) or surfaces the welcome gate. No more silent sandbox identity creation.
+
+**End of sequencing revision. 3a begins next.**

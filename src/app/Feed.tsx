@@ -5,6 +5,7 @@ import { BootToast } from "@/components/BootToast";
 import { SignInModal } from "@/components/SignInModal";
 import { BootProvider, useBootContext } from "@/contexts/BootContext";
 import { IdentityProvider, useIdentityContext } from "@/contexts/IdentityContext";
+import { InstallProvider } from "@/contexts/InstallContext";
 import { useFeedPolling } from "@/hooks/useFeedPolling";
 import { useScrollTracker } from "@/hooks/useScrollTracker";
 import { timeAgo } from "@/lib/utils";
@@ -330,8 +331,10 @@ export function Feed({
   return (
     <BootProvider>
       <IdentityProvider>
-        <SignInModal />
-        <FeedContent initialPosts={initialPosts} initialBootboard={initialBootboard} />
+        <InstallProvider>
+          <SignInModal />
+          <FeedContent initialPosts={initialPosts} initialBootboard={initialBootboard} />
+        </InstallProvider>
       </IdentityProvider>
     </BootProvider>
   );

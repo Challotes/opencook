@@ -2,6 +2,20 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-05-11 — Bucket 3a detection layer + iOS Safari polish
+
+Category: Build, iOS polish, architectural foundation
+
+Started Bucket 1 with `SignInModal` bottom-sheet refactor — first proof of the `flex items-end sm:items-center` / `rounded-t-2xl sm:rounded-2xl` pattern adoption (proven in AgentChat, now applied to a second modal). iPhone testing then surfaced the iOS Safari auto-zoom bug — fixed in `globals.css` with a single `@media (max-width: 640px)` rule forcing 16px font-size on all inputs (eliminates zoom-and-stay-zoomed on every input across the app, not just PostForm).
+
+Real-world iPhone testing then revealed the bigger issue: multiple "Add to Home Screen" actions on iOS create isolated storage sandboxes, each silently generating a new identity. Two-round agent review (architect + designer + marketer) converged on splitting Bucket 3 into 3a (identity flow, no Bucket 4 dep) and 3b (notifications, needs Bucket 4). Revised sequence: 3a → 1 → 2 → 4 → 3b → 5. LAUNCH_PLAN.md updated with the split + per-component shape specs (welcome gate is full-screen takeover, install pitch is inline section + bottom banner, toasts match GoatModeToast pattern).
+
+Bucket 3a detection layer landed (tasks 6–8): `useStandaloneMode` hook (display-mode + navigator.standalone with reactive listener), `useInstallPlatform` hook with `classifyUA()` pure function + 11 vitest cases covering Android Chrome/Samsung/Firefox, iOS Safari/Chrome, iPad-as-Mac, desktop Chrome/Edge/Firefox, `InstallContext` with `beforeinstallprompt` capture + `appinstalled` handling + 30-day suppression and `markEngaged()` permanent flag, plus `isSuppressedAt()` pure helper with 6 vitest cases. `InstallProvider` nested inside `IdentityProvider` in `Feed.tsx`. Type augmentation in `src/types/install.d.ts` so `beforeinstallprompt` types correctly without casts.
+
+New memory `feedback_consult_before_implementation.md` codifies the new workflow: dispatch agent for approach review BEFORE writing code for each meaningful implementation chunk (skip for trivial mechanical edits). Five consult cycles ran this session (welcome-gate hierarchy, sequence reorder, useStandaloneMode, useInstallPlatform, InstallContext) — each took ~30s of agent time and prevented genuine misimplementations every time.
+
+Next: Bucket 3a continues with HomeScreenWelcomeGate component (task 9).
+
 ## 2026-05-10 — Launch readiness: two-round multi-agent review + LAUNCH_PLAN.md
 
 Category: Planning, architecture
