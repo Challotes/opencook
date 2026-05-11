@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PassphrasePrompt } from "@/components/PassphrasePrompt";
+import { useInstallContext } from "@/contexts/InstallContext";
 import { decryptWif } from "@/services/bsv/crypto";
 import { parseRecoveryFile } from "@/services/bsv/restore-from-file";
 import type { Identity } from "@/types";
@@ -49,6 +50,11 @@ export function HomeScreenWelcomeGate({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const restoreButtonRef = useRef<HTMLButtonElement>(null);
 
+  // The file the user just restored from IS their backup by definition. Mark
+  // backed up so the You modal doesn't bounce them into a redundant "Save your
+  // recovery file" prompt (parity with RestoreModal.onSuccess).
+  const { markBackedUp } = useInstallContext();
+
   // Auto-focus the primary action on mount. No focus trap needed — the gate IS
   // the full screen, there's nothing to escape to.
   useEffect(() => {
@@ -88,6 +94,7 @@ export function HomeScreenWelcomeGate({
       }
       // Plain WIF — import directly via the context single-entry point
       await onRestore(result.payload.wif, result.payload.name);
+      markBackedUp();
     } catch {
       setError("Something went wrong — please try again");
     } finally {
@@ -106,6 +113,7 @@ export function HomeScreenWelcomeGate({
         return;
       }
       await onRestore(wif, encryptedPayload.name);
+      markBackedUp();
     } catch {
       setError("Something went wrong — please try again");
     } finally {
