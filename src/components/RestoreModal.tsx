@@ -241,139 +241,143 @@ export function RestoreModal({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
-    >
+    <>
+      {/* Backdrop — full-screen click target for dismiss */}
       <button
         type="button"
-        className="absolute inset-0 w-full cursor-default"
+        className="fixed inset-0 z-[70] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
         aria-label="Close modal"
         onClick={handleClose}
       />
-      <div
-        className="relative z-10 w-full max-w-sm rounded-xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden"
-        style={{ backgroundColor: "#0f0f0f" }}
-      >
-        <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-amber-400/10">
-          <div>
-            <p className="text-sm font-semibold text-zinc-100">Restore key from file</p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">
-              This will replace your current identity
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="text-zinc-500 hover:text-zinc-200 transition-colors ml-3"
-            aria-label="Close"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+      {/* Modal — full-height wizard bottom sheet on mobile, centered on desktop */}
+      <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 pointer-events-none">
+        <div
+          className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out] min-h-[75vh] sm:min-h-0 overflow-y-auto"
+          style={{ backgroundColor: "#0f0f0f" }}
+        >
+          <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
 
-        {/* Body */}
-        <div className="px-4 py-4 space-y-3">
-          <p className="text-[11px] text-red-400 leading-relaxed">
-            Your current recovery file will be saved first.
-          </p>
-          <p className="text-[11px] text-zinc-400 leading-relaxed">
-            Your current posts and earnings stay with your current key — the backup file is how you
-            return to them.
-          </p>
-
-          {pendingRestoreWif !== null ? (
-            <div className="space-y-2 bg-amber-400/5 rounded-lg p-2.5 border border-amber-400/15">
-              <p className="text-[11px] text-zinc-300 leading-relaxed font-medium">
-                Your recovery file has been saved.
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-amber-400/10">
+            <div>
+              <p className="text-sm font-semibold text-zinc-100">Restore key from file</p>
+              <p className="text-[11px] text-zinc-500 mt-0.5">
+                This will replace your current identity
               </p>
-              <p className="text-[11px] text-zinc-500 leading-relaxed">
-                Continue with restore? This will replace your current identity.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPendingRestoreWif(null);
-                    setPendingRestoreName(undefined);
-                    setImporting(false);
-                  }}
-                  className="flex-1 bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmPendingRestore}
-                  disabled={importing}
-                  className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {importing ? "Restoring..." : "Continue"}
-                </button>
-              </div>
             </div>
-          ) : encryptedImportData !== null ? (
-            <PassphrasePrompt
-              context="This recovery file is encrypted. Enter the passphrase you used when creating it."
-              error={encryptedImportError}
-              loading={decryptingImport}
-              onConfirm={handleDecryptAndImport}
-              onCancel={() => {
-                setEncryptedImportData(null);
-                setEncryptedImportError("");
-              }}
-              confirmLabel="Restore"
-              hint={encryptedImportData.hint}
-            />
-          ) : (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".html,.json,text/html,application/json"
-                onChange={handleImportFile}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
-                className="w-full bg-amber-400/10 text-amber-300 border border-amber-400/30 rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-400/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            <button
+              type="button"
+              onClick={handleClose}
+              className="text-zinc-500 hover:text-zinc-200 transition-colors ml-3"
+              aria-label="Close"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
               >
-                {importing ? "Restoring..." : "Choose recovery file"}
-              </button>
-            </>
-          )}
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
 
-          {importError && <p className="text-[11px] text-red-400 leading-relaxed">{importError}</p>}
-          {importSuccess && (
-            <p className="text-[11px] text-amber-400 font-medium">Identity restored.</p>
-          )}
+          {/* Body */}
+          <div className="px-4 py-4 space-y-3">
+            <p className="text-[11px] text-red-400 leading-relaxed">
+              Your current recovery file will be saved first.
+            </p>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Your current posts and earnings stay with your current key — the backup file is how
+              you return to them.
+            </p>
 
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-full bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-3 py-2 text-xs font-medium hover:bg-zinc-800 transition-colors"
-          >
-            Cancel
-          </button>
+            {pendingRestoreWif !== null ? (
+              <div className="space-y-2 bg-amber-400/5 rounded-lg p-2.5 border border-amber-400/15">
+                <p className="text-[11px] text-zinc-300 leading-relaxed font-medium">
+                  Your recovery file has been saved.
+                </p>
+                <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  Continue with restore? This will replace your current identity.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingRestoreWif(null);
+                      setPendingRestoreName(undefined);
+                      setImporting(false);
+                    }}
+                    className="flex-1 bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmPendingRestore}
+                    disabled={importing}
+                    className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {importing ? "Restoring..." : "Continue"}
+                  </button>
+                </div>
+              </div>
+            ) : encryptedImportData !== null ? (
+              <PassphrasePrompt
+                context="This recovery file is encrypted. Enter the passphrase you used when creating it."
+                error={encryptedImportError}
+                loading={decryptingImport}
+                onConfirm={handleDecryptAndImport}
+                onCancel={() => {
+                  setEncryptedImportData(null);
+                  setEncryptedImportError("");
+                }}
+                confirmLabel="Restore"
+                hint={encryptedImportData.hint}
+              />
+            ) : (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".html,.json,text/html,application/json"
+                  onChange={handleImportFile}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="w-full bg-amber-400/10 text-amber-300 border border-amber-400/30 rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-400/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {importing ? "Restoring..." : "Choose recovery file"}
+                </button>
+              </>
+            )}
+
+            {importError && (
+              <p className="text-[11px] text-red-400 leading-relaxed">{importError}</p>
+            )}
+            {importSuccess && (
+              <p className="text-[11px] text-amber-400 font-medium">Identity restored.</p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-full bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-3 py-2 text-xs font-medium hover:bg-zinc-800 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
