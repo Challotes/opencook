@@ -23,6 +23,13 @@ export function PostForm({
   const [hasContent, setHasContent] = useState(false);
   const [justPosted, setJustPosted] = useState(false);
   const [resumeNudge, setResumeNudge] = useState(false);
+  // Surfaced mic errors (permission denied, no speech detected, etc.) — was
+  // previously silent, leaving iOS users wondering why nothing happened.
+  // Auto-clears after 4s; tap dismisses immediately.
+  const [micError, setMicError] = useState<string | null>(null);
+  // Set true between mic-tap and onstart firing — prevents double-tap races
+  // that would call start() on an already-started instance (iOS throws).
+  const isStartingRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { identity, needsUnlock, sign, requireIdentity } = useIdentityContext();
   // Set when the user tries to submit while locked — drives a focus + amber
@@ -121,47 +128,168 @@ export function PostForm({
     }
   }
 
+  // Map raw SpeechRecognitionErrorEvent.error codes to user-friendly copy.
+  // iOS Safari's most common failures are `not-allowed` (permission denied)
+  // and `no-speech` (mic active but silence). Previously these all failed
+  // silently — the user just saw the button do nothing.
+  function micErrorMessage(code: string): string {
+    switch (code) {
+      case "not-allowed":
+      case "service-not-allowed":
+        return "Microphone access denied. Enable it in Settings → Safari → Microphone.";
+      case "no-speech":
+        return "Didn't catch that — try again.";
+      case "audio-capture":
+        return "Couldn't access the microphone.";
+      case "network":
+        return "Voice input needs an internet connection.";
+      case "aborted":
+        return ""; // user-initiated stop; no error to surface
+      default:
+        return "Voice input failed. Try again.";
+    }
+  }
+
+  // Show a transient error toast that auto-clears after 4s. Empty string
+  // clears immediately without showing anything.
+  function showMicError(message: string): void {
+    setIsListening(false);
+    if (!message) {
+      setMicError(null);
+      return;
+    }
+    setMicError(message);
+    setTimeout(() => {
+      setMicError((prev) => (prev === message ? null : prev));
+    }, 4000);
+  }
+
   function toggleMic(): void {
+    // Already listening — stop and clear state. Some iOS versions throw if
+    // stop() is called on an already-ended instance; ignore those errors.
     if (isListening) {
-      recognitionRef.current?.stop();
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        /* already stopped */
+      }
       setIsListening(false);
+      return;
+    }
+
+    // Guard against rapid double-taps between tap and `onstart` firing.
+    if (isStartingRef.current) return;
+
+    // Speech recognition is a secure-context API (HTTPS or localhost only).
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      showMicError("Voice input requires HTTPS.");
       return;
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in this browser.");
+      showMicError("Voice input isn't supported in this browser.");
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognitionRef.current = recognition;
+    isStartingRef.current = true;
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map((r) => r[0].transcript)
-        .join("");
+    // Best-effort permission pre-check. Safari historically returns "prompt"
+    // or throws — wrap defensively. If we detect a definitive "denied" state,
+    // surface the friendly nudge instead of attempting start() and failing
+    // silently in onerror.
+    const beginRecognition = (): void => {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+      recognitionRef.current = recognition;
 
-      if (textareaRef.current) {
-        textareaRef.current.value = transcript;
-        textareaRef.current.style.height = "auto";
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      // Use addEventListener for "start" — TypeScript's SpeechRecognition lib
+      // type doesn't include the onstart property on all versions.
+      recognition.addEventListener("start", () => {
+        // Mic is actually live — flip the button visual now (not before).
+        isStartingRef.current = false;
+        setMicError(null);
+        setIsListening(true);
+      });
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // Build the transcript from FINAL results only, ignoring interim
+        // results to reduce textarea churn. The final result fires once per
+        // utterance on iOS Safari with `continuous=false`.
+        let finalText = "";
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalText += result[0].transcript;
+          }
+        }
+        if (!finalText || !textareaRef.current) return;
+
+        const el = textareaRef.current;
+        // Append to existing content rather than overwriting — supports
+        // dictating multiple chunks in one session.
+        el.value = el.value ? `${el.value.trim()} ${finalText.trim()}` : finalText.trim();
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+        // CRITICAL: trigger React's onInput so `hasContent` updates and the
+        // send button replaces the mic. Without this dispatch, direct .value
+        // writes are invisible to React and the user can't send their post.
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+
+      recognition.onend = () => {
+        isStartingRef.current = false;
+        recognitionRef.current = null;
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event: Event) => {
+        isStartingRef.current = false;
+        recognitionRef.current = null;
+        const code = (event as { error?: string }).error ?? "unknown";
+        const message = micErrorMessage(code);
+        if (message) showMicError(message);
+        else setIsListening(false);
+      };
+
+      try {
+        recognition.start();
+      } catch (e) {
+        isStartingRef.current = false;
+        recognitionRef.current = null;
+        // iOS throws InvalidStateError if start() is called while already
+        // running. Treat as a no-op (the existing instance keeps listening).
+        // Anything else is a real failure — surface to the user.
+        const name = e instanceof Error ? e.name : "";
+        if (name !== "InvalidStateError") {
+          showMicError("Couldn't start voice input. Try again.");
+        }
       }
     };
 
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognition.onerror = () => {
-      setIsListening(false);
-    };
-
-    recognition.start();
-    setIsListening(true);
+    // Permissions API is unreliable on iOS for "microphone" — try, but proceed
+    // regardless. Only block when we get a definitive "denied".
+    if (typeof navigator !== "undefined" && navigator.permissions) {
+      navigator.permissions
+        .query({ name: "microphone" as PermissionName })
+        .then((status) => {
+          if (status.state === "denied") {
+            isStartingRef.current = false;
+            showMicError("Microphone access denied. Enable it in Settings → Safari → Microphone.");
+            return;
+          }
+          beginRecognition();
+        })
+        .catch(() => {
+          // Permissions API doesn't support "microphone" on this browser —
+          // proceed and let start() / onerror handle it.
+          beginRecognition();
+        });
+    } else {
+      beginRecognition();
+    }
   }
 
   return (
@@ -254,6 +382,16 @@ export function PostForm({
           </button>
         )}
       </div>
+      {micError && (
+        <button
+          type="button"
+          onClick={() => setMicError(null)}
+          className="mt-1 w-full text-left text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 hover:bg-amber-500/15 transition-colors"
+          aria-live="polite"
+        >
+          {micError}
+        </button>
+      )}
       <div className="flex items-center justify-between mt-1 ml-1 mr-1">
         <div className="hidden sm:flex items-center gap-2">
           <p className="text-[11px] text-zinc-600">Enter to post, Shift+Enter for new line</p>
