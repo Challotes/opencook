@@ -12,7 +12,7 @@ import { useIdentityContext } from "@/contexts/IdentityContext";
 import { useInstallContext } from "@/contexts/InstallContext";
 import { satsToDollars, useBsvPrice } from "@/hooks/useBsvPrice";
 import { useCurrencyMode } from "@/hooks/useCurrencyMode";
-import { useVisualViewport } from "@/hooks/useVisualViewport";
+import { useKeyboardOffset } from "@/hooks/useVisualViewport";
 import { downloadBackup, getStoredHint } from "@/services/bsv/backup-template";
 import { encryptWif } from "@/services/bsv/crypto";
 import { getStoredAnonName, isEffectivelyProtected, unlockIdentity } from "@/services/bsv/identity";
@@ -50,7 +50,7 @@ export function IdentityChip(): React.JSX.Element | null {
   const { identity, isLoading, needsUnlock, updateIdentity, openSignIn } = useIdentityContext();
   const installCtx = useInstallContext();
   const [open, setOpen] = useState(false);
-  const vvp = useVisualViewport();
+  const kbd = useKeyboardOffset();
 
   // Security state
   const [isProtected, setIsProtected] = useState(false);
@@ -565,13 +565,13 @@ export function IdentityChip(): React.JSX.Element | null {
             onClick={closeManageModal}
           />
 
-          {/* Modal — centered, visualViewport-driven height. This is the
-              tallest modal (earnings + chart + activity + balance + rows);
-              max-h-[calc(100dvh-3rem)] with overflow-y-auto lets the content
-              scroll inside the card when it exceeds available height. */}
+          {/* Modal — centered. This is the tallest modal (earnings + chart
+              + activity + balance + rows); max-h with overflow-y-auto lets
+              the content scroll inside the card. Padding-bottom inflates
+              with the iOS keyboard during locked-state passphrase entry. */}
           <div
-            className="fixed left-0 right-0 z-[60] flex items-center justify-center p-6 pointer-events-none"
-            style={vvp ? { top: vvp.offsetTop, height: vvp.height } : { top: 0, height: "100dvh" }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-6 pointer-events-none transition-[padding] duration-200 ease-out"
+            style={{ paddingBottom: `calc(1.5rem + ${kbd}px)` }}
           >
             <div
               className="w-full max-w-sm rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out] min-h-[220px] max-h-[calc(100dvh-3rem)] overflow-y-auto"

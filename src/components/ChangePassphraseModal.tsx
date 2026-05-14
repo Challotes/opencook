@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { migrateIdentity, verifyMigrationChain } from "@/app/actions";
-import { useVisualViewport } from "@/hooks/useVisualViewport";
+import { useKeyboardOffset } from "@/hooks/useVisualViewport";
 import { type BackupData, downloadBackup, getStoredHint } from "@/services/bsv/backup-template";
 import { encryptWif } from "@/services/bsv/crypto";
 import { commitUpgrade, unlockIdentity, upgradeIdentity } from "@/services/bsv/identity";
@@ -39,7 +39,7 @@ export function ChangePassphraseModal({
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const [chainWarning, setChainWarning] = useState(false);
-  const vvp = useVisualViewport();
+  const kbd = useKeyboardOffset();
 
   function handleClose() {
     setStep(preVerifiedPassphrase ? "newpass" : "verify");
@@ -183,11 +183,11 @@ export function ChangePassphraseModal({
         onClick={handleClose}
       />
 
-      {/* Modal — centered, visualViewport-driven height. Content scrolls
-          inside the card when it exceeds available height. */}
+      {/* Modal — centered. Wrapper padding-bottom inflates with the iOS
+          keyboard so items-center re-centers smoothly. */}
       <div
-        className="fixed left-0 right-0 z-[60] flex items-center justify-center p-6 pointer-events-none"
-        style={vvp ? { top: vvp.offsetTop, height: vvp.height } : { top: 0, height: "100dvh" }}
+        className="fixed inset-0 z-[60] flex items-center justify-center p-6 pointer-events-none transition-[padding] duration-200 ease-out"
+        style={{ paddingBottom: `calc(1.5rem + ${kbd}px)` }}
       >
         <div
           className="w-full max-w-md rounded-2xl border border-amber-400/20 shadow-2xl overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out] min-h-[220px] max-h-[calc(100dvh-3rem)] flex flex-col overflow-y-auto"

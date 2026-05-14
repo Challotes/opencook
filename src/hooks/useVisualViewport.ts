@@ -2,37 +2,54 @@
 
 import { useEffect, useState } from "react";
 
-interface VisualViewportRect {
-  height: number;
-  offsetTop: number;
-}
-
 /**
- * Returns the current visual viewport's height and offsetTop. On iOS Safari
- * the visual viewport shrinks when the soft keyboard opens (unlike `100dvh`,
- * which does NOT react to the keyboard — it only tracks browser chrome).
+ * Returns the iOS soft-keyboard height in pixels (0 when closed). Reads
+ * `window.visualViewport` — the only reliable signal on iOS Safari, since
+ * `100dvh` does NOT respond to keyboard open/close, only to browser chrome.
  *
- * Apply to a centered modal wrapper as inline styles so the wrapper covers
- * exactly the visible area and the modal stays fully visible above the
- * keyboard:
+ * The recommended usage is wrapper `padding-bottom` inflation (NOT wrapper
+ * resize). The wrapper stays `fixed inset-0` and only its padding-bottom
+ * grows when the keyboard opens — `items-center` then re-centers the
+ * content smoothly via a CSS transition, matching iOS's ~250ms keyboard
+ * slide. Resizing the wrapper directly causes a visible snap.
  *
- *   const vvp = useVisualViewport();
+ *   const kbd = useKeyboardOffset();
  *   <div
- *     className="fixed left-0 right-0 z-[N] flex items-center justify-center p-6"
- *     style={vvp ? { top: vvp.offsetTop, height: vvp.height } : { top: 0, height: "100dvh" }}
+ *     className="fixed inset-0 ... p-6 transition-[padding] duration-200 ease-out"
+ *     style={{ paddingBottom: `calc(1.5rem + ${kbd}px)` }}
  *   >
  *
- * Returns null on SSR / before mount.
+ * Reading details:
+ *
+ * - Baseline is `document.documentElement.clientHeight`, not
+ *   `window.innerHeight`. The latter fluctuates with Safari's URL bar;
+ *   the former is stable across browser-chrome transitions in both
+ *   Safari (URL bar at bottom) and PWA (no URL bar).
+ *
+ * - Initial spurious values during page-load reflow are filtered: any
+ *   reading where the implied keyboard exceeds 60% of the screen is
+ *   ignored (no real keyboard ever occupies that much).
+ *
+ * - Throttled: only re-renders when the height changes by more than 50px.
+ *   Visual-viewport fires `scroll` events on micro-scrolls; without this
+ *   gate every page-pixel-scroll would trigger a re-render across every
+ *   open modal.
  */
-export function useVisualViewport(): VisualViewportRect | null {
-  const [rect, setRect] = useState<VisualViewportRect | null>(null);
+export function useKeyboardOffset(): number {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
     const vvp = window.visualViewport;
 
     function update() {
-      setRect({ height: vvp.height, offsetTop: vvp.offsetTop });
+      const screenHeight = document.documentElement.clientHeight;
+      const next = Math.max(0, screenHeight - vvp.height);
+
+      // Ignore obvious garbage values from page-load reflow.
+      if (next > screenHeight * 0.6) return;
+
+      setKeyboardHeight((prev) => (Math.abs(prev - next) < 50 ? prev : next));
     }
 
     update();
@@ -44,5 +61,5 @@ export function useVisualViewport(): VisualViewportRect | null {
     };
   }, []);
 
-  return rect;
+  return keyboardHeight;
 }

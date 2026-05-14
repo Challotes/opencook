@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { migrateIdentity, verifyMigrationChain } from "@/app/actions";
-import { useVisualViewport } from "@/hooks/useVisualViewport";
+import { useKeyboardOffset } from "@/hooks/useVisualViewport";
 import { type BackupData, downloadBackup, getStoredHint } from "@/services/bsv/backup-template";
 import { encryptWif } from "@/services/bsv/crypto";
 import { commitUpgrade, sweepFunds, upgradeIdentity } from "@/services/bsv/identity";
@@ -155,7 +155,7 @@ export function MoveAddressModal({
   // combined recovery file at done-state supersedes this entirely.
   const preRotationBackupRef = useRef<BackupData | null>(null);
 
-  const vvp = useVisualViewport();
+  const kbd = useKeyboardOffset();
 
   // ── Stage runners ──────────────────────────────────────────────────────────
 
@@ -427,11 +427,11 @@ export function MoveAddressModal({
         />
       )}
 
-      {/* Modal — centered, visualViewport-driven height so passphrase entry
-          stays above the iOS keyboard. */}
+      {/* Modal — centered. Padding-bottom inflates with the iOS keyboard
+          during passphrase stage. */}
       <div
-        className="fixed left-0 right-0 z-[70] flex items-center justify-center p-6 pointer-events-none"
-        style={vvp ? { top: vvp.offsetTop, height: vvp.height } : { top: 0, height: "100dvh" }}
+        className="fixed inset-0 z-[70] flex items-center justify-center p-6 pointer-events-none transition-[padding] duration-200 ease-out"
+        style={{ paddingBottom: `calc(1.5rem + ${kbd}px)` }}
       >
         <div className="w-full max-w-md rounded-2xl bg-[#0f0f0f] border border-amber-400/20 shadow-2xl min-h-[220px] max-h-[calc(100dvh-3rem)] overflow-y-auto pointer-events-auto animate-[slideUp_0.3s_ease-out] p-5">
           {/* Header */}

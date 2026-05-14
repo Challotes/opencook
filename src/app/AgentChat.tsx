@@ -315,7 +315,7 @@ export function AgentChat({ highlight }: { highlight?: boolean }) {
               half-opacity divider so it reads as a footer tier subordinate
               to the input row above. Safe-area padding so the link doesn't
               sit on the iOS home indicator on bottom-sheet display. */}
-          <div className="border-t border-zinc-800/50 px-4 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] sm:pb-2.5 flex justify-center">
+          <div className="border-t border-zinc-800/50 px-4 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] sm:pb-3.5 flex justify-center">
             <a
               href="https://github.com/Challotes/bsvibes-"
               target="_blank"

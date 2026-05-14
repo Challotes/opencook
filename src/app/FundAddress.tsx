@@ -2,7 +2,7 @@
 
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
-import { useVisualViewport } from "@/hooks/useVisualViewport";
+import { useKeyboardOffset } from "@/hooks/useVisualViewport";
 
 interface FundAddressProps {
   address: string;
@@ -13,7 +13,7 @@ interface FundAddressProps {
 
 export function FundAddress({ address, bootPrice, balance, onClose }: FundAddressProps) {
   const [copied, setCopied] = useState(false);
-  const vvp = useVisualViewport();
+  const kbd = useKeyboardOffset();
 
   function handleCopy() {
     navigator.clipboard.writeText(address);
@@ -35,11 +35,11 @@ export function FundAddress({ address, bootPrice, balance, onClose }: FundAddres
         onClick={onClose}
       />
 
-      {/* Modal — centered, visualViewport-driven height. No keyboard input
-          here, but keeping a single shared layout for consistency. */}
+      {/* Modal — centered. No keyboard input here, but shared layout for
+          consistency with the other modals. */}
       <div
-        className="fixed left-0 right-0 z-[60] flex items-center justify-center p-6 pointer-events-none"
-        style={vvp ? { top: vvp.offsetTop, height: vvp.height } : { top: 0, height: "100dvh" }}
+        className="fixed inset-0 z-[60] flex items-center justify-center p-6 pointer-events-none transition-[padding] duration-200 ease-out"
+        style={{ paddingBottom: `calc(1.5rem + ${kbd}px)` }}
       >
         <div
           className="w-full max-w-sm rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out] min-h-[220px] max-h-[calc(100dvh-3rem)] overflow-y-auto"

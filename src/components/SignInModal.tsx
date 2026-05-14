@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useIdentityContext } from "@/contexts/IdentityContext";
-import { useVisualViewport } from "@/hooks/useVisualViewport";
+import { useKeyboardOffset } from "@/hooks/useVisualViewport";
 import { getStoredHint } from "@/services/bsv/backup-template";
 import { unlockIdentity } from "@/services/bsv/identity";
 
@@ -25,7 +25,7 @@ export function SignInModal(): React.JSX.Element | null {
   const [hintRevealed, setHintRevealed] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const vvp = useVisualViewport();
+  const kbd = useKeyboardOffset();
 
   // Load hint and autofocus on open
   useEffect(() => {
@@ -36,16 +36,18 @@ export function SignInModal(): React.JSX.Element | null {
     }
   }, [signInOpen]);
 
-  // Tab blur — close modal and clear state (password-manager parity)
+  // Real tab-blur / app-backgrounded — close modal and clear state
+  // (password-manager parity). Uses `pagehide` instead of
+  // `visibilitychange` because the latter fires on transient hides on
+  // iOS PWA — including during keyboard transitions — which closed the
+  // modal mid-unlock on home-screen-installed app.
   useEffect(() => {
     if (!signInOpen) return;
-    function handleVisibility() {
-      if (document.visibilityState === "hidden") {
-        closeSignIn();
-      }
+    function handleHide() {
+      closeSignIn();
     }
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handleHide);
+    return () => window.removeEventListener("pagehide", handleHide);
   }, [signInOpen, closeSignIn]);
 
   // Escape key
@@ -100,11 +102,12 @@ export function SignInModal(): React.JSX.Element | null {
         onClick={closeSignIn}
       />
 
-      {/* Modal — centered, visualViewport-driven height so it stays above
-          the iOS keyboard when the passphrase input is focused. */}
+      {/* Modal — centered. Wrapper stays inset-0; padding-bottom inflates
+          smoothly with the iOS keyboard so items-center re-centers the
+          card without snap. */}
       <div
-        className="fixed left-0 right-0 z-[80] flex items-center justify-center p-6 pointer-events-none"
-        style={vvp ? { top: vvp.offsetTop, height: vvp.height } : { top: 0, height: "100dvh" }}
+        className="fixed inset-0 z-[80] flex items-center justify-center p-6 pointer-events-none transition-[padding] duration-200 ease-out"
+        style={{ paddingBottom: `calc(1.5rem + ${kbd}px)` }}
       >
         <div
           key={shakeKey === 0 ? "modal" : `modal-shake-${shakeKey}`}

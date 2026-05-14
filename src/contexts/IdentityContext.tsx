@@ -78,21 +78,25 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     [identityValue.updateIdentity]
   );
 
-  // Tab blur → clear in-memory session caches (parity with You modal
-  // password-manager pattern). Only fires in standalone mode where the app
-  // can stay open in the background for long periods — browser tabs are
-  // already short-lived enough that this is unnecessary.
+  // Real backgrounding → clear in-memory session caches (parity with You
+  // modal password-manager pattern). Only fires in standalone mode where
+  // the app can stay open in the background for long periods.
+  //
+  // Uses `pagehide` instead of `visibilitychange` because the latter fires
+  // on transient hides on iOS PWA — including keyboard transitions — which
+  // wiped the session mid-transaction. `pagehide` fires only on real page
+  // unloads and app-backgrounding events.
   //
   // detectStandalone() is read INSIDE the handler (not captured in closure)
   // so iPad Stage Manager transitions between modes are caught correctly.
   useEffect(() => {
-    function handleVisibility(): void {
-      if (document.visibilityState === "hidden" && detectStandalone()) {
+    function handleHide(): void {
+      if (detectStandalone()) {
         clearSessionCaches();
       }
     }
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handleHide);
+    return () => window.removeEventListener("pagehide", handleHide);
   }, []);
 
   // Cross-tab identity sync — if another tab in the same sandbox writes an
