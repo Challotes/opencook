@@ -15,15 +15,19 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  /* overflow: hidden on body alongside the page wrapper's overflow-hidden
+     makes Safari treat the document as completely non-scrollable, which
+     suppresses iOS's pull-to-refresh gesture (the recommended pure-CSS
+     attempt). The page wrapper still owns the layout via 100dvh. If this
+     doesn't fully block refresh on Safari, the JS-touchmove preventDefault
+     fallback is the next step. */
+  overflow: hidden;
 }
 
-/* Block iOS pull-down-to-refresh. The feed auto-polls every 5s so manual
-   refresh adds no value, and accidental refresh while scrolling near the
-   top costs the user any unsaved compose draft. overscroll-behavior-y:
-   contain at document level prevents the gesture from propagating to the
-   browser refresh handler. Scrollable inner containers (feed posts,
-   AgentChat messages) also have overscroll-y-contain for the same
-   reason. */
+/* overscroll-behavior is mostly a no-op on iOS Safari for pull-to-refresh
+   suppression (Chrome respects it, Safari treats it as a rendering hint
+   only). We keep it on the html and inner scrollable containers as a
+   belt-and-braces measure for Chrome/Android. */
 html {
   overscroll-behavior-y: contain;
 }

@@ -218,7 +218,7 @@ export function AgentChat({ highlight }: { highlight?: boolean }) {
           off-screen when the layout viewport shrank. */}
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 pointer-events-none">
         <div
-          className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out] shadow-2xl flex flex-col max-h-[100dvh] sm:max-h-[calc(100dvh-2rem)]"
+          className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out] shadow-2xl flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top))] sm:max-h-[calc(100dvh-2rem)]"
           role="dialog"
           aria-modal="true"
           aria-label="BSVibes Agent"
@@ -301,28 +301,55 @@ export function AgentChat({ highlight }: { highlight?: boolean }) {
             </div>
           )}
 
-          {/* Input */}
+          {/* Input — flex row so the send button sits inline at the right.
+              Button is amber-tinted and disabled when there's no text or a
+              stream is in flight. enterKeyHint=send also relabels the iOS
+              Return key as "Send" for users who don't notice the button. */}
           <div className="shrink-0 border-t border-zinc-800 px-4 py-3">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSubmit(e);
-                }
-              }}
-              placeholder={isStreaming ? "Thinking..." : "Ask something..."}
-              disabled={isStreaming}
-              enterKeyHint="send"
-              autoCapitalize="sentences"
-              autoCorrect="on"
-              autoComplete="off"
-              className="w-full bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSubmit(e);
+                  }
+                }}
+                placeholder={isStreaming ? "Thinking..." : "Ask something..."}
+                disabled={isStreaming}
+                enterKeyHint="send"
+                autoCapitalize="sentences"
+                autoCorrect="on"
+                autoComplete="off"
+                className="flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!input.trim() || isStreaming}
+                aria-label="Send"
+                className="shrink-0 text-amber-400 hover:text-amber-300 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors p-1.5"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Open-source footer — quiet trust signal for users investigating
