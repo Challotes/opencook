@@ -230,9 +230,14 @@ export function AgentChat({ highlight }: { highlight?: boolean }) {
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
-          {/* Header — pt safe-area so the close X isn't covered by the
-              PWA status bar (black-translucent overlay). */}
-          <div className="shrink-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b border-zinc-800">
+          {/* Header — pt-3 for normal breathing room. The wrapper's
+              pt-[max(0.5rem,env(safe-area-inset-top))] already pushes
+              the card's top edge below the status bar, so the header
+              does NOT need its own env(safe-area-inset-top) padding —
+              that was triple-dipping with the wrapper pt and the
+              card's max-h reduction, making the modal extend too high
+              on Safari after body overflow:hidden was restored. */}
+          <div className="shrink-0 flex items-center justify-between px-4 pt-3 pb-3 border-b border-zinc-800">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
               <span className="text-sm font-medium text-zinc-300">BSVibes Agent</span>
