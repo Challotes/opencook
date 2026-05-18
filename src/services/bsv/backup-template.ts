@@ -181,24 +181,27 @@ export function generateBackupHtml(data: BackupData): string {
         '    <div class="card" id="plaintext-section">',
         '      <div class="wif-block">',
         '        <div class="wif-label">Your secret key (WIF)</div>',
-        `        <div class="wif-value">${escapeHtml(data.wif || "")}</div>`,
+        `        <textarea class="wif-value" readonly rows="2">${escapeHtml(data.wif || "")}</textarea>`,
         "      </div>",
         wifWarningHtml(false),
         "    </div>",
       ].join("\n")
     : [
         "    <!-- Encrypted recovery file: passphrase required -->",
-        "    <noscript>",
-        '      <div class="noscript-banner">',
-        "        <strong>Your keys are safe &mdash; but this preview can't decrypt them.</strong>",
-        "        <p>Apple's file preview can't run the code this file needs for decryption. Your recovery key is still securely encrypted with your passphrase.</p>",
-        "        <p><strong>Two ways to access it:</strong></p>",
-        "        <ul>",
-        "          <li><strong>From the BSVibes app:</strong> Open the You menu and tap <em>Restore key from file</em> &mdash; decryption happens inside the app itself.</li>",
-        "          <li><strong>From a browser:</strong> Open this file in Safari, Chrome, or Firefox on any Mac or PC to enter your passphrase and view your recovery key directly.</li>",
-        "        </ul>",
-        "      </div>",
-        "    </noscript>",
+        "    <!-- Quick Look notice: visible by default in renderers that don't run JS",
+        "         (iOS Files / Quick Look, email previews). The script block hides this",
+        "         on load when JS runs, so browsers see only the decrypt UI. We can't",
+        "         use <noscript> here because iOS Quick Look's WebKit reports scripting",
+        "         as 'enabled' at the engine level even when it never executes scripts. -->",
+        '    <div id="quicklook-notice" class="noscript-banner">',
+        "      <strong>Your keys are safe &mdash; but this preview can't decrypt them.</strong>",
+        "      <p>Apple's file preview can't run the code this file needs for decryption. Your recovery key is still securely encrypted with your passphrase.</p>",
+        "      <p><strong>Two ways to access it:</strong></p>",
+        "      <ul>",
+        "        <li><strong>From the BSVibes app:</strong> Open the You menu and tap <em>Restore key from file</em> &mdash; decryption happens inside the app itself.</li>",
+        "        <li><strong>From a browser:</strong> Open this file in Safari, Chrome, or Firefox on any Mac or PC to enter your passphrase and view your recovery key directly.</li>",
+        "      </ul>",
+        "    </div>",
         '    <div class="card" id="decrypt-section">',
         data.hint
           ? `      <div class="hint-box"><strong>Memory clue:</strong> ${escapeHtml(data.hint)}</div>`
@@ -222,14 +225,14 @@ export function generateBackupHtml(data: BackupData): string {
         '      <div id="wif-primary-block" style="display:none">',
         '        <div class="wif-block">',
         '          <div class="wif-label">Your secret key (WIF)</div>',
-        '          <div class="wif-value" id="wif-primary"></div>',
+        '          <textarea class="wif-value" id="wif-primary" readonly rows="2"></textarea>',
         "        </div>",
         wifWarningHtml(false),
         "      </div>",
         '      <div id="wif-old-block" style="display:none">',
         '        <div class="wif-block">',
         '          <div class="wif-label">Previous secret key</div>',
-        '          <div class="wif-value" id="wif-old"></div>',
+        '          <textarea class="wif-value" id="wif-old" readonly rows="2"></textarea>',
         "        </div>",
         wifWarningHtml(true),
         "      </div>",
@@ -304,12 +307,12 @@ export function generateBackupHtml(data: BackupData): string {
         "    function showSuccess(primary, old) {",
         "      // Primary key block",
         "      const pb = document.getElementById('wif-primary-block');",
-        "      document.getElementById('wif-primary').textContent = primary;",
+        "      document.getElementById('wif-primary').value = primary;",
         "      pb.style.display = 'block';",
         "      // Previous key block",
         "      const ob = document.getElementById('wif-old-block');",
         "      if (old) {",
-        "        document.getElementById('wif-old').textContent = old;",
+        "        document.getElementById('wif-old').value = old;",
         "        ob.style.display = 'block';",
         "      } else {",
         "        ob.style.display = 'none';",
@@ -384,7 +387,12 @@ export function generateBackupHtml(data: BackupData): string {
     "    .meta-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; margin-bottom: 6px; gap: 12px; }\n" +
     "    .meta-row.with-copy { align-items: center; }\n" +
     "    .meta-label { color: #71717a; flex-shrink: 0; }\n" +
-    "    .meta-value { color: #a1a1aa; font-family: 'SF Mono', 'Fira Code', monospace; word-break: break-all; text-align: right; flex: 1; user-select: all; }\n" +
+    '    /* Used by both <span> (name, saved date) and <input type="text" readonly>\n' +
+    "       (address rows). The input variants need defaults stripped so they look\n" +
+    "       visually identical to spans, plus they pick up native iOS text-selection\n" +
+    "       affordance in Quick Look (which CSS user-select: all does not). */\n" +
+    "    .meta-value { color: #a1a1aa; font-family: 'SF Mono', 'Fira Code', monospace; word-break: break-all; text-align: right; flex: 1; background: transparent; border: 0; padding: 0; margin: 0; font-size: inherit; min-width: 0; }\n" +
+    "    .meta-value:focus { outline: none; }\n" +
     "    .meta-value.name { color: #f4f4f5; font-weight: 600; font-family: inherit; }\n" +
     "    .meta-copy-btn {\n" +
     "      background: transparent; border: 1px solid #3f3f46; border-radius: 5px;\n" +
@@ -426,7 +434,10 @@ export function generateBackupHtml(data: BackupData): string {
     "    .address-value { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: #a1a1aa; word-break: break-all; flex: 1; }\n" +
     "    .wif-block { background: #09090b; border: 1px solid #3f3f46; border-radius: 8px; padding: 12px; margin-bottom: 8px; }\n" +
     "    .wif-label { font-size: 10px; font-weight: 500; color: #71717a; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }\n" +
-    "    .wif-value { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #f4f4f5; word-break: break-all; line-height: 1.6; user-select: all; }\n" +
+    "    /* <textarea readonly> for iOS Quick Look-friendly tap-to-select. Defaults\n" +
+    "       stripped so the textarea visually matches the surrounding card. */\n" +
+    "    .wif-value { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #f4f4f5; word-break: break-all; line-height: 1.6; width: 100%; background: transparent; border: 0; padding: 0; margin: 0; resize: none; display: block; }\n" +
+    "    .wif-value:focus { outline: none; }\n" +
     "    .wif-warning { margin-top: 8px; margin-bottom: 12px; }\n" +
     "    .wif-warning p { font-size: 11px; color: #fca5a5; line-height: 1.55; margin-bottom: 4px; }\n" +
     "    .wif-warning p:last-child { margin-bottom: 0; }\n" +
@@ -476,7 +487,7 @@ export function generateBackupHtml(data: BackupData): string {
         '        <span class="meta-label">' +
         addressLabel +
         "</span>\n" +
-        `        <span class="meta-value" id="meta-address">${escapeHtml(data.address)}</span>\n` +
+        `        <input class="meta-value" id="meta-address" type="text" readonly value="${escapeHtml(data.address)}">\n` +
         '        <button class="meta-copy-btn" onclick="copyText(\'meta-address\', this)">Copy</button>\n' +
         "      </div>\n" +
         '      <div class="meta-row">\n' +
@@ -488,7 +499,7 @@ export function generateBackupHtml(data: BackupData): string {
         '    <div class="card-previous">\n' +
         '      <div class="meta-row with-copy">\n' +
         '        <span class="meta-label">Previous address</span>\n' +
-        `        <span class="meta-value" id="meta-old-address">${escapeHtml(data.oldAddress)}</span>\n` +
+        `        <input class="meta-value" id="meta-old-address" type="text" readonly value="${escapeHtml(data.oldAddress)}">\n` +
         '        <button class="meta-copy-btn" onclick="copyText(\'meta-old-address\', this)">Copy</button>\n' +
         "      </div>\n" +
         '      <p class="card-tagline-muted">Your previous key &mdash; here in case any funds were in transit during the move.</p>\n' +
@@ -502,7 +513,7 @@ export function generateBackupHtml(data: BackupData): string {
         '        <span class="meta-label">' +
         addressLabel +
         "</span>\n" +
-        `        <span class="meta-value" id="meta-address">${escapeHtml(data.address)}</span>\n` +
+        `        <input class="meta-value" id="meta-address" type="text" readonly value="${escapeHtml(data.address)}">\n` +
         '        <button class="meta-copy-btn" onclick="copyText(\'meta-address\', this)">Copy</button>\n' +
         "      </div>\n" +
         '      <div class="meta-row">\n' +
@@ -539,21 +550,38 @@ export function generateBackupHtml(data: BackupData): string {
     "\n" +
     "    // Universal copy helper — used by both the metadata Address row and any\n" +
     "    // Copy button inside the variant body (e.g., the previous-address row).\n" +
+    "    // Reads `.value` from form inputs (the new tap-to-select friendly pattern\n" +
+    "    // for iOS Quick Look) or `.textContent` from span/div elements (the\n" +
+    "    // 'Saved' date row is still a span).\n" +
     "    function copyText(id, btn) {\n" +
-    "      const text = document.getElementById(id).textContent;\n" +
+    "      const el = document.getElementById(id);\n" +
+    "      const text = 'value' in el ? el.value : el.textContent;\n" +
     "      const original = btn.textContent;\n" +
     "      navigator.clipboard.writeText(text).then(() => {\n" +
     "        btn.textContent = 'Copied!'; btn.classList.add('copied');\n" +
     "        setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 2000);\n" +
     "      }).catch(() => {\n" +
-    "        const el = document.getElementById(id);\n" +
-    "        const range = document.createRange(); range.selectNodeContents(el);\n" +
-    "        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);\n" +
-    "        document.execCommand('copy'); sel.removeAllRanges();\n" +
+    "        // Fallback for browsers without async clipboard API. Inputs/textareas\n" +
+    "        // use their native .select(); other elements use a Range.\n" +
+    "        if (typeof el.select === 'function') { el.select(); }\n" +
+    "        else {\n" +
+    "          const range = document.createRange(); range.selectNodeContents(el);\n" +
+    "          const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);\n" +
+    "        }\n" +
+    "        document.execCommand('copy');\n" +
+    "        if (window.getSelection) window.getSelection().removeAllRanges();\n" +
     "        btn.textContent = 'Copied!'; btn.classList.add('copied');\n" +
     "        setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 2000);\n" +
     "      });\n" +
     "    }\n" +
+    "\n" +
+    "    // Hide the Quick Look notice — it's the inverse-noscript pattern: visible by\n" +
+    "    // default for renderers that don't run JS (iOS Files / Quick Look, email\n" +
+    "    // previews), hidden the moment JS runs in a real browser.\n" +
+    "    (function hideQuickLookNotice() {\n" +
+    "      const el = document.getElementById('quicklook-notice');\n" +
+    "      if (el) el.style.display = 'none';\n" +
+    "    })();\n" +
     "\n" +
     // Metadata (name, address, saved date) and footer stamp render statically\n
     // at template-build time — no JS required so iOS Files Quick Look /

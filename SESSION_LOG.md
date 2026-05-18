@@ -2,6 +2,30 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-05-18 — E25: iOS Quick Look fix for recovery file (noscript inversion + form-control selection)
+
+Category: iOS bugfix — recovery file rendering in iOS Files / Quick Look.
+
+**The bug.** Nige opened an encrypted recovery file on iPhone via iOS Files preview. The `<noscript>` banner that's meant to explain "your keys are safe — but this preview can't decrypt them" was not visible. Separately, long-press-to-copy on the address row didn't work in Quick Look.
+
+**The diagnosis.** Researcher agent confirmed two iOS Quick Look quirks. (1) `<noscript>` content doesn't render in Quick Look because the WHATWG spec ties `<noscript>` visibility to whether the *engine* reports scripting as "disabled," not whether scripts actually run. iOS Quick Look's sandboxed WebKit reports scripting as "enabled" even though it never executes. (2) `user-select: all` is intercepted by Quick Look's preview UI layer, so the long-press copy gesture doesn't fire on `<div>` / `<span>` elements.
+
+**The fix.** All in `src/services/bsv/backup-template.ts`:
+- `<noscript>` → `<div id="quicklook-notice">` visible by default; tiny IIFE hides it when JS runs. Reliable across renderers.
+- Address row `<span class="meta-value">` → `<input type="text" readonly value="...">` for 3 occurrences (current-only card, current+previous cards, and the previous-address row).
+- WIF block `<div class="wif-value">` → `<textarea readonly rows="2">` for 3 occurrences (plaintext, encrypted-primary, encrypted-old). Native form controls retain iOS-OS-level tap-to-select / long-press handles in Quick Look.
+- `showSuccess()` switched from `.textContent =` to `.value =` for the textareas.
+- `copyText()` updated to read `el.value` for form controls (`'value' in el`) and `el.textContent` for spans (Saved date row).
+- `copyText()` fallback path also gained native `el.select()` for inputs; range-based selection for the rest.
+- CSS strips form-control defaults (border, padding, background, resize) so inputs/textareas look visually identical to today's spans/divs.
+- `user-select: all` rules removed (irrelevant on form controls).
+
+CLAUDE.md backup-template entry rewritten with the new pattern + explicit "do not revert" guards. DECISIONS.md gained a no-relitigate entry titled *"iOS Quick Look noscript / input-readonly pattern"* covering both quirks and the rationale, plus citing the 1Password Emergency Kit / Bitwarden precedent. Pattern matches industry-standard password-manager emergency sheets.
+
+Biome clean, tsc clean, 11/11 backup-template-related tests pass (`restore-from-file.test.ts`). File-format data shape unchanged — only the HTML rendering layer differs. App-side decrypt/restore paths untouched.
+
+Approved end-to-end by Nige before each edit (per `feedback_ask_before_code_change` rule).
+
 ## 2026-05-16 — E24: iPhone mic, Safari password save, PWA "Done" flow
 
 Category: iOS bugfixes — three independent regressions discovered during B-category manual testing.
