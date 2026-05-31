@@ -22,7 +22,16 @@ interface RestoreModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (identity: Identity) => void;
-  currentIdentity: Identity;
+  /**
+   * Identity currently held in localStorage on this device. Nullable for the
+   * E30 stale-key flow where the device may still hold an identity that's
+   * been rotated forward elsewhere — and (in future flows) for cases where
+   * the modal is opened from a no-identity context. When null, the
+   * "save outgoing key" prompt is skipped (there's no outgoing key worth
+   * saving), the encrypted-key save path is unavailable, and the modal goes
+   * straight from passphrase decrypt → restore.
+   */
+  currentIdentity: Identity | null;
   isProtected: boolean;
   reAuthPassphrase: string;
 }
@@ -172,6 +181,16 @@ export function RestoreModal({
       if (err instanceof Error && err.name === "AbortError") return;
       setImportError("Couldn't verify this key — check your connection and try again.");
       setImporting(false);
+      return;
+    }
+
+    // E30: when there's no outgoing identity (stale-key flow opens this modal
+    // with currentIdentity === null), there's nothing to "save before
+    // switching" — bypass the save-or-skip prompt entirely and proceed with
+    // the import. The pending state + prompt only makes sense when we're
+    // replacing a key the user might want to back up first.
+    if (!currentIdentity) {
+      await performImport(wif, name, passphrase, hint);
       return;
     }
 
@@ -455,13 +474,15 @@ export function RestoreModal({
       {/* Backdrop — full-screen click target for dismiss */}
       <button
         type="button"
-        className="fixed inset-0 z-[70] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
+        className="fixed inset-0 z-[100] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
         aria-label="Close modal"
         onClick={handleClose}
       />
 
       {/* Modal — pinned to top of viewport (iOS-native pattern). */}
-      <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[8vh] pointer-events-none">
+      {/* z-[100]: above SignInModal (z-[80]) AND E30's StaleKeyModal (z-[90]) */}
+      {/* so the restore flow always sits on top when chained from either modal. */}
+      <div className="fixed inset-0 z-[100] flex items-start justify-center px-6 pt-[8vh] pointer-events-none">
         <div
           className="w-full max-w-md rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] max-h-[80vh] overflow-y-auto"
           style={{ backgroundColor: "#0f0f0f" }}
@@ -587,7 +608,9 @@ export function RestoreModal({
                     {outgoingEarnings !== null && outgoingEarnings > 0 ? (
                       <p className="text-[11px] text-amber-400/90 leading-relaxed">
                         Your current key (
-                        <span className="font-semibold text-amber-300">{currentIdentity.name}</span>
+                        <span className="font-semibold text-amber-300">
+                          {currentIdentity?.name ?? "this key"}
+                        </span>
                         ) has{" "}
                         <span className="font-semibold text-amber-300">
                           {outgoingEarnings.toLocaleString()} sats

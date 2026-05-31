@@ -13,6 +13,10 @@ interface StoredIdentity {
   wif: string;
   name: string;
   address: string;
+  // E30: persisted alongside address so loads avoid an extra SDK round-trip.
+  // Optional for back-compat with payloads written before E30 — `getIdentity`
+  // backfills + rewrites the store the first time it sees a legacy entry.
+  pubkey?: string;
 }
 
 import type { Identity } from "@/types";
@@ -169,8 +173,7 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
         "[BSVibes] getIdentity: encrypted key exists but plaintext key also present — " +
           "likely an interrupted upgrade. Using plaintext identity."
       );
-      getBsvSdk();
-      return { name: plaintext.name, address: plaintext.address, wif: plaintext.wif };
+      return await materializeFromStored(plaintext);
     }
     return null;
   }
@@ -185,8 +188,7 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
       } catch {}
       return null;
     }
-    getBsvSdk();
-    return { name: stored.name, address: stored.address, wif: stored.wif };
+    return await materializeFromStored(stored);
   }
 
   // Don't generate a new key if an encrypted identity exists — user needs to unlock
@@ -202,6 +204,7 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
   const { PrivateKey } = await getBsvSdk();
   const key = PrivateKey.fromRandom();
   const address = key.toAddress().toString();
+  const pubkey = key.toPublicKey().toString();
   const name = oldName ?? generateAnonName();
   const wif = key.toWif();
 
@@ -210,10 +213,10 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
   if (isIdentityEncrypted()) return null;
   const raceCheck = getStoredIdentity();
   if (raceCheck) {
-    return { name: raceCheck.name, address: raceCheck.address, wif: raceCheck.wif };
+    return await materializeFromStored(raceCheck);
   }
 
-  const store: StoredIdentity = { wif, name, address };
+  const store: StoredIdentity = { wif, name, address, pubkey };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   } catch (err) {
@@ -228,7 +231,31 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
     }
   }
 
-  return { name, address, wif };
+  return { name, address, wif, pubkey };
+}
+
+/**
+ * Resolve a `StoredIdentity` (read from localStorage) into a fully-formed
+ * `Identity` with `pubkey`. If the stored payload predates E30 it lacks the
+ * pubkey field — derive it via the BSV SDK and rewrite the localStorage entry
+ * so subsequent loads skip the derive. The backfill is best-effort: if the
+ * write fails (private-browsing quota, etc.), we still return the in-memory
+ * Identity so the user isn't blocked.
+ */
+async function materializeFromStored(stored: StoredIdentity): Promise<Identity> {
+  if (stored.pubkey) {
+    // Pre-warm SDK so subsequent signing calls don't pay the import cost.
+    getBsvSdk();
+    return { name: stored.name, address: stored.address, wif: stored.wif, pubkey: stored.pubkey };
+  }
+  const pubkey = await derivePubkeyFromWif(stored.wif);
+  try {
+    const refreshed: StoredIdentity = { ...stored, pubkey };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshed));
+  } catch {
+    // Backfill is non-critical — derive on the next load if write fails.
+  }
+  return { name: stored.name, address: stored.address, wif: stored.wif, pubkey };
 }
 
 /**
@@ -267,13 +294,14 @@ export async function unlockIdentity(passphrase: string): Promise<Identity | nul
   const wif = await decryptWif(encData.encrypted, passphrase);
   if (!wif) return null;
 
-  // Cache for session
-  _sessionIdentity = { name: encData.name, address: encData.address, wif };
-
   // Pre-warm SDK and cache key
   const { PrivateKey } = await getBsvSdk();
   _cachedWif = wif;
   _cachedPrivateKey = PrivateKey.fromWif(wif);
+  const pubkey = _cachedPrivateKey.toPublicKey().toString();
+
+  // Cache for session
+  _sessionIdentity = { name: encData.name, address: encData.address, wif, pubkey };
 
   return _sessionIdentity;
 }
@@ -535,7 +563,12 @@ async function _upgradeIdentityInner(
   // Do NOT set session caches here. Caller must call commitUpgrade() after
   // migrateIdentity() succeeds. If we set caches now and migration fails,
   // the in-memory signing key diverges from the server's identity record.
-  const identity: Identity = { name: currentName, address: newAddress, wif: newWif };
+  const identity: Identity = {
+    name: currentName,
+    address: newAddress,
+    wif: newWif,
+    pubkey: newPubkey,
+  };
 
   return {
     identity,
@@ -727,13 +760,23 @@ async function _resetIdentityInner(
   // Sweep confirmed-only funds (leaves phantom UTXOs behind)
   const fundTransfer = await sweepFunds(currentWif, oldAddress, newAddress);
 
-  const identity: Identity = { name: currentName, address: newAddress, wif: newWif };
+  const identity: Identity = {
+    name: currentName,
+    address: newAddress,
+    wif: newWif,
+    pubkey: newPubkey,
+  };
 
   // Deferred commit: caller invokes commit() only after all downstream steps
   // (migrateIdentity, etc.) succeed. Prevents the bug where localStorage
   // updates to the new key but the sweep/migration failed — stranding funds.
   const commit = () => {
-    const store: StoredIdentity = { wif: newWif, name: currentName, address: newAddress };
+    const store: StoredIdentity = {
+      wif: newWif,
+      name: currentName,
+      address: newAddress,
+      pubkey: newPubkey,
+    };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
       localStorage.removeItem(ENCRYPTED_KEY);
@@ -816,10 +859,7 @@ export function getStoredAnonName(): string | null {
  * @param wif    - A Base58-encoded WIF private key string.
  * @param name   - Optional display name. Falls back to generating a new anon name.
  */
-export async function importIdentity(
-  wif: string,
-  name?: string
-): Promise<Identity & { pubkey: string }> {
+export async function importIdentity(wif: string, name?: string): Promise<Identity> {
   if (typeof window === "undefined") {
     throw new Error("importIdentity can only run in the browser");
   }
@@ -840,7 +880,7 @@ export async function importIdentity(
   const address = key.toPublicKey().toAddress().toString();
   const identityName = (name ?? "").trim() || generateAnonName();
 
-  const store: StoredIdentity = { wif: trimmed, name: identityName, address };
+  const store: StoredIdentity = { wif: trimmed, name: identityName, address, pubkey };
 
   // Clear any existing encrypted identity so the app uses the new plaintext one.
   // This is critical: a previous failed upgrade may have written bfn_keypair_enc
@@ -882,7 +922,7 @@ export async function importEncryptedIdentity(
   passphrase: string,
   name?: string,
   hint?: string
-): Promise<Identity & { pubkey: string }> {
+): Promise<Identity> {
   if (typeof window === "undefined") {
     throw new Error("importEncryptedIdentity can only run in the browser");
   }
@@ -924,7 +964,7 @@ export async function importEncryptedIdentity(
   // works without forcing the user to re-unlock. The encrypted-store path
   // normally requires unlockIdentity(passphrase) before signing — we skip
   // that here because we JUST received the passphrase from the user.
-  _sessionIdentity = { name: identityName, address, wif: trimmed };
+  _sessionIdentity = { name: identityName, address, wif: trimmed, pubkey };
   _cachedWif = trimmed;
   _cachedPrivateKey = key;
 

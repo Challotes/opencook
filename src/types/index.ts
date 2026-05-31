@@ -4,6 +4,12 @@ export interface Identity {
   name: string;
   address: string;
   wif: string;
+  // E30: compressed-hex secp256k1 public key derived from `wif`. Required
+  // so the feed-polling client can send it to the server in the
+  // `x-bsvibes-pubkey` header for stale-key detection without re-deriving
+  // on every poll. Identity-creating sites in `services/bsv/identity.ts`
+  // derive this in one place; consumers MUST NOT compute it ad-hoc.
+  pubkey: string;
 }
 
 // ── Posts ──────────────────────────────────────────────────────────────────

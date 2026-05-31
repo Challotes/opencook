@@ -30,6 +30,33 @@ interface IdentityContextValue {
    * "Welcome gate fires when standalone-mode + no identity."
    */
   awaitingWelcomeGate: boolean;
+  /**
+   * E30: true when the locally-held key has a forward migration on-chain.
+   * When true, `requireIdentity()` opens the StaleKeyModal (instead of
+   * SignInModal) and returns false — UI mutation handlers refuse to proceed
+   * until the user restores their newer recovery file. The underlying
+   * `identity` accessor still returns the cached key so non-signing reads
+   * (chip name, address) continue to work.
+   */
+  staleKey: boolean;
+  /**
+   * E30: mark the active identity stale (called by the polling layer when the
+   * server reports `key_status.stale === true`). Idempotent — no-op if already
+   * stale, if no identity is loaded, or if `isSessionClearBlocked()` is true
+   * (which means a rotation flow on THIS device is mid-flight; the polling
+   * layer must not flag its own freshly-rotated key as stale before the
+   * commit completes). Safe to call from any context that already holds an
+   * identity reference.
+   */
+  markIdentityStale: () => void;
+  /**
+   * E30: clear `staleKey` (transition back to `ready`). Called when the user
+   * restores their newer key in the same tab via `acceptRestoredIdentity`,
+   * which fires after `updateIdentity` — `clearStaleKey` is exposed for
+   * callers that need to drop stale state without changing the identity
+   * itself (rare; primarily an escape hatch for tests + future flows).
+   */
+  clearStaleKey: () => void;
   sign: (content: string) => Promise<{ signature: string; pubkey: string } | null>;
   updateIdentity: (newIdentity: Identity) => void;
   /**
@@ -112,11 +139,45 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   }, []);
   const isSessionClearBlocked = useCallback(() => sessionClearBlockedRef.current > 0, []);
 
+  // E30 stub opener: replaced in E30b with a real `setStaleModalOpen(true)`.
+  // Kept in E30a as an explicit no-op so the staleKey branch in
+  // `requireIdentity()` is a complete, type-checked code path — not a TODO.
+  // Without an opener call, callers in staleKey state would silently fail
+  // the mutation with no UI feedback (which is the wrong shape even though
+  // E30a never reaches this branch in practice).
+  const openStaleKeyModal = useCallback(() => {
+    // Intentional no-op until E30b mounts <StaleKeyModal />.
+  }, []);
+
   const requireIdentity = useCallback((): boolean => {
+    // E30: stale-key state takes precedence over both "has identity" and
+    // "needs sign-in" — even with a non-null identity reference, the
+    // underlying key has been rotated forward on-chain and signing would
+    // produce posts/boots attributed to a revoked key. Open the StaleKeyModal
+    // (via the opener stub — replaced with `setStaleModalOpen(true)` in E30b)
+    // instead of allowing the action through.
+    if (identityValue.staleKey) {
+      openStaleKeyModal();
+      return false;
+    }
     if (identityValue.identity) return true;
     setSignInOpen(true);
     return false;
-  }, [identityValue.identity]);
+  }, [identityValue.identity, identityValue.staleKey, openStaleKeyModal]);
+
+  // E30 (F3 mitigation): suppress the stale-key transition while a rotation
+  // flow is mid-flight on THIS device. MoveAddressModal / ChangePassphraseModal
+  // call `blockSessionClear()` while rotating; the poll layer can fire a
+  // stale signal between the migration-record write and the local
+  // `commitUpgrade()` call, which would race-flag our OWN newly-rotated key
+  // as stale on this device. The block window covers exactly that gap.
+  // Wraps the hook's raw transition so the context is the single chokepoint
+  // for the rule.
+  const hookMarkStale = identityValue.markIdentityStale;
+  const markIdentityStale = useCallback(() => {
+    if (sessionClearBlockedRef.current > 0) return;
+    hookMarkStale();
+  }, [hookMarkStale]);
 
   const acceptRestoredIdentity = useCallback(
     async (wif: string, name?: string, passphrase?: string, hint?: string): Promise<Identity> => {
@@ -196,6 +257,9 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   const contextValue: IdentityContextValue = {
     ...identityValue,
+    // Override hook's raw markIdentityStale with the context-level wrapper
+    // that enforces the isSessionClearBlocked() guard.
+    markIdentityStale,
     acceptRestoredIdentity,
     signInOpen,
     openSignIn,
