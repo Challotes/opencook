@@ -1,12 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useIdentityContext } from "@/contexts/IdentityContext";
 import type { BootboardData, Post } from "@/types";
 
 interface FeedPollingResult {
   posts: Post[];
   bootboard: BootboardData;
   updated?: Post[];
+  // E30: server-emitted staleness signal. Present (with `stale: true`) when
+  // the supplied pubkey has a forward migration record on-chain. Absent
+  // when the key is current OR when the env flag is off OR when ANY error
+  // occurred — the client treats absence as not-stale (F1+F2 fail-open).
+  key_status?: { stale?: unknown };
 }
 
 interface UseFeedPollingOptions {
@@ -20,6 +26,13 @@ export function useFeedPolling({
   initialBootboard,
   intervalMs = 5000,
 }: UseFeedPollingOptions) {
+  // E30: pull identity + the stale-key transition out of context so the poll
+  // can send `x-bsvibes-pubkey` on each request AND mark the local state
+  // stale when the server reports it. Kept in a ref so identity changes
+  // don't churn the polling timer.
+  const { identity, markIdentityStale } = useIdentityContext();
+  const pubkeyRef = useRef<string | null>(identity?.pubkey ?? null);
+  pubkeyRef.current = identity?.pubkey ?? null;
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [bootboard, setBootboard] = useState<BootboardData>(initialBootboard);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -50,9 +63,34 @@ export function useFeedPolling({
         url += `${separator}pending_tx=${pendingIds.join(",")}`;
       }
 
-      const res = await fetch(url, { cache: "no-store" });
+      // E30: send the local pubkey in a header (not query string) so server
+      // can detect forward-migration without leaking pubkey ↔ IP correlation
+      // into CDN/proxy URL access logs.
+      const headers: HeadersInit = {};
+      // Capture the pubkey at request-build time so we can compare against
+      // the current pubkey at response-handle time. Without this, a poll
+      // that left with OLD pubkey and returns AFTER a same-tab rotation
+      // would mark the freshly-rotated NEW key as stale (the F3 block
+      // window only covers the rotation flow itself; an in-flight poll
+      // request that resolves post-block is unprotected).
+      const sentPubkey = pubkeyRef.current;
+      if (sentPubkey) headers["x-bsvibes-pubkey"] = sentPubkey;
+
+      const res = await fetch(url, { cache: "no-store", headers });
       if (!res.ok) return;
       const data: FeedPollingResult = await res.json();
+
+      // E30 (F1+F2): treat ONLY a strict-equal `true` boolean as stale.
+      // undefined / null / "true" string / {stale: "yes"} / any other shape
+      // is fail-open. A future server bug must not mass-lock users.
+      //
+      // Race guard: only apply the stale verdict if the pubkey the server
+      // computed it for still matches our current pubkey. If they diverge
+      // (in-flight poll during cross-tab restore or same-tab rotation), the
+      // verdict is for a no-longer-current key and must be discarded.
+      if (data.key_status?.stale === true && sentPubkey === pubkeyRef.current) {
+        markIdentityStale();
+      }
 
       setBootboard(data.bootboard);
 
@@ -105,7 +143,7 @@ export function useFeedPolling({
     } finally {
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [markIdentityStale]);
 
   useEffect(() => {
     function schedule() {

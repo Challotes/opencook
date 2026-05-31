@@ -112,3 +112,22 @@
 - L4: Rate limiter cleanup uses first caller's window
 - L5: Direct WoC calls leak user addresses with IP
 - L6: Clipboard not cleared after WIF copy
+
+### L7: Stale-key attribution griefing (E30 deferred risk)
+**Severity:** LOW — bounded per-victim, requires WIF compromise as prerequisite
+**Files:** `src/app/actions.ts` (createPost), `src/services/fairness/weights.ts`
+**Risk:** After rotation, the old key remains cryptographically valid. A party who obtained the old plaintext WIF (before passphrase protection) can broadcast signed posts under the old pubkey via direct BSV broadcast, bypassing the BSVibes UI. The fairness chain resolver (`weights.ts: resolveChain()`) follows migration records forward and attributes engagement weight to the CURRENT key-holder — attacker gains no earnings — but the attacker CAN produce posts that appear attributable to the current user's author name in the feed.
+
+**Prerequisites for exploit:** (1) attacker obtained the old plaintext WIF (physical device access, unencrypted cloud sync leak, prior localStorage exposure); (2) user has rotated to a newer key; (3) attacker motivated to spam under target name.
+
+**Mitigations in place:**
+- Chain resolver redirects all attribution to current key — attacker gains no earnings
+- **E30 (2026-05-28)**: session-lockout prevents the legitimate client on a stale-key device from accidentally contributing posts attributed to the wrong key. Detection is via `/api/posts` returning `key_status: { stale: true }` when the `x-bsvibes-pubkey` header matches a forward-migrated pubkey; client surfaces `<StaleKeyModal>` and replaces the textarea with an amber banner blocking the compose flow. UI-layer lock only — `createPost` server action still accepts cryptographically-valid signatures from the old key (which is the deliberate trade-off; see DECISIONS.md "E30 stale-key session-lockout").
+- `createPost` rate limiting (pubkey-keyed) caps post rate per key regardless of origin
+
+**Residual risk:** controlled spam — an attacker bypassing the UI entirely (direct BSV broadcast with the leaked WIF) can post as the old identity. Not mitigated by E30 alone. The on-chain audit trail (OP_RETURN post payloads) records these ghost posts permanently — attribution UI redirects forward via chain resolver, but the on-chain signature stays.
+
+**Trigger to promote to per-mutation server gating:** if attribution griefing is observed in production (spam posts appearing under real users' names from revoked keys), add a server-side migration-chain check inside `createPost` that rejects posts from any pubkey with a forward migration record. One-session change: add a `getForwardMigration()` lookup to the createPost path, reject if non-null. Analogous to E29's `/api/restore-eligibility` check, just applied at mutation time instead of restore time.
+
+**Cross-reference:** DECISIONS.md "E30 stale-key session-lockout (Design: UI-layer only)" · CLAUDE.md Hard Rule #7 (`requireIdentity()` universal pattern)
+**Status:** DEFERRED — acceptable risk at current scale. Promote if griefing observed.

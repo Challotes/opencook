@@ -31,7 +31,8 @@ export function PostForm({
   // that would call start() on an already-started instance (iOS throws).
   const isStartingRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const { identity, needsUnlock, sign, requireIdentity } = useIdentityContext();
+  const { identity, needsUnlock, sign, requireIdentity, staleKey, openStaleKeyModal } =
+    useIdentityContext();
   // Set when the user tries to submit while locked — drives a focus + amber
   // border pulse once identity arrives, so the user knows their draft is
   // waiting and can hit Enter to send.
@@ -93,10 +94,13 @@ export function PostForm({
     if (typeof content !== "string" || !content.trim()) return;
     const trimmed = content.trim();
 
-    // Opens SignInModal if locked; caller retaps after signing in.
-    if (!identity) {
+    // E30 defense-in-depth: when stale, requireIdentity() opens StaleKeyModal
+    // and returns false. The textarea is also hidden in this state so the
+    // user can't physically reach this code path via the UI, but a future
+    // change adding a hidden submit affordance (keyboard shortcut on a
+    // sibling input, etc.) must still go through the gate.
+    if (!requireIdentity() || !identity) {
       wantedToPostRef.current = true;
-      requireIdentity();
       return;
     }
 
@@ -298,37 +302,55 @@ export function PostForm({
       className="w-full max-w-2xl"
     >
       <div className="relative">
-        <textarea
-          ref={textareaRef}
-          name="content"
-          aria-label="Share an idea"
-          placeholder={
-            !identity && !needsUnlock ? "Setting up your identity..." : "Share an idea..."
-          }
-          maxLength={1000}
-          disabled={!identity && !needsUnlock}
-          onKeyDown={handleKeyDown}
-          className={`block w-full bg-zinc-900 border rounded-3xl pl-4 pr-14 py-3 sm:pl-5 sm:py-4 text-sm sm:text-base resize-none focus:outline-none placeholder:text-zinc-600 min-h-[48px] sm:min-h-[56px] max-h-[200px] disabled:opacity-50 scrollbar-hide ${
-            resumeNudge ? "" : "transition-colors duration-300"
-          } ${
-            justPosted
-              ? "border-green-600/60 focus:border-green-600/60"
-              : resumeNudge && hasContent
-                ? "border-amber-400/60 focus:border-amber-400/60 animate-[nudgePulse_0.8s_ease-in-out_2]"
-                : hasContent
-                  ? "border-amber-400/60 focus:border-amber-400/60"
-                  : "border-zinc-800 focus:border-zinc-700"
-          }`}
-          style={{ scrollbarWidth: "none" }}
-          rows={1}
-          onInput={(e) => {
-            const el = e.currentTarget;
-            el.style.height = "auto";
-            el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-            setHasContent(el.value.trim().length > 0);
-          }}
-        />
-        {hasContent ? (
+        {staleKey ? (
+          // E30b — amber banner replaces the textarea + send/mic block when
+          // the local key is stale. Click re-opens StaleKeyModal (which in
+          // turn launches the restore flow). Shape mirrors the textarea
+          // (rounded-3xl, min-h-[48px]/[56px]) so the swap is layout-neutral
+          // — no shift when staleness flips. min-h pinned in tandem with
+          // the textarea's so the compose area doesn't grow/shrink between
+          // states.
+          <button
+            type="button"
+            onClick={openStaleKeyModal}
+            className="w-full text-left text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-3xl px-4 py-3 sm:py-4 hover:bg-amber-500/15 transition-colors min-h-[48px] sm:min-h-[56px] flex items-center animate-[fadeIn_0.2s_ease-out]"
+            aria-live="polite"
+          >
+            Your key needs updating — restore your recovery file to post.
+          </button>
+        ) : (
+          <textarea
+            ref={textareaRef}
+            name="content"
+            aria-label="Share an idea"
+            placeholder={
+              !identity && !needsUnlock ? "Setting up your identity..." : "Share an idea..."
+            }
+            maxLength={1000}
+            disabled={!identity && !needsUnlock}
+            onKeyDown={handleKeyDown}
+            className={`block w-full bg-zinc-900 border rounded-3xl pl-4 pr-14 py-3 sm:pl-5 sm:py-4 text-sm sm:text-base resize-none focus:outline-none placeholder:text-zinc-600 min-h-[48px] sm:min-h-[56px] max-h-[200px] disabled:opacity-50 scrollbar-hide ${
+              resumeNudge ? "" : "transition-colors duration-300"
+            } ${
+              justPosted
+                ? "border-green-600/60 focus:border-green-600/60"
+                : resumeNudge && hasContent
+                  ? "border-amber-400/60 focus:border-amber-400/60 animate-[nudgePulse_0.8s_ease-in-out_2]"
+                  : hasContent
+                    ? "border-amber-400/60 focus:border-amber-400/60"
+                    : "border-zinc-800 focus:border-zinc-700"
+            }`}
+            style={{ scrollbarWidth: "none" }}
+            rows={1}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+              setHasContent(el.value.trim().length > 0);
+            }}
+          />
+        )}
+        {!staleKey && hasContent ? (
           <button
             type="button"
             onClick={submitForm}
@@ -349,7 +371,7 @@ export function PostForm({
               <path d="M5 12h14m0 0l-6-6m6 6l-6 6" />
             </svg>
           </button>
-        ) : (
+        ) : !staleKey ? (
           <button
             type="button"
             onClick={toggleMic}
@@ -376,7 +398,7 @@ export function PostForm({
               <line x1="12" x2="12" y1="19" y2="22" />
             </svg>
           </button>
-        )}
+        ) : null}
       </div>
       {micError && (
         <button

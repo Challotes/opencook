@@ -61,6 +61,7 @@ export function IdentityChip(): React.JSX.Element | null {
     isSessionClearBlocked,
     blockSessionClear,
     unblockSessionClear,
+    staleKey,
   } = useIdentityContext();
   const installCtx = useInstallContext();
   const [open, setOpen] = useState(false);
@@ -165,6 +166,18 @@ export function IdentityChip(): React.JSX.Element | null {
     setActivityExpanded(false);
     setJustBackedUp(false);
   }, []);
+
+  // E30b (R1 fix): when polling flags the local key as stale, the in-app WIF
+  // reveal MUST close immediately — otherwise the user could photograph or
+  // copy a now-dead WIF (the newer key on another device is what controls
+  // their account, this WIF can no longer sign for them). Same effect closes
+  // the whole dropdown so the user sees the StaleKeyModal auto-opened by
+  // the context's stale transition, not a half-open modal stacked under it.
+  useEffect(() => {
+    if (staleKey) {
+      closeDropdown();
+    }
+  }, [staleKey, closeDropdown]);
 
   const loadStoredHint = useCallback(() => {
     try {

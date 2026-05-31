@@ -2,6 +2,49 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-05-29 — E30: stale-key session-lockout (shipped, two commits)
+
+Category: security architecture + UX — completes the rotation/revocation story by closing the "existing device unaware its key was revoked elsewhere" hole. E29 closed "new device adopts stale key"; E30 closes the symmetric case.
+
+**Shape:** UI-layer session-lockout (not per-mutation server gating). Polling sends `x-bsvibes-pubkey` header on every `/api/posts` request; server returns `key_status: { stale: true }` when the pubkey has a forward migration. Client transitions identity to a `staleKey` state, surfaces `<StaleKeyModal>`, replaces the textarea with an amber banner. `createPost` / `bootPost` server actions UNMODIFIED — a malicious WIF holder bypassing the UI is documented as residual risk L7 with retreat path. Reasoning: open/closed principle — `requireIdentity()` Hard Rule #7 universal pattern automatically inherits the lock for any future mutation feature.
+
+**Shipped as two commits:**
+
+**E30a (3818e2c) — scaffolding, no user-visible change (~440 LOC).**
+- `Identity` type gains required `pubkey: string`, derived in identity.ts and persisted to localStorage. Legacy `StoredIdentity` payloads backfilled via new `materializeFromStored` helper.
+- `IdentityState` union gains `kind: "staleKey"` variant, plus `markIdentityStale` / `clearStaleKey` transitions.
+- IdentityContext wraps `markIdentityStale` with `isSessionClearBlocked()` guard (F3 mitigation — prevents self-stale during own-device rotation).
+- `requireIdentity()` gains stale-key branch with stub opener (replaced in E30b).
+- RestoreModal z-[70] → z-[100]; `currentIdentity` prop made nullable.
+- `/api/posts` flag-gated `key_status` field via `shouldCheckStaleness` helper; reads `x-bsvibes-pubkey` header (not query string — privacy P2); strict env flag check `=== "true"` (F1+F2 fail-open); errors caught + swallowed.
+- 24 new tests (20 pubkey-shape + flag-gating + fail-open, 4 derivePubkeyFromWif pinning).
+- Code-auditor verdict: SHIP. All invariants confirmed.
+
+**E30b — UI + behavior live (~340 LOC + #50 revert + docs).**
+- `<StaleKeyModal>` (NEW, ~210 LOC) — z-[90], mirrors SignInModal container. Body: primary CTA, zinc-500 device-each note, U1 escape-hatch link flips "I don't have the newer file" ↔ "Hide" with inline 3-paragraph honest explanation (no recovery promise, no support hook). Dismiss: backdrop / X / Escape / pagehide. RestoreModal rendered as sibling (not child) so closing the stale modal doesn't unmount the restore flow.
+- `useFeedPolling` reads `key_status?.stale === true` strictly; captures `sentPubkey` pre-request and compares to current pubkey at response time (race guard — discards stale verdict if pubkey changed mid-flight, defense against in-flight poll resolving after cross-tab restore or same-tab rotation).
+- `Feed.tsx` mounts `<StaleKeyModal />` alongside `<SignInModal />` inside `<IdentityProvider>`.
+- `PostForm.tsx` swaps textarea → amber banner button when stale (rounded-3xl, min-h matches textarea so zero layout shift). `submitForm` now uses `requireIdentity()` instead of bare `!identity` check — defense in depth via stale-state branching.
+- `IdentityBar.tsx` subscribes to `staleKey` and force-closes the dropdown on transition (R1 fix — prevents user photographing/copying a now-dead WIF mid-reveal).
+- **Task #50 — reverted 3 diagnostic `console.warn` lines from PostForm's SpeechRecognition handler.** Bundled here since E30b touches PostForm anyway.
+- DECISIONS.md gains "E30 stale-key session-lockout (UI-layer only)" entry with full F1+F2/F3 rationale, retreat path, do-not-revert guards.
+- SECURITY_AUDIT.md gains L7 entry documenting residual griefing risk + escalation trigger.
+- CLAUDE.md gains StaleKeyModal key-files entry.
+
+**Auditor findings during E30b implementation and fixes applied before commit:**
+- F1 (HIGH): StaleKeyModal `onSuccess` dropped the imported identity → re-open loop. **Fixed:** now calls `updateIdentity(imported)` before clearing.
+- F2 (HIGH): Reset effect immediately undid `setRestoreOpen(true)` from the CTA handler → restore modal unmounted on next render. **Fixed:** reset effect now only resets `explanationOpen`, never `restoreOpen`.
+- F3 (MEDIUM): Passing non-null `currentIdentity` to RestoreModal triggered save-outgoing-key prompt for a dead key. **Fixed:** pass `null` to match RestoreModal's documented stale-flow bypass.
+- F4 (MEDIUM): F3 (block-guard) mitigation has a late-response race window — poll fired with OLD pubkey, returns after block released, marks new key stale. **Fixed:** captured `sentPubkey` pre-request, compare to current pubkey at response time.
+- F5 (LOW): PostForm `submitForm` lacked stale guard at handler level (textarea hiding was the only defense). **Fixed:** routed through `requireIdentity()`.
+- F7 (cosmetic): outdated "stub opener" comment. **Fixed.**
+
+Re-audit verdict: SHIP. All five findings closed, no regressions to previously-confirmed invariants, no new issues introduced.
+
+**Deploy precondition:** set `E30_STALE_KEY_ENABLED=true` on Railway/Vercel after deploy. Until set, the feature is dark (server omits `key_status`, client treats absence as not-stale via fail-open).
+
+Biome clean, tsc clean, 87/87 tests pass, prod build clean.
+
 ## 2026-05-28 — E30 design lock (planning session, no code)
 
 Category: design / planning — no code changes. Locked the full E30 (session-lockout for stale-key devices) implementation spec across three parallel agent reviews.

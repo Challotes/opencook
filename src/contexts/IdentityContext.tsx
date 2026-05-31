@@ -114,8 +114,19 @@ interface IdentityContextValue {
    *
    * Do NOT call signPost, clientSideBoot, or any other wif-using service
    * from a UI handler without this gate. See CLAUDE.md "Universal pattern".
+   *
+   * E30: when the local key is stale (`staleKey === true`) this opens
+   * <StaleKeyModal> instead of <SignInModal> — the user must restore their
+   * newer recovery file, not just unlock the current one.
    */
   requireIdentity: () => boolean;
+  // E30 stale-key modal control (consumed by <StaleKeyModal /> + the amber
+  // banner in PostForm). `staleKeyModalOpen` is true when the modal should
+  // mount. Toggled by `requireIdentity()` (auto), the banner's onClick
+  // (manual re-entry), and dismissed by the modal's own close paths.
+  staleKeyModalOpen: boolean;
+  openStaleKeyModal: () => void;
+  closeStaleKeyModal: () => void;
 }
 
 const IdentityContext = createContext<IdentityContextValue | null>(null);
@@ -123,9 +134,11 @@ const IdentityContext = createContext<IdentityContextValue | null>(null);
 export function IdentityProvider({ children }: { children: ReactNode }) {
   const identityValue = useIdentity();
   const [signInOpen, setSignInOpen] = useState(false);
+  const [staleKeyModalOpen, setStaleKeyModalOpen] = useState(false);
 
   const openSignIn = useCallback(() => setSignInOpen(true), []);
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
+  const closeStaleKeyModal = useCallback(() => setStaleKeyModalOpen(false), []);
 
   // Ref-counted suppression of pagehide-driven session clearing. Ref (not
   // state) so the pagehide handler reads the live value without re-binding
@@ -139,14 +152,12 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   }, []);
   const isSessionClearBlocked = useCallback(() => sessionClearBlockedRef.current > 0, []);
 
-  // E30 stub opener: replaced in E30b with a real `setStaleModalOpen(true)`.
-  // Kept in E30a as an explicit no-op so the staleKey branch in
-  // `requireIdentity()` is a complete, type-checked code path — not a TODO.
-  // Without an opener call, callers in staleKey state would silently fail
-  // the mutation with no UI feedback (which is the wrong shape even though
-  // E30a never reaches this branch in practice).
+  // E30b: real opener. Surfaces the StaleKeyModal mounted in Feed.tsx.
+  // Called from (a) requireIdentity() when a mutation is attempted in stale
+  // state, and (b) the amber banner in PostForm.tsx (manual re-entry after
+  // the user dismissed the modal once).
   const openStaleKeyModal = useCallback(() => {
-    // Intentional no-op until E30b mounts <StaleKeyModal />.
+    setStaleKeyModalOpen(true);
   }, []);
 
   const requireIdentity = useCallback((): boolean => {
@@ -154,7 +165,6 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     // "needs sign-in" — even with a non-null identity reference, the
     // underlying key has been rotated forward on-chain and signing would
     // produce posts/boots attributed to a revoked key. Open the StaleKeyModal
-    // (via the opener stub — replaced with `setStaleModalOpen(true)` in E30b)
     // instead of allowing the action through.
     if (identityValue.staleKey) {
       openStaleKeyModal();
@@ -178,6 +188,18 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     if (sessionClearBlockedRef.current > 0) return;
     hookMarkStale();
   }, [hookMarkStale]);
+
+  // E30b: auto-open the modal on the FIRST stale transition. Subsequent
+  // polls that re-fire `markIdentityStale()` are no-ops at the hook level
+  // (already-stale → stale), so this effect won't reopen a user-dismissed
+  // modal — it only fires once when staleKey flips false → true.
+  const wasStaleRef = useRef(false);
+  useEffect(() => {
+    if (identityValue.staleKey && !wasStaleRef.current) {
+      setStaleKeyModalOpen(true);
+    }
+    wasStaleRef.current = identityValue.staleKey;
+  }, [identityValue.staleKey]);
 
   const acceptRestoredIdentity = useCallback(
     async (wif: string, name?: string, passphrase?: string, hint?: string): Promise<Identity> => {
@@ -268,6 +290,9 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     blockSessionClear,
     unblockSessionClear,
     isSessionClearBlocked,
+    staleKeyModalOpen,
+    openStaleKeyModal,
+    closeStaleKeyModal,
   };
 
   return <IdentityContext.Provider value={contextValue}>{children}</IdentityContext.Provider>;
