@@ -170,18 +170,67 @@ function renderContent(
 
   if (installType === "manual-instructions") {
     // Three sub-platforms share this branch; each gets a one-line instruction.
+    // iOS Safari uses inline SVG icons (Share + plus-square) because Apple
+    // blocks programmatic Add-to-Home-Screen triggering — the icons make the
+    // manual instructions visually obvious. License-safe Heroicons-style
+    // glyphs (NOT SF Symbols — Apple's license forbids web use). Icons get
+    // `aria-hidden` because the surrounding prose is complete on its own;
+    // screen readers reading "box with upward arrow, Share..." would be worse
+    // than hiding the icon.
     const instructions =
-      platform === "ios-safari"
-        ? "Tap the share icon, then Add to Home Screen."
-        : platform === "desktop-safari"
-          ? "Open File menu → Add to Dock."
-          : "Open the browser menu, then Install."; // Firefox Android + fallback
+      platform === "ios-safari" ? (
+        <span className="text-[11px] text-zinc-400 block">
+          Tap{" "}
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="inline-block text-zinc-300"
+            style={{ verticalAlign: "-2px" }}
+          >
+            <path d="M9 12H4a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-5" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+            <polyline points="8 6 12 2 16 6" />
+          </svg>{" "}
+          Share, then{" "}
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="inline-block text-zinc-300"
+            style={{ verticalAlign: "-2px" }}
+          >
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>{" "}
+          Add to Home Screen.
+        </span>
+      ) : platform === "desktop-safari" ? (
+        <span className="text-[11px] text-zinc-400 block">Open File menu → Add to Dock.</span>
+      ) : (
+        <span className="text-[11px] text-zinc-400 block">
+          Open the browser menu, then Install.
+        </span>
+      );
     return (
       <div className="space-y-1">
         <span className="text-[12px] text-amber-400 font-medium block">
           Get notified when you earn.
         </span>
-        <span className="text-[11px] text-zinc-400 block">{instructions}</span>
+        {instructions}
       </div>
     );
   }

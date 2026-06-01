@@ -40,7 +40,7 @@ export function PassphrasePrompt({
       />
       {hint && (
         <div className="border-l-2 border-amber-500/60 pl-2 py-0.5">
-          <span className="text-[11px] text-amber-400/90">💡 {hint}</span>
+          <span className="text-[11px] text-amber-400/90">Hint: {hint}</span>
         </div>
       )}
       {error && <p className="text-[11px] text-red-400">{error}</p>}
