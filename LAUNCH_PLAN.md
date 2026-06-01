@@ -1,6 +1,6 @@
 # Launch Plan
 
-> ⚠️ **Working document — temporary.** This file is the active launch-prep scratchpad created 2026-05-09. At launch-close: strategic decisions promote into `DECISIONS.md` (under a new "Platform & Distribution" heading), shipped buckets promote into `ROADMAP.md` as Phase 6.5 closeout, and this file gets **deleted via `git rm`** (not archived — git history preserves it). Do not treat as canonical reference once launch is declared done. Lifecycle owned by the agent — see memory `project_launch_plan_lifecycle.md`.
+> ⚠️ **Working document — temporary.** This file is the active launch-prep scratchpad created 2026-05-09. At launch-close: strategic decisions promote into `DECISIONS.md` (under the "Platform & Distribution" heading), shipped buckets promote into `ROADMAP.md` as Phase 6.5 closeout, and this file gets **deleted via `git rm`** (not archived — git history preserves it). Do not treat as canonical reference once launch is declared done. Lifecycle owned by the agent — see memory `project_launch_plan_lifecycle.md`.
 
 > Comprehensive launch readiness plan covering mobile polish, in-app browser handling, install/notifications flow, and the QR device-sync layer.
 >
@@ -8,6 +8,25 @@
 > Status: pre-implementation. Two rounds of agent review complete; ready for build.
 >
 > **Read order:** CLAUDE.md → ROADMAP.md → DECISIONS.md → this file → SESSION_LOG.md
+
+---
+
+## Bucket status (2026-06-01)
+
+| Bucket | Status | Evidence |
+|---|---|---|
+| 1 — Mobile polish | ✅ DONE | Commits `6ee6441` → `ff7a193` (5 modals → bottom-sheet), `6c56093` (Batch 1 tap-targets). Verified by agent audit 2026-06-01. |
+| 2 — In-app browser splash | ⏸ NOT STARTED | No in-app-browser detection in `src/`. Decision is in DECISIONS.md, code not written. |
+| 3a — Welcome gate + identity flow | ✅ DONE | Components shipped: `useStandaloneMode`, `useInstallPlatform`, `InstallContext`, `InstallPitch`, `HomeScreenWelcomeGate`, `IosStorageToast`. Commit `111c0e2` is the landing point. |
+| 3b — Notifications | ⏸ NOT STARTED | Blocked behind Bucket 4 (`publishPayout()` helper). No service worker exists. |
+| 4 — Server resilience | ⏸ NOT STARTED | No `/api/broadcast` proxy. No `publishPayout()` helper. `tx.broadcast()` still direct. |
+| 5 — Deploy + observability | ⏸ NOT STARTED | Owner hasn't deployed. Railway-prep config exists (Dockerfile, `.env.example` env-var DB path). |
+
+**Decisions promoted to DECISIONS.md 2026-06-01** as part of partial-promotion checkpoint: D4 ordering flow, D5 welcome-gate copy discipline, D6 SW scope discipline, Status #4 first-earning wiring, Status #6 notification copy, Status #10 install pitch dismissal calibration, Status #12 iOS ITP sequencing, C4 standalone-mode detection, C5 SW + Next.js 16 integration. The original sections in this file remain for working context but the binding decisions live in DECISIONS.md.
+
+**Earlier decisions already promoted:** D1 (PWA over App Store), D2 (in-app browser hard block), D3 (mobile bottom-sheet), D7 (QR sync post-launch), Welcome gate four-causes note, TAAL deferral / miner-agnostic guardrail.
+
+**Buckets 2, 3b, 4, 5 remain the live working surface of this file.** When all five are shipped, this file gets `git rm`'d per memory `project_launch_plan_lifecycle.md`.
 
 ---
 
