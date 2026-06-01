@@ -188,6 +188,13 @@ BootButton/useBoot → bootPost server action → server wallet builds split tx 
 
 - **Rate limiting uses `x-forwarded-for` header** for IP identification. This header is client-supplied — behind a reverse proxy (Railway, Vercel, Cloudflare), the proxy sets it from the real client IP and it's trustworthy. If self-hosting without a proxy, attackers can spoof this header to bypass rate limits. Check your platform's docs for the correct trusted IP header (e.g. Vercel uses `x-real-ip`). All rate limit IP extraction is in the individual API route files (`src/app/api/*/route.ts`).
 
+- **Environment variables.** See `.env.example` for the full list with inline comments. Highlights:
+  - `ANTHROPIC_API_KEY` — required for AI agent chat (`/api/agent`)
+  - `BSV_SERVER_WIF` — required for on-chain post logging (OP_RETURN). Without it, posts save to DB only with no on-chain fingerprint.
+  - `DATABASE_PATH` — defaults to `./local.db`. Railway: set to `/data/local.db` with a mounted volume.
+  - `PORT` — Railway sets this automatically. Vercel ignores it.
+  - `E30_STALE_KEY_ENABLED` — feature flag for E30's stale-key session-lockout. Set to literal `"true"` to enable. Defaults to OFF (server omits `key_status` field, client treats as not-stale). E29 (block-restore) and E31 (block-rotate) are always on regardless — the flag only gates E30's polling-based detection + auto-modal UI. Strict string match: only `"true"` enables.
+
 ## Development
 
 ```bash
