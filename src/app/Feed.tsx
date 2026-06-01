@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { BootToast } from "@/components/BootToast";
 import { HomeScreenWelcomeGate } from "@/components/HomeScreenWelcomeGate";
+import { InstallBookmark } from "@/components/InstallBookmark";
 import { InstallPitch } from "@/components/InstallPitch";
 import { IosStorageToast } from "@/components/IosStorageToast";
 import { SignInModal } from "@/components/SignInModal";
@@ -315,7 +316,12 @@ function FeedContent({
             onPostRejected={handlePostRejected}
             agentHighlight={agentHighlight}
           />
-          <div className="flex justify-center mt-1">
+          <div className="flex justify-center items-center gap-3 mt-1">
+            {/* Install bookmark — visible only when the install-pitch sheet has
+                been minimised this session. Sits at attribution-link visual
+                weight (30% opacity), tap to re-open the sheet. See
+                InstallBookmark.tsx + DECISIONS.md install-pitch entries. */}
+            <InstallBookmark />
             <a
               href="https://bopen.ai"
               target="_blank"

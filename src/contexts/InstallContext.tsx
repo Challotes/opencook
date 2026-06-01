@@ -14,8 +14,23 @@ import { isSuppressedAt } from "@/lib/install-suppression";
 const DISMISSED_UNTIL_KEY = "bsvibes_install_pitch_dismissed_until";
 const ENGAGED_KEY = "bsvibes_install_engaged";
 const BACKED_UP_KEY = "bsvibes_identity_backed_up";
+const SHEET_SHOWN_KEY = "bsvibes_install_sheet_shown"; // sessionStorage
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DISMISS_DAYS_DEFAULT = 30;
+const SHEET_DELAY_MS = 800;
+
+/**
+ * Install pitch mode — drives which surface (sheet vs bookmark) is currently
+ * rendered when the user passes the 4-condition visibility gate.
+ *
+ * - `"hidden"` — initial state; no surface visible. Used both before gate
+ *   passes (no recovery file yet, etc.) AND during the first 800ms after the
+ *   gate passes (gives the user a moment to land on the page).
+ * - `"sheet"` — full slide-up sheet. The big-impact post-save moment.
+ * - `"bookmark"` — minimised state. Small app-icon bookmark sits next to the
+ *   "created with bopen.ai" link in Feed.tsx. Quietly visible, tap to re-open.
+ */
+export type InstallSheetMode = "hidden" | "sheet" | "bookmark";
 
 interface InstallContextValue {
   /** True if a `beforeinstallprompt` event was captured and hasn't been consumed. */
@@ -33,7 +48,7 @@ interface InstallContextValue {
    * event fired).
    */
   isSuppressed: boolean;
-  /** Set `dismissedUntil = now + days × DAY_MS`. Called on X-tap on the install banner. */
+  /** Set `dismissedUntil = now + days × DAY_MS`. Called by `promptInstall` on dismissed outcome. */
   suppressForDays: (days: number) => void;
   /** Mark the user as having engaged the install path. Permanent. */
   markEngaged: () => void;
@@ -50,6 +65,29 @@ interface InstallContextValue {
    * this, the banner would only appear on the next page load). Idempotent.
    */
   markBackedUp: () => void;
+  /** Current install pitch surface — see `InstallSheetMode`. */
+  installSheetMode: InstallSheetMode;
+  /**
+   * Called by `InstallPitch` once it determines the visibility gate has passed
+   * for the first time this session. Idempotent — re-calls are no-ops.
+   *
+   * Behavior:
+   * - First-ever call this tab session (no sessionStorage flag): sets the flag
+   *   synchronously to prevent reload-during-delay double-fire, schedules
+   *   `installSheetMode = "sheet"` after 800ms.
+   * - Subsequent sessions (flag already set): `installSheetMode = "bookmark"`
+   *   immediately. The user has already seen the sheet once; the bookmark is
+   *   the persistent reminder.
+   *
+   * sessionStorage failure (private browsing / quota) is fail-open: behave as
+   * "first time" each render, which means the user gets the sheet again. Worse
+   * than ideal but better than crashing.
+   */
+  initializeSheetMode: () => void;
+  /** Chevron tap on the sheet — minimises to the bookmark. */
+  minimiseToBookmark: () => void;
+  /** Bookmark tap — re-opens the sheet (slideUp animation). */
+  openSheetFromBookmark: () => void;
 }
 
 const InstallContext = createContext<InstallContextValue | null>(null);
@@ -89,7 +127,14 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
   const [dismissedUntil, setDismissedUntil] = useState<number | null>(() => readDismissedUntil());
   const [engaged, setEngaged] = useState<boolean>(() => readEngaged());
   const [backedUp, setBackedUp] = useState<boolean>(() => readBackedUp());
+  const [installSheetMode, setInstallSheetMode] = useState<InstallSheetMode>("hidden");
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  // initializeSheetMode is callable many times across re-renders but should
+  // only do its first-pass logic ONCE. Ref-guarded so React Strict Mode's
+  // double-invoke can't cause a double-fire of the sessionStorage write or
+  // the 800ms timer.
+  const sheetInitRef = useRef(false);
+  const sheetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Capture beforeinstallprompt + appinstalled events
   useEffect(() => {
@@ -172,6 +217,56 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
     setBackedUp(true);
   }, []);
 
+  const initializeSheetMode = useCallback((): void => {
+    if (sheetInitRef.current) return;
+    sheetInitRef.current = true;
+    // Atomically set the sessionStorage flag BEFORE scheduling the 800ms reveal.
+    // If the user hard-reloads during the 800ms window, we want the next mount
+    // to land on "bookmark" (flag already set), not on a fresh "sheet" — that
+    // would double-fire the impactful surface.
+    try {
+      if (window.sessionStorage.getItem(SHEET_SHOWN_KEY)) {
+        // Already shown this tab session — straight to bookmark.
+        setInstallSheetMode("bookmark");
+        return;
+      }
+      window.sessionStorage.setItem(SHEET_SHOWN_KEY, "1");
+    } catch {
+      // sessionStorage blocked (private mode / quota). Fall through to the
+      // 800ms timer — user gets the sheet, no flag persisted. Slightly worse
+      // than ideal but no crash.
+    }
+    sheetTimerRef.current = setTimeout(() => {
+      setInstallSheetMode("sheet");
+      sheetTimerRef.current = null;
+    }, SHEET_DELAY_MS);
+  }, []);
+
+  const minimiseToBookmark = useCallback((): void => {
+    // If the timer is still pending (user shouldn't be able to act on a hidden
+    // sheet, but defensive), clear it so the sheet doesn't pop up after they
+    // already minimised.
+    if (sheetTimerRef.current !== null) {
+      clearTimeout(sheetTimerRef.current);
+      sheetTimerRef.current = null;
+    }
+    setInstallSheetMode("bookmark");
+  }, []);
+
+  const openSheetFromBookmark = useCallback((): void => {
+    setInstallSheetMode("sheet");
+  }, []);
+
+  // Clean up any pending timer on provider unmount (HMR, route change).
+  useEffect(() => {
+    return () => {
+      if (sheetTimerRef.current !== null) {
+        clearTimeout(sheetTimerRef.current);
+        sheetTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Derived on every render. Calling Date.now() here means a mid-session
   // expiry of dismissedUntil only becomes visible on the next render — fine
   // for this use case because consumers only render when something else
@@ -188,6 +283,10 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
         markEngaged,
         backedUp,
         markBackedUp,
+        installSheetMode,
+        initializeSheetMode,
+        minimiseToBookmark,
+        openSheetFromBookmark,
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { useInstallContext } from "@/contexts/InstallContext";
 import { type InstallPlatform, useInstallPlatform } from "@/hooks/useInstallPlatform";
 import { useStandaloneMode } from "@/hooks/useStandaloneMode";
@@ -8,56 +8,47 @@ import { shouldShowInstallPitch } from "@/lib/install-pitch";
 
 interface InstallPitchProps {
   /**
-   * `"inline"` — embeds inside the You modal done-state (no X, no dismissal —
-   * the user already actively triggered this view by saving their key).
+   * `"inline"` — embeds inside the You modal done-state (no chevron, no
+   * minimise — the user already actively triggered this view by saving their
+   * key). Always renders the compact strip shape; never the slide-up sheet.
    *
-   * `"banner"` — fixed strip rendered inside Feed's pinned-bottom container,
-   * above the compose area. Has an X for 30-day suppression. On the FIRST
-   * session per tab the banner promotes itself to a slide-up sheet for higher
-   * conversion impact; subsequent sessions fall back to the compact strip
-   * until the 30-day suppression expires or the user installs.
+   * `"banner"` — drives the global slide-up sheet / bookmark interaction.
+   * Mounts once per app, reads `installSheetMode` from `InstallContext`. When
+   * `installSheetMode === "sheet"`, renders the slide-up sheet. When mode is
+   * `"bookmark"` or `"hidden"`, renders nothing — the bookmark itself is
+   * rendered by `<InstallBookmark />` next to the bopen.ai link in `Feed.tsx`.
    */
   variant: "inline" | "banner";
-  /**
-   * Banner-only. Fires when the user taps the X or backdrop. Parent unmounts
-   * the banner for this session; the 30-day suppression flag persists across
-   * sessions.
-   */
-  onDismiss?: () => void;
 }
 
 /**
- * Per-tab-session flag — first appearance of the banner in this tab shows the
- * slide-up sheet (impactful, post-save moment); every subsequent appearance
- * falls back to the compact strip. The flag is `sessionStorage`-scoped so each
- * new tab gets one fresh sheet impression.
- */
-const SESSION_KEY = "bsvibes_install_sheet_shown";
-
-/**
- * Install pitch — one component, three surfaces, per LAUNCH_PLAN decision #10
- * + 2026-06-02 visual upgrade decision.
+ * Install pitch sheet — full-impact slide-up surface for the first-tab-session
+ * appearance after a recovery file save. See LAUNCH_PLAN.md decision #10 +
+ * DECISIONS.md "Install pitch dual-surface with calibrated dismissal" +
+ * 2026-06-02 bookmark pattern.
  *
  * Visibility is a four-condition gate (see `shouldShowInstallPitch`): recovery
  * file saved AND not already standalone AND supported platform AND not
  * suppressed. Returns `null` when any condition fails.
  *
- * Surface selection:
- * - `variant="inline"` → small strip inside the You modal done-state. No X.
- * - `variant="banner"` + first-tab-session → slide-up sheet with the BSVibes
- *   icon at 64px, headline, supporting line, primary CTA, recessive dismiss.
- * - `variant="banner"` + subsequent sessions → compact strip (the pre-2026-06
- *   shape).
+ * State machine (per-session-per-tab, lives in `InstallContext`):
+ * - `"hidden"` → initial. While the gate is closed OR during the 800ms reveal
+ *   delay after the gate opens.
+ * - `"sheet"` → after the 800ms reveal: the slide-up sheet. Chevron tap →
+ *   `"bookmark"`.
+ * - `"bookmark"` → the minimised state. Sheet not rendered; a small icon next
+ *   to the bopen.ai link signals the install pitch is still available. Tap
+ *   the bookmark → back to `"sheet"`. The 30-day suppression is NOT applied
+ *   on chevron-minimise — the bookmark IS the persistent reminder.
  *
  * Platform branching (from `useInstallPlatform`):
  * - `one-tap` (Android Chrome/Brave/Edge/Samsung, desktop Chrome/Edge) — real
- *   button calling `promptInstall()`. `InstallContext` handles outcome →
- *   suppression internally (accepted = permanent engagement; dismissed = 30d).
+ *   button calling `promptInstall()`. Internal logic in `promptInstall`:
+ *   accepted = permanent engagement; dismissed = 30-day suppression.
  * - `manual-instructions` — iOS Safari, desktop Safari, Firefox Android.
  *   Visual instructions with the platform's actual install steps. iOS gets
- *   inline SVG icons for Share + Add-to-Home-Screen because Apple blocks
- *   programmatic install triggering — the icons make the manual instructions
- *   visually obvious.
+ *   inline pill labels with Share + Add-to-Home-Screen icons + "scroll down"
+ *   cue between them (Add-to-Home-Screen is below the fold in iOS Share).
  * - `open-in-safari` — iOS Chrome/Brave/Firefox/Edge. WebKit-wrapped browsers
  *   can't install PWAs on iOS; nudge user to open in Safari first.
  *
@@ -66,32 +57,18 @@ const SESSION_KEY = "bsvibes_install_sheet_shown";
  * the gate fails, the pitch hides forever on that device. Do NOT add a phantom
  * engagement tracker for iOS — the standalone gate IS the suppression.
  */
-export function InstallPitch({ variant, onDismiss }: InstallPitchProps): React.JSX.Element | null {
+export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element | null {
   const { platform, installType } = useInstallPlatform();
   const standalone = useStandaloneMode();
-  const { backedUp, isSuppressed, canPromptInstall, promptInstall, suppressForDays } =
-    useInstallContext();
-
-  // Banner only — decide once per mount whether this session gets the sheet.
-  // Uses sessionStorage so the flag clears on tab close (next session sees the
-  // sheet again) but persists across in-tab re-renders. Reading is guarded
-  // because sessionStorage can throw in private modes / quota errors.
-  const [useSheet, setUseSheet] = useState(false);
-  const sheetChecked = useRef(false);
-
-  useEffect(() => {
-    if (variant !== "banner" || sheetChecked.current) return;
-    sheetChecked.current = true;
-    try {
-      if (!sessionStorage.getItem(SESSION_KEY)) {
-        sessionStorage.setItem(SESSION_KEY, "1");
-        setUseSheet(true);
-      }
-    } catch {
-      // sessionStorage blocked (private mode / quota exceeded) — fall through
-      // to the compact strip. Better than risking an exception.
-    }
-  }, [variant]);
+  const {
+    backedUp,
+    isSuppressed,
+    canPromptInstall,
+    promptInstall,
+    installSheetMode,
+    initializeSheetMode,
+    minimiseToBookmark,
+  } = useInstallContext();
 
   const visible = shouldShowInstallPitch({
     backedUp,
@@ -100,18 +77,21 @@ export function InstallPitch({ variant, onDismiss }: InstallPitchProps): React.J
     suppressed: isSuppressed,
   });
 
+  // Banner only — kick off the mode initialisation (sessionStorage check +
+  // 800ms reveal) once visibility opens up. Idempotent in InstallContext.
+  useEffect(() => {
+    if (variant === "banner" && visible) {
+      initializeSheetMode();
+    }
+  }, [variant, visible, initializeSheetMode]);
+
   if (!visible) return null;
 
   async function handleInstallTap(): Promise<void> {
     if (!canPromptInstall) return;
     await promptInstall();
     // promptInstall handles suppression internally (accepted → engaged,
-    // dismissed → 30d). Banner re-renders via context state change.
-  }
-
-  function handleDismiss(): void {
-    suppressForDays(30);
-    onDismiss?.();
+    // dismissed → 30d).
   }
 
   // ─── Inline variant (inside You modal done-state) ──────────────────────────
@@ -141,115 +121,86 @@ export function InstallPitch({ variant, onDismiss }: InstallPitchProps): React.J
     );
   }
 
-  // ─── Banner variant — first-session slide-up sheet ────────────────────────
-  if (useSheet) {
-    return (
-      <>
-        <button
-          type="button"
-          className="fixed inset-0 z-[70] w-full bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
-          aria-label="Dismiss install prompt"
-          onClick={handleDismiss}
-        />
-        <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center pointer-events-none animate-[slideUp_0.35s_ease-out_backwards]">
-          <div
-            className="w-full max-w-lg rounded-t-2xl border border-amber-400/20 border-b-0 shadow-[0_-8px_40px_rgba(0,0,0,0.7)] overflow-hidden pointer-events-auto"
-            style={{ backgroundColor: "#0f0f0f" }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Install BSVibes"
-          >
-            {/* Gold top stripe — same as StaleKeyModal / SignInModal / FundAddress */}
-            <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+  // ─── Banner variant — only render when mode is "sheet" ─────────────────────
+  // "hidden" → nothing yet (initial / during 800ms delay).
+  // "bookmark" → nothing here; <InstallBookmark /> handles that surface.
+  if (installSheetMode !== "sheet") return null;
 
-            {/* Drag handle + dismiss X */}
-            <div className="relative flex justify-end px-5 pt-4 pb-0">
-              <div className="absolute left-1/2 top-3 -translate-x-1/2 w-8 h-1 rounded-full bg-zinc-700" />
-              <button
-                type="button"
-                onClick={handleDismiss}
-                aria-label="Dismiss install prompt"
-                className="relative -m-2 p-2 text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="px-6 pb-6 pt-3 text-center">
-              {/* 64px BSVibes app icon — the actual home-screen preview, with
-                  amber glow shadow so it reads as "premium" without shouting.
-                  Decorative — aria-hidden because the headline does the lifting. */}
-              {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}
-              <img
-                src="/icon-192.png"
-                alt=""
-                aria-hidden="true"
-                width={64}
-                height={64}
-                className="rounded-xl mx-auto mb-4 shadow-[0_4px_16px_rgba(245,158,11,0.25)]"
-              />
-              {/* Locked headline — DECISIONS.md "Notification copy discipline" */}
-              <p className="text-lg font-semibold text-amber-400 leading-snug mb-2">
-                Get notified when you earn.
-              </p>
-              {/* Supporting line — possession framing, no fear */}
-              <p className="text-sm text-zinc-400 leading-relaxed mb-5">
-                Your earnings live on your phone, not a tab you&apos;ll close.
-              </p>
-              <div className="space-y-3">
-                {renderSheetCTA(installType, platform, canPromptInstall, handleInstallTap)}
-              </div>
-            </div>
-            {/* iOS home-indicator safe-area */}
-            <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }} />
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // ─── Banner variant — compact strip fallback (subsequent sessions) ────────
   return (
-    <div className="border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-sm px-4 py-3 flex items-center gap-3">
-      <div className="flex-1 min-w-0 text-[12px] leading-relaxed text-zinc-200">
-        {renderStripContent(installType, platform, canPromptInstall, handleInstallTap)}
-      </div>
+    <>
       <button
         type="button"
-        onClick={handleDismiss}
-        aria-label="Dismiss install prompt"
-        className="relative -m-3 p-3 text-zinc-500 hover:text-zinc-300 transition-colors"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
+        className="fixed inset-0 z-[70] w-full bg-black/30 backdrop-blur-[2px] animate-[fadeIn_0.2s_ease-out] cursor-default"
+        aria-label="Minimise install prompt"
+        onClick={minimiseToBookmark}
+      />
+      <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center pointer-events-none animate-[slideUp_0.35s_ease-out_backwards]">
+        <div
+          className="w-full max-w-lg rounded-t-2xl border-t border-x border-amber-400/20 shadow-[0_-8px_40px_rgba(0,0,0,0.7)] overflow-hidden pointer-events-auto bg-zinc-900"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Install BSVibes"
         >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-    </div>
+          {/* Gold top stripe — same as StaleKeyModal / SignInModal / FundAddress */}
+          <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+
+          {/* Chevron-down (minimise) at top center. Replaces the prior X to
+              signal "minimise to bookmark" rather than "destroy with 30-day
+              suppression". The bookmark in Feed.tsx is the persistent reminder. */}
+          <div className="flex justify-center pt-2 pb-1">
+            <button
+              type="button"
+              onClick={minimiseToBookmark}
+              aria-label="Minimise install prompt"
+              className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 pb-6 pt-1 text-center">
+            {/* 64px BSVibes app icon — the actual home-screen preview, with
+                amber glow shadow so it reads as "premium" without shouting.
+                Decorative — aria-hidden because the headline does the lifting. */}
+            {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}
+            <img
+              src="/icon-192.png"
+              alt=""
+              aria-hidden="true"
+              width={64}
+              height={64}
+              className="rounded-xl mx-auto mb-4 shadow-[0_4px_16px_rgba(245,158,11,0.25)]"
+            />
+            {/* Locked headline — DECISIONS.md "Notification copy discipline" */}
+            <p className="text-lg font-semibold text-amber-400 leading-snug mb-2">
+              Get notified when you earn.
+            </p>
+            {/* Supporting line — possession framing, no fear */}
+            <p className="text-sm text-zinc-400 leading-relaxed mb-5">
+              Your earnings live on your phone, not a tab you&apos;ll close.
+            </p>
+            <div className="space-y-3">
+              {renderSheetCTA(installType, platform, canPromptInstall, handleInstallTap)}
+            </div>
+          </div>
+          {/* iOS home-indicator safe-area */}
+          <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }} />
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -284,14 +235,15 @@ function renderSheetCTA(
 
   if (installType === "manual-instructions") {
     if (platform === "ios-safari") {
-      // "Almost there." prefix tells the user they're close — minimal
-      // motivation that doesn't compete with the icon-hunting task.
-      // Pill-shaped inline labels mirror iOS button visual treatment so the
-      // user is matching shapes between sheet and Safari chrome.
+      // iOS Share sheet places "Add to Home Screen" BELOW the visible fold —
+      // users frequently miss it without an explicit scroll-down cue. The
+      // small parenthetical sits between the Share and Add-to-Home-Screen
+      // pills at exactly the point the user needs the hint. Pill-shaped
+      // labels mirror iOS button visual treatment so the user is matching
+      // shapes between sheet and Safari chrome.
       return (
-        <div className="space-y-2">
-          <p className="text-[13px] text-zinc-300 leading-relaxed">Almost there.</p>
-          <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-400">
+        <div className="flex flex-col items-center gap-2 text-sm text-zinc-400">
+          <div className="inline-flex items-center gap-2">
             <span>Tap</span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-medium">
               <svg
@@ -311,7 +263,12 @@ function renderSheetCTA(
               </svg>
               Share
             </span>
-            <span>then</span>
+          </div>
+          <p className="text-[11px] text-zinc-600 leading-relaxed">
+            (scroll down in the Share menu)
+          </p>
+          <div className="inline-flex items-center gap-2">
+            <span>then tap</span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-medium">
               <svg
                 width="13"
@@ -362,8 +319,9 @@ function renderSheetCTA(
 }
 
 /**
- * Strip-scale content — used by the inline variant and the compact-strip
- * fallback. Compact one-line layout, smaller typography, in-line CTA.
+ * Strip-scale content — used ONLY by the inline variant (inside You modal
+ * done-state). The banner variant no longer falls back to a compact strip —
+ * the bookmark in Feed.tsx is the second-impression surface now.
  */
 function renderStripContent(
   installType: ReturnType<typeof useInstallPlatform>["installType"],
@@ -470,7 +428,5 @@ function renderStripContent(
     );
   }
 
-  // installType === "unsupported" or null — should never reach here because
-  // shouldShowInstallPitch returns false for both. Render-safe fallback.
   return <span className="text-[12px] text-zinc-400">Get notified when you earn.</span>;
 }
