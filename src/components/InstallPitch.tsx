@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInstallContext } from "@/contexts/InstallContext";
 import { type InstallPlatform, useInstallPlatform } from "@/hooks/useInstallPlatform";
 import { useStandaloneMode } from "@/hooks/useStandaloneMode";
 import { shouldShowInstallPitch } from "@/lib/install-pitch";
+
+/**
+ * Duration of the sheet-to-bookmark collapse animation. Must match the
+ * `collapseToBookmark` keyframe duration in `globals.css` (currently 0.3s).
+ * The actual mode flip from "sheet" → "bookmark" fires `COLLAPSE_MS` after
+ * the chevron tap so the exit animation runs to completion before the sheet
+ * unmounts and the bookmark appears.
+ */
+const COLLAPSE_MS = 300;
 
 interface InstallPitchProps {
   /**
@@ -85,6 +94,24 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
     }
   }, [variant, visible, initializeSheetMode]);
 
+  // Local collapse animation state — fires when user taps the chevron. The
+  // sheet renders the `collapseToBookmark` keyframe during this window, then
+  // we flip context mode to "bookmark" so the sheet unmounts and the
+  // <InstallBookmark /> in Feed.tsx fades in at its destination position.
+  // Local (not context) state because only the sheet needs to render the
+  // exit animation — once unmounted, no consumer cares about the transient.
+  const [collapsing, setCollapsing] = useState(false);
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (collapseTimerRef.current !== null) {
+        clearTimeout(collapseTimerRef.current);
+        collapseTimerRef.current = null;
+      }
+    };
+  }, []);
+
   if (!visible) return null;
 
   async function handleInstallTap(): Promise<void> {
@@ -92,6 +119,16 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
     await promptInstall();
     // promptInstall handles suppression internally (accepted → engaged,
     // dismissed → 30d).
+  }
+
+  function handleChevronTap(): void {
+    if (collapsing) return; // ignore double-tap during animation
+    setCollapsing(true);
+    collapseTimerRef.current = setTimeout(() => {
+      minimiseToBookmark();
+      setCollapsing(false);
+      collapseTimerRef.current = null;
+    }, COLLAPSE_MS);
   }
 
   // ─── Inline variant (inside You modal done-state) ──────────────────────────
@@ -126,17 +163,26 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
   // "bookmark" → nothing here; <InstallBookmark /> handles that surface.
   if (installSheetMode !== "sheet") return null;
 
+  // Sheet entrance vs collapse animation. The slide-up keyframe runs on
+  // mount; the collapse keyframe replaces it during the chevron-tap exit.
+  const sheetAnimation = collapsing
+    ? "animate-[collapseToBookmark_0.3s_ease-in_forwards]"
+    : "animate-[slideUp_0.35s_ease-out_backwards]";
+  const backdropAnimation = collapsing
+    ? "animate-[fadeOut_0.3s_ease-in_forwards]"
+    : "animate-[fadeIn_0.2s_ease-out]";
+
   return (
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[70] w-full bg-black/30 backdrop-blur-[2px] animate-[fadeIn_0.2s_ease-out] cursor-default"
+        className={`fixed inset-0 z-[70] w-full bg-black/30 backdrop-blur-[2px] cursor-default ${backdropAnimation}`}
         aria-label="Minimise install prompt"
-        onClick={minimiseToBookmark}
+        onClick={handleChevronTap}
       />
-      <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center pointer-events-none animate-[slideUp_0.35s_ease-out_backwards]">
+      <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center pointer-events-none">
         <div
-          className="w-full max-w-lg rounded-t-2xl border-t border-x border-amber-400/20 shadow-[0_-8px_40px_rgba(0,0,0,0.7)] overflow-hidden pointer-events-auto bg-zinc-900"
+          className={`w-full max-w-lg rounded-t-2xl border-t border-x border-amber-400/20 shadow-[0_-8px_40px_rgba(0,0,0,0.7)] overflow-hidden pointer-events-auto bg-zinc-900 ${sheetAnimation}`}
           role="dialog"
           aria-modal="true"
           aria-label="Install BSVibes"
@@ -150,7 +196,7 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
           <div className="flex justify-center pt-2 pb-1">
             <button
               type="button"
-              onClick={minimiseToBookmark}
+              onClick={handleChevronTap}
               aria-label="Minimise install prompt"
               className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors"
             >

@@ -43,7 +43,7 @@ export function InstallBookmark(): React.JSX.Element | null {
       type="button"
       onClick={openSheetFromBookmark}
       aria-label="Open install prompt"
-      className="opacity-30 hover:opacity-70 transition-opacity duration-300"
+      className="opacity-50 hover:opacity-90 transition-opacity duration-300 animate-[fadeIn_0.3s_ease-out_backwards]"
     >
       {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}
       <img

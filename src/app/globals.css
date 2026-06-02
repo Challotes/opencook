@@ -101,6 +101,36 @@ body {
   }
 }
 
+/* Reverse of fadeIn for backdrop exit during install-sheet collapse. */
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Install sheet → bookmark collapse animation. The sheet shrinks toward
+   the bottom-left where the bookmark sits in Feed.tsx's footer row (left
+   third of the viewport). Translate values are approximate — the user
+   reads the directional shrink and the shared app icon between sheet and
+   bookmark closes the visual loop. */
+@keyframes collapseToBookmark {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  60% {
+    opacity: 0.5;
+    transform: translate3d(-30vw, 10px, 0) scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-33vw, 20px, 0) scale(0.05);
+  }
+}
+
 /* Throbbing amber border — fires twice (1.6s total) when a locked submit
    resolves to remind the user their draft is still there. */
 @keyframes nudgePulse {

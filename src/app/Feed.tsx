@@ -316,20 +316,26 @@ function FeedContent({
             onPostRejected={handlePostRejected}
             agentHighlight={agentHighlight}
           />
-          <div className="flex justify-center items-center gap-3 mt-1">
-            {/* Install bookmark — visible only when the install-pitch sheet has
-                been minimised this session. Sits at attribution-link visual
-                weight (30% opacity), tap to re-open the sheet. See
-                InstallBookmark.tsx + DECISIONS.md install-pitch entries. */}
-            <InstallBookmark />
-            <a
-              href="https://bopen.ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-zinc-700 hover:text-zinc-500 transition-colors"
-            >
-              created with bopen.ai
-            </a>
+          {/* Three-column row at the footer: left third holds the install
+              bookmark (only visible when the sheet has been minimised), middle
+              third holds the bopen.ai attribution link, right third is empty
+              for symmetry. The bookmark is positioned far from bopen.ai so
+              taps don't accidentally hit the link. */}
+          <div className="grid grid-cols-3 items-center mt-1">
+            <div className="flex justify-center">
+              <InstallBookmark />
+            </div>
+            <div className="flex justify-center">
+              <a
+                href="https://bopen.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-zinc-700 hover:text-zinc-500 transition-colors"
+              >
+                created with bopen.ai
+              </a>
+            </div>
+            <div />
           </div>
         </div>
       </div>
