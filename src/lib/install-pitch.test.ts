@@ -4,17 +4,26 @@ import { shouldShowInstallPitch } from "./install-pitch";
 describe("shouldShowInstallPitch", () => {
   const allTrue = {
     backedUp: true,
+    protected: true,
     standalone: false,
     installType: "one-tap" as const,
     suppressed: false,
   };
 
-  it("shows the pitch when all four conditions are met", () => {
+  it("shows the pitch when all five conditions are met", () => {
     expect(shouldShowInstallPitch(allTrue)).toBe(true);
   });
 
   it("hides when the recovery file has not been saved", () => {
     expect(shouldShowInstallPitch({ ...allTrue, backedUp: false })).toBe(false);
+  });
+
+  it("hides when the user is not passphrase-protected (plaintext WIF)", () => {
+    expect(shouldShowInstallPitch({ ...allTrue, protected: false })).toBe(false);
+  });
+
+  it("hides when both file is saved AND no passphrase (sequential flow not complete)", () => {
+    expect(shouldShowInstallPitch({ ...allTrue, backedUp: true, protected: false })).toBe(false);
   });
 
   it("hides when the app is already running standalone (installed)", () => {

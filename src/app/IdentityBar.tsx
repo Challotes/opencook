@@ -70,11 +70,15 @@ export function IdentityChip(): React.JSX.Element | null {
   // Security state
   const [isProtected, setIsProtected] = useState(false);
   const [backedUp, setBackedUp] = useState<boolean | null>(null);
-  // Local "save just happened" flag — flips true when markBackedUp() runs, clears
-  // when the You modal closes. Drives the inline install pitch (event-shaped, not
-  // state-shaped — per LAUNCH_PLAN decision #10 the inline fires on the save
-  // event, NOT on every modal open where backedUp is already true).
-  const [justBackedUp, setJustBackedUp] = useState(false);
+  // Local "save just happened" flag — historical (per LAUNCH_PLAN decision
+  // #10 the inline install pitch was event-shaped, only firing once per save).
+  // E32 (2026-06-02) dropped that gate — the inline install pitch now self-
+  // gates via the 5-condition `shouldShowInstallPitch` (which requires
+  // `protected` so unprotected users see the red banner instead). State kept
+  // as a no-op setter so existing call sites compile; underscore prefix
+  // signals "set but never read." Will remove in a cleanup pass once the
+  // event-based hooks below (closeDropdown, setupHeartbeat) are also retired.
+  const [_justBackedUp, setJustBackedUp] = useState(false);
   // After download fires we wait for the user to explicitly acknowledge
   // ("Got it") before flipping backedUp. Prevents the silent "advanced
   // believing backup was saved" failure mode when the browser didn't
@@ -1386,10 +1390,15 @@ export function IdentityChip(): React.JSX.Element | null {
                 </div>
               ))}
 
-            {/* ── Inline install pitch — appears once on save event, cleared on
-                 modal close. The component self-gates (hides if already
-                 standalone, suppressed, or platform unsupported). ── */}
-            {justBackedUp && <InstallPitch variant="inline" />}
+            {/* ── Inline install pitch — permanent escape hatch for users who
+                 dismissed the slide-up sheet popup. Self-gates via the 5-condition
+                 `shouldShowInstallPitch` (which now requires `protected`, so
+                 unprotected users see the red "Not protected" banner below
+                 INSTEAD of this row). Drops the prior `justBackedUp` event-
+                 only gate so the row stays visible across modal opens until
+                 the user installs. See DECISIONS.md "Install pitch dual-
+                 surface" + 2026-06-02 protected-gate decision. ── */}
+            <InstallPitch variant="inline" />
 
             {/* ── Security warning (unprotected only — protected uses inline checkmark) ── */}
             {!isProtected && (

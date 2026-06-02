@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { migrateIdentity, verifyMigrationChain } from "@/app/actions";
 import { useIdentityContext } from "@/contexts/IdentityContext";
+import { useInstallContext } from "@/contexts/InstallContext";
 import { type BackupData, downloadBackup, getStoredHint } from "@/services/bsv/backup-template";
 import { encryptWif } from "@/services/bsv/crypto";
 import {
@@ -73,6 +74,17 @@ export function ChangePassphraseModal({
       }
     };
   }, [unblockSessionClear]);
+
+  // E32: block the install pitch while this modal is mounted (prevents the
+  // pitch from sliding up over the done state when the user saves their new
+  // recovery file). Released on unmount → install pitch fires at a clean
+  // moment. Also call refreshProtected after commitUpgrade so the gate's
+  // protected condition flips for users who passphrase-changed.
+  const { blockInstallPitch, unblockInstallPitch, refreshProtected } = useInstallContext();
+  useEffect(() => {
+    blockInstallPitch();
+    return () => unblockInstallPitch();
+  }, [blockInstallPitch, unblockInstallPitch]);
 
   function handleClose() {
     unblock();
@@ -199,6 +211,10 @@ export function ChangePassphraseModal({
       }
 
       commitUpgrade(result.encStore, result.identity);
+      // E32: protection state didn't change here (user was already protected
+      // — this is a passphrase CHANGE not an UPGRADE), but call for parity
+      // with MoveAddressModal's pattern. Cheap idempotent re-read.
+      refreshProtected();
 
       const newIdentity = result.identity;
       let encryptedWif: string;

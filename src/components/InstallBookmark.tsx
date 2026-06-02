@@ -26,10 +26,17 @@ import { shouldShowInstallPitch } from "@/lib/install-pitch";
 export function InstallBookmark(): React.JSX.Element | null {
   const { installType } = useInstallPlatform();
   const standalone = useStandaloneMode();
-  const { backedUp, isSuppressed, installSheetMode, openSheetFromBookmark } = useInstallContext();
+  const {
+    backedUp,
+    protected: isProtected,
+    isSuppressed,
+    installSheetMode,
+    openSheetFromBookmark,
+  } = useInstallContext();
 
   const visible = shouldShowInstallPitch({
     backedUp,
+    protected: isProtected,
     standalone,
     installType,
     suppressed: isSuppressed,

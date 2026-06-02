@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PassphrasePrompt } from "@/components/PassphrasePrompt";
 import { useIdentityContext } from "@/contexts/IdentityContext";
+import { useInstallContext } from "@/contexts/InstallContext";
 import { useBsvPrice } from "@/hooks/useBsvPrice";
 import {
   type BackupData,
@@ -112,6 +113,16 @@ export function RestoreModal({
       }
     };
   }, [unblockSessionClear]);
+
+  // E32: block the install pitch while this modal is mounted. Released on
+  // unmount → install pitch fires at a clean moment after the user dismisses
+  // the done state. Also refreshProtected after a successful import (the
+  // encrypted-file path flips protection true; plaintext path flips it false).
+  const { blockInstallPitch, unblockInstallPitch, refreshProtected } = useInstallContext();
+  useEffect(() => {
+    blockInstallPitch();
+    return () => unblockInstallPitch();
+  }, [blockInstallPitch, unblockInstallPitch]);
 
   function handleClose() {
     unblock();
@@ -313,6 +324,12 @@ export function RestoreModal({
       const imported = passphrase
         ? await importEncryptedIdentity(wif, passphrase, name, hint)
         : await importIdentity(wif, name);
+
+      // E32: refresh InstallContext's protected state after the import. The
+      // encrypted-file path flips protection true; the plaintext-file path
+      // flips it false. Either way the install pitch's 5-condition gate needs
+      // to re-evaluate.
+      refreshProtected();
 
       // The restored file IS the recovery file for this address — mark it
       // saved so the new "Unsaved key" badge doesn't fire for an address

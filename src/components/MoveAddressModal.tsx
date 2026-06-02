@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { migrateIdentity, verifyMigrationChain } from "@/app/actions";
 import { useIdentityContext } from "@/contexts/IdentityContext";
+import { useInstallContext } from "@/contexts/InstallContext";
 import { useBsvPrice } from "@/hooks/useBsvPrice";
 import {
   type BackupData,
@@ -216,6 +217,19 @@ export function MoveAddressModal({
       }
     };
   }, [unblockSessionClear]);
+
+  // E32: block the install pitch while this modal is mounted. Without this,
+  // the user saving their recovery file in the done state fires markBackedUp,
+  // which causes InstallPitch to slide up over the still-mounted MoveAddressModal.
+  // The block is released on unmount; InstallPitch's effect then re-evaluates
+  // and fires the sheet at a clean moment. Also call refreshProtected after
+  // the commit step (line 513) so the install pitch's protected gate flips
+  // before the modal closes.
+  const { blockInstallPitch, unblockInstallPitch, refreshProtected } = useInstallContext();
+  useEffect(() => {
+    blockInstallPitch();
+    return () => unblockInstallPitch();
+  }, [blockInstallPitch, unblockInstallPitch]);
 
   // Fetch earnings stats once the done stage is reached. The new key's address
   // is on the freshly-inserted migration row, so /api/earnings's chain-resolver
@@ -511,6 +525,11 @@ export function MoveAddressModal({
 
       // Commit encrypted key to localStorage
       commitUpgrade(result.encStore, result.identity);
+      // E32: notify InstallContext that protection state has flipped — the
+      // install pitch's 5-condition gate watches `protected` and needs to
+      // re-evaluate now that the user has a passphrase. Same-tab writes don't
+      // fire the storage event, so this explicit call is required.
+      refreshProtected();
 
       // Download combined recovery file containing BOTH keys, encrypted under
       // the new passphrase. The final file supersedes the temporary stage-1

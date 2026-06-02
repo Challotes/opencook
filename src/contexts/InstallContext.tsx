@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { isSuppressedAt } from "@/lib/install-suppression";
+import { isEffectivelyProtected } from "@/services/bsv/identity";
 
 const DISMISSED_UNTIL_KEY = "bsvibes_install_pitch_dismissed_until";
 const ENGAGED_KEY = "bsvibes_install_engaged";
@@ -65,6 +66,24 @@ interface InstallContextValue {
    * this, the banner would only appear on the next page load). Idempotent.
    */
   markBackedUp: () => void;
+  /**
+   * True if the user's identity is passphrase-encrypted. Mirrors
+   * `isEffectivelyProtected()` from `services/bsv/identity.ts` so the install
+   * pitch gate can re-render when protection state changes (after rotation
+   * via MoveAddressModal / ChangePassphraseModal, after encrypted restore via
+   * RestoreModal). Initial value read synchronously on mount; refreshed when
+   * `refreshProtected()` is called (after any rotation flow completes) and
+   * when a `storage` event fires for the encrypted-key localStorage entry
+   * (cross-tab restore).
+   */
+  protected: boolean;
+  /**
+   * Force a re-read of `isEffectivelyProtected()` and update context state.
+   * Called by MoveAddressModal / ChangePassphraseModal / RestoreModal after
+   * their commitUpgrade / importIdentity completes — those operations write
+   * localStorage but don't fire a `storage` event in the same tab.
+   */
+  refreshProtected: () => void;
   /** Current install pitch surface — see `InstallSheetMode`. */
   installSheetMode: InstallSheetMode;
   /**
@@ -88,6 +107,30 @@ interface InstallContextValue {
   minimiseToBookmark: () => void;
   /** Bookmark tap — re-opens the sheet (slideUp animation). */
   openSheetFromBookmark: () => void;
+  /**
+   * Ref-counted block on the install-pitch sheet appearance — mirror of the
+   * `blockSessionClear` pattern in IdentityContext. Used by rotation modals
+   * (MoveAddressModal / ChangePassphraseModal / RestoreModal) to suppress the
+   * sheet during their lifecycle: when those modals are mounted, `markBackedUp`
+   * may fire mid-flow but the install pitch must not appear on top of an
+   * active modal. Modals mount → `blockInstallPitch()`, unmount → `unblockInstallPitch()`.
+   * Once the count returns to zero, the install pitch's gate re-evaluates and
+   * fires the sheet (or bookmark) at a clean moment.
+   *
+   * Ref-counted so overlapping modals (e.g. RestoreModal stacked on top of
+   * StaleKeyModal) compose safely.
+   */
+  blockInstallPitch: () => void;
+  unblockInstallPitch: () => void;
+  /** Reader for the block ref — true if any modal is currently blocking the pitch. */
+  isInstallPitchBlocked: () => boolean;
+  /**
+   * Tick that increments whenever the block count returns to zero — forces
+   * `InstallPitch` to re-render and re-check the gate even though the ref
+   * count itself isn't React state. Consumers read this to participate in
+   * the React lifecycle; don't read the ref directly.
+   */
+  installPitchBlockTick: number;
 }
 
 const InstallContext = createContext<InstallContextValue | null>(null);
@@ -122,12 +165,23 @@ function readBackedUp(): boolean {
   }
 }
 
+function readProtected(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return isEffectivelyProtected();
+  } catch {
+    return false;
+  }
+}
+
 export function InstallProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [canPromptInstall, setCanPromptInstall] = useState(false);
   const [dismissedUntil, setDismissedUntil] = useState<number | null>(() => readDismissedUntil());
   const [engaged, setEngaged] = useState<boolean>(() => readEngaged());
   const [backedUp, setBackedUp] = useState<boolean>(() => readBackedUp());
   const [installSheetMode, setInstallSheetMode] = useState<InstallSheetMode>("hidden");
+  const [protectedState, setProtectedState] = useState<boolean>(() => readProtected());
+  const [installPitchBlockTick, setInstallPitchBlockTick] = useState(0);
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   // initializeSheetMode is callable many times across re-renders but should
   // only do its first-pass logic ONCE. Ref-guarded so React Strict Mode's
@@ -135,6 +189,10 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
   // the 800ms timer.
   const sheetInitRef = useRef(false);
   const sheetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref-counted block — modal mount → +1, unmount → -1. When count returns
+  // to 0, install pitch can fire. Tick state increments on the 0-edge so
+  // consumers in the React tree re-evaluate.
+  const installPitchBlockRef = useRef(0);
 
   // Capture beforeinstallprompt + appinstalled events
   useEffect(() => {
@@ -217,6 +275,45 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
     setBackedUp(true);
   }, []);
 
+  const refreshProtected = useCallback((): void => {
+    setProtectedState(readProtected());
+  }, []);
+
+  // Cross-tab protection sync — storage events fire when ANOTHER tab writes
+  // to localStorage. Same-tab writes (after rotation flow in MoveAddressModal /
+  // ChangePassphraseModal / RestoreModal) don't fire `storage`, so those modals
+  // must call `refreshProtected()` explicitly after their commit step.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function handleStorage(e: StorageEvent): void {
+      // Both plaintext + encrypted store key changes affect isEffectivelyProtected().
+      if (e.key === "bfn_keypair" || e.key === "bfn_keypair_enc") {
+        setProtectedState(readProtected());
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  const blockInstallPitch = useCallback((): void => {
+    installPitchBlockRef.current += 1;
+  }, []);
+
+  const unblockInstallPitch = useCallback((): void => {
+    installPitchBlockRef.current = Math.max(0, installPitchBlockRef.current - 1);
+    if (installPitchBlockRef.current === 0) {
+      // Force re-render of consumers (InstallPitch) so the gate re-evaluates
+      // and initializeSheetMode fires now that the modal is gone. Counter
+      // (not boolean) so two close-in-time tick increments are still treated
+      // as distinct events.
+      setInstallPitchBlockTick((t) => t + 1);
+    }
+  }, []);
+
+  const isInstallPitchBlocked = useCallback((): boolean => {
+    return installPitchBlockRef.current > 0;
+  }, []);
+
   const initializeSheetMode = useCallback((): void => {
     if (sheetInitRef.current) return;
     sheetInitRef.current = true;
@@ -283,10 +380,16 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
         markEngaged,
         backedUp,
         markBackedUp,
+        protected: protectedState,
+        refreshProtected,
         installSheetMode,
         initializeSheetMode,
         minimiseToBookmark,
         openSheetFromBookmark,
+        blockInstallPitch,
+        unblockInstallPitch,
+        isInstallPitchBlocked,
+        installPitchBlockTick,
       }}
     >
       {children}

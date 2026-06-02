@@ -71,28 +71,43 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
   const standalone = useStandaloneMode();
   const {
     backedUp,
+    protected: isProtected,
     isSuppressed,
     canPromptInstall,
     promptInstall,
     installSheetMode,
     initializeSheetMode,
     minimiseToBookmark,
+    isInstallPitchBlocked,
+    installPitchBlockTick,
   } = useInstallContext();
 
   const visible = shouldShowInstallPitch({
     backedUp,
+    protected: isProtected,
     standalone,
     installType,
     suppressed: isSuppressed,
   });
 
   // Banner only — kick off the mode initialisation (sessionStorage check +
-  // 800ms reveal) once visibility opens up. Idempotent in InstallContext.
+  // 800ms reveal) once visibility opens up AND no rotation modal is currently
+  // blocking. `installPitchBlockTick` increments when the block count returns
+  // to 0, forcing this effect to re-fire so the pitch lands at a clean moment
+  // (after the user dismisses their MoveAddressModal / ChangePassphraseModal
+  // / RestoreModal done state). The block ref itself isn't React state — the
+  // tick is the React-observable proxy.
+  // installPitchBlockTick is intentionally in the dep array — it's the
+  // React-observable signal that the ref-counted block has changed. Without
+  // it the effect wouldn't re-fire when a rotation modal unmounts and
+  // releases the block. `isInstallPitchBlocked` is a stable useCallback that
+  // reads the ref; the tick is what re-evaluates the gate.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above
   useEffect(() => {
-    if (variant === "banner" && visible) {
-      initializeSheetMode();
-    }
-  }, [variant, visible, initializeSheetMode]);
+    if (variant !== "banner" || !visible) return;
+    if (isInstallPitchBlocked()) return; // a rotation modal is active — wait
+    initializeSheetMode();
+  }, [variant, visible, initializeSheetMode, isInstallPitchBlocked, installPitchBlockTick]);
 
   // Local collapse animation state — fires when user taps the chevron. The
   // sheet renders the `collapseToBookmark` keyframe during this window, then
@@ -310,8 +325,24 @@ function renderSheetCTA(
               Share
             </span>
           </div>
-          <p className="text-[11px] text-zinc-600 leading-relaxed">
-            (scroll down in the Share menu)
+          <p className="flex items-center justify-center gap-1 text-[11px] text-zinc-300 leading-relaxed">
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="shrink-0 text-amber-400/70"
+            >
+              <title>Scroll down</title>
+              <line x1="12" y1="2" x2="12" y2="22" />
+              <polyline points="19 15 12 22 5 15" />
+            </svg>
+            scroll down to find it
           </p>
           <div className="inline-flex items-center gap-2">
             <span>then tap</span>
