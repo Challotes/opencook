@@ -131,6 +131,22 @@ body {
   }
 }
 
+/* Install sheet's 64px app icon floats up and down — "won a prize" feel.
+   GPU-friendly translate3d only, no top/margin shifts. Drop-shadow filter
+   scales with the float so the icon "lifts" off the sheet at peak. Wrap in
+   motion-safe: on the consumer so reduced-motion users don't see the bob. */
+@keyframes floatBob {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    filter: drop-shadow(0 6px 20px rgba(245, 158, 11, 0.25));
+  }
+  50% {
+    transform: translate3d(0, -6px, 0);
+    filter: drop-shadow(0 12px 28px rgba(245, 158, 11, 0.5));
+  }
+}
+
 /* Throbbing amber border — fires twice (1.6s total) when a locked submit
    resolves to remind the user their draft is still there. */
 @keyframes nudgePulse {

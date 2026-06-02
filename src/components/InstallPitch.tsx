@@ -235,7 +235,12 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
           <div className="px-6 pb-6 pt-1 text-center">
             {/* 64px BSVibes app icon — the actual home-screen preview, with
                 amber glow shadow so it reads as "premium" without shouting.
-                Decorative — aria-hidden because the headline does the lifting. */}
+                `floatBob` keyframe gives it a gentle up-and-down float (6px,
+                2.5s loop, GPU-only via translate3d) — the "won a prize" feel
+                the project owner requested. `motion-safe:` prefix respects
+                prefers-reduced-motion (icon stays still for users who opted
+                out of animation). Decorative — aria-hidden because the
+                headline does the lifting. */}
             {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}
             <img
               src="/icon-192.png"
@@ -243,7 +248,7 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
               aria-hidden="true"
               width={64}
               height={64}
-              className="rounded-xl mx-auto mb-4 shadow-[0_4px_16px_rgba(245,158,11,0.25)]"
+              className="rounded-xl mx-auto mb-4 shadow-[0_4px_16px_rgba(245,158,11,0.25)] motion-safe:animate-[floatBob_2.5s_ease-in-out_infinite]"
             />
             {/* Locked headline — DECISIONS.md "Notification copy discipline" */}
             <p className="text-lg font-semibold text-amber-400 leading-snug mb-2">
