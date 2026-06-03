@@ -13,12 +13,13 @@ import { shouldShowInstallPitch } from "@/lib/install-pitch";
  * (`<InstallPitch variant="banner" />`).
  *
  * Design (settled 2026-06-03):
- * - Bare 20px BSVibes app icon at rest
- * - `ring-1 ring-zinc-700` outline at rest — subtle frame so the icon reads
- *   as interactive without competing with the Ask AI pill's chip shape.
- *   Lower-weight version of the highlight's `ring-2 ring-amber-500`.
+ * - 30×30 BSVibes app icon inside a 34×34 container (border-zinc-800 +
+ *   1px padding ring) — fills the chip while keeping the container shape
+ *   readable. Geometry matches the Ask AI pill exactly (34×34 outer,
+ *   `border` not `ring`, `mt-1` baseline offset) so tops and bottoms
+ *   align in the PostForm grid.
  * - Ask-AI-style highlight flash on collapse from sheet → bookmark
- *   (`ring-2 ring-amber-500 + scale-110 + glow shadow`, 2000ms). No
+ *   (border-amber-500 + bg + scale-110 + glow shadow, 2000ms). No
  *   pinging dot — flash treatment alone reads as a strong attention signal
  *   without the extra noise.
  *
@@ -75,8 +76,8 @@ export function InstallBookmark(): React.JSX.Element | null {
         src="/icon-192.png"
         alt=""
         aria-hidden="true"
-        width={20}
-        height={20}
+        width={30}
+        height={30}
         className="rounded-sm"
       />
     </button>
