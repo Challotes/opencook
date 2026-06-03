@@ -2,6 +2,77 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-02 / 2026-06-03 — E32 install pitch overhaul + Android device fixes + MD audit
+
+Category: UX polish + Android device-test bug fixes + documentation accuracy sweep. 14 commits across two days, plus a comprehensive MD audit at end of session.
+
+### Install pitch UX overhaul (E32) — 12 commits
+
+Continued iteration on the install pitch surface after E32 scaffolding. Final shape:
+- **Slide-up sheet** (`<InstallPitch variant="banner" />`) mounted globally in `Feed.tsx`, drives the full-impact first-tab-session experience via `installSheetMode` from `InstallContext`. Sheet has chevron-minimise (NOT X) to bookmark.
+- **Bookmark chip** (`<InstallBookmark />`) — 34×34 chip with 30px BSVibes icon, geometry matches the Ask AI pill exactly (`border` not `ring`, `mt-1` baseline offset, `border-zinc-800` rest / `border-amber-500 + scale-110 + glow` highlight). Centered in PostForm footer via `grid-cols-3` layout. Highlight flash on sheet→bookmark collapse.
+- **Inline variant** inside the You modal done-state — branches on `installType` so one-tap platforms (Android Chrome, desktop Chrome) fire `promptInstall()` directly on tap; manual-instructions platforms (iOS Safari, Firefox Android) open the slide-up sheet for instructions.
+- **No timer-based dismissal anywhere** — the 30-day `dismissedUntil` suppression mechanism was removed entirely (`install-suppression.{ts,test.ts}` deleted). The chevron-minimise + bookmark IS the persistent reminder. `engaged` flag is set only on `appinstalled` event or native prompt "accepted" outcome.
+- **Modal-overlap fix** — ref-counted `blockInstallPitch()` / `unblockInstallPitch()` in `InstallContext` (mirrors `blockSessionClear` pattern in `IdentityContext`). MoveAddressModal / ChangePassphraseModal / RestoreModal call it during their flows so the install pitch doesn't ambush the user mid-rotation. `installPitchBlockTick` is the React-observable proxy.
+- **Collapse animation** centered (was previously `translate3d(-33vw, …)` from when the bookmark lived in the left-third of the bopen.ai row).
+- **Protected gate** added to `shouldShowInstallPitch` (the predicate is now 5-condition: backedUp + protected + not-standalone + supported-platform + not-engaged).
+- **DECISIONS.md** rewrite of the install pitch entry to document the three-surface no-timer model + anti-pattern guards (don't re-add the X, don't re-add the 30-day timer, don't make the icon a separate tap target).
+
+Commits (oldest first): `19ecbfd`, `17ffc19`, `e414f09`, `37ad0c8`, `69c9857`, `b75f1ba`, `9d9e821`, `1a3687a` (geometry parity), `f33c20f` (icon 20→30px).
+
+### Android device-test fixes — 2 commits
+
+iPhone testing earlier verified E32 OK. Android Chrome testing surfaced three bugs, all fixed in commit `7891355`:
+1. **`bad-txns-inputs-duplicate` on sweep during key rotation** — WhatsOnChain returned the same `(tx_hash, tx_pos)` outpoint twice in `/api/unspent`. Both `autoTransferFunds` and `sweepFunds` in `identity.ts` built the tx by iterating the raw list with no dedup. New `dedupeUtxos()` helper keyed on `${tx_hash}:${tx_pos}` (same pattern `client-boot.ts` uses via `utxoKey`). Both sweep paths now route raw WoC data through dedup. Confirmed in device testing: same txid `8fc71ef6…` rejected twice in a row, third attempt succeeded after WoC stabilized.
+2. **Inline install row tapped twice on Android one-tap** — regression from the install-pitch consolidation: inline row always called `openSheetFromBookmark()`, so Android users went tap row → sheet → tap install → native dialog (two taps). Restored single-tap direct install via conditional `onClick` (`isOneTap = installType === "one-tap" && canPromptInstall` → `handleInstallTap`; else → `openSheetFromBookmark`).
+3. **Retry/Continue modal cut off on Android Chrome** — `MoveAddressModal` used `vh` units. Android Chrome's `100vh` includes the collapsible address bar, so `80vh` could push the card's top out of view. Fixed in same commit with `pt-[8vh]` → `pt-[6svh]`, `max-h-[80vh]` → `max-h-[80svh]`.
+
+Site-wide follow-up in commit `6b59c1d`: same `vh` → `svh` pattern applied to the other 6 centered modals (ChangePassphraseModal, StaleKeyModal, SignInModal, RestoreModal, FundAddress, IdentityBar You modal). DECISIONS.md entry updated with the canonical pattern + anti-pattern guard. IdentityBar dropdown (line 1127, absolute-positioned) intentionally left on `vh` — different shape.
+
+**DB verification** of the user's Android testing: 2 posts from old address before rotation (19:16, 19:17), migration record id=163 at 19:22:24, 2 posts from new address after (19:43, 19:44). Migration chain resolves all 4 to new address for fairness/earnings.
+
+### MD audit — comprehensive sweep across all 10 docs
+
+User requested a deep doc-vs-code audit after noticing MDs hadn't been updated in a while. Dispatched 7 parallel agents — one per MD or grouped where related — to compare each doc's claims against current code. Findings:
+
+- **CLAUDE.md (medium):** 10 new files undocumented (whole install pitch ecosystem + restore-eligibility + restore-from-file + FirstEarningToast/IosStorageToast/HomeScreenWelcomeGate), 3 stale descriptions, 1 internal contradiction. **Fixed in this session.**
+- **DECISIONS.md (healthy):** 1 drift (FirstEarningToast localStorage key name), 3 forward-looking entries need "not yet built" qualifier (SW / NotificationPrompt / public/sw.js — all Bucket 3b). Zero reversed decisions across ~80+ verified entries. **Deferred to Tier 2.**
+- **FAIRNESS.md (healthy):** All formulas + constants verified match code. 2 minor drifts (`poolShare` is dead constant, rounding remainder undocumented), 4 missing operational details, 1 stale "we plan to" (paid boots already client-side), 2 Open Questions resolved in code. **Deferred to Tier 2.**
+- **SECURITY_AUDIT.md (healthy):** All 9 criticals + 3 highs verified still fixed. Zero regressions. 4 silent improvements not logged (`/api/posts` rate limit, `/api/restore-eligibility`, `dedupeUtxos`, E30 stale-key). One new LOW finding: `BootContext.claimBoot` non-atomic lock (bounded by server rate limit + client-boot mutex). One side-finding: `/api/agent` rate-limit header doesn't split on `,`. **Deferred to Tier 2/4.**
+- **ROADMAP.md (stale — fixed this session):** Header dated 2026-05-03, missing ~30 commits, line 142 contradiction with E31 (cleanupMigrations gone). **Fixed in this session — new Phase 6.6 section added.**
+- **LAUNCH_PLAN.md (medium):** Bucket status table accurate, but "Where we are now" table has 4 outdated rows; Q1/Q3/Q6 marked open but actually resolved. **Deferred to Tier 2.**
+- **FUTURE.md (medium):** QR sync bullet duplicates LAUNCH_PLAN Bucket 6, "Patterns" section conflates "shipped in-app" with "future reusable primitive". **Deferred to Tier 3.**
+- **DIRECTION.md (healthy):** Tagline mismatch (minor), Phase 7 vs Phases 1-3 inconsistency. **Deferred to Tier 3.**
+- **README.md (medium — fixed this session):** Broken `your-org/bsvibes` repo URL. **Fixed.** (Audit also flagged `generate-wallet.mjs` as broken, but it actually exists — false alarm.) Node version note deferred to Tier 3.
+- **SESSION_LOG.md (stale — fixed by this entry):** 14 commits since 2026-06-01 unlogged. **Fixed by this entry.**
+
+### Files touched in Tier 1 doc updates (this session)
+- README.md — repo URL
+- ROADMAP.md — header date, line 142 strike, new Phase 6.6 section
+- CLAUDE.md — 10 new file entries + E30 stale-key note in Universal pattern
+- SESSION_LOG.md — this entry
+
+### Next session — Tier 2/3/4 work remaining
+
+Full breakdown in memory file `project_md_audit_2026_06_03.md`. Summary:
+
+**Tier 2 (drift fixes):**
+- DECISIONS.md: fix FirstEarningToast key name + add "not yet built" qualifier to SW/NotificationPrompt/public/sw.js entries
+- FAIRNESS.md: note `poolShare` dead, mark Open Questions resolved with code answers, update "Server-side for Phase 1" claim
+- LAUNCH_PLAN.md: refresh "Where we are now" table, mark Q1/Q3/Q6 resolved
+- SECURITY_AUDIT.md: add 4 silent improvements + 2 side-findings as observations
+
+**Tier 3 (polish):**
+- FUTURE.md: drop QR-sync bullet (lives in LAUNCH_PLAN Bucket 6 now), distinguish "shipped in-app" patterns
+- DIRECTION.md: tagline + Phase numbering consistency
+- README.md: Node version note
+
+**Tier 4 (actual code fixes — separate commits, each needs auditor):**
+- `/api/agent` `x-forwarded-for` parsing inconsistency (other routes split on `","[0]`, agent route doesn't — minor rate-limit bypass vector)
+- `BootContext.claimBoot` atomic lock via `useRef` (LOW severity — bounded by other locks)
+
+13 commits unpushed at end of session (master 13 ahead of origin). Push deferred per Hard Rule #8 — awaiting explicit approval.
+
 ## 2026-06-01 — E31: block rotate-from-stale + delete cleanupMigrations (single commit)
 
 Category: security architecture — closes a HIGH severity takeover vector discovered during E30 manual testing. Symmetric to E29's restore-from-stale block.

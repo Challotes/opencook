@@ -50,8 +50,8 @@ The fairness formula (Phase 1): contribution weight = `sqrt(engagement) × time_
 ## Quick start
 
 ```bash
-git clone https://github.com/your-org/bsvibes
-cd bsvibes
+git clone https://github.com/Challotes/bsvibes-
+cd bsvibes-
 npm install
 cp .env.example .env.local
 npm run dev

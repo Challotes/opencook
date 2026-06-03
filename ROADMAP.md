@@ -2,7 +2,7 @@
 
 > What's done, what's next, what's planned. AI agents: update this file when you complete or start a task.
 >
-> Last updated: 2026-05-03
+> Last updated: 2026-06-03
 
 ## Phase 1: Foundation — COMPLETE
 
@@ -139,7 +139,7 @@
 - [x] Forced backup download on security upgrade, interrupted upgrade recovery
 - [x] Passphrase unlock UI (users no longer locked out after refresh with encrypted identity)
 - [x] Atomic migration ordering (server confirms before key stored locally)
-- [x] Identity import with automatic migration cleanup (signed challenge required)
+- [x] ~~Identity import with automatic migration cleanup~~ — **REMOVED 2026-06-01 in E31** (commit `d7730cc`). The `cleanupMigrations` action was deleted because E29 + E31 closed the underlying scenario at the source (re-import of a rotated key + rotation from a stale key are now both blocked). Recoverable from git history if a future signature-gated admin reclaim design materialises.
 - [x] Full tester audit: all identity/upgrade paths verified
 - [x] Migration return value checked — upgrade aborts if migration fails (prevents orphaned posts)
 - [x] Full identity dropdown redesign: radical simplification (43→24 state vars, extracted UpgradeModal, shared PassphrasePrompt). *UpgradeModal subsequently deleted in Stage 8 batch 1 (2026-05-01) — orphaned after Stage 6 modal restructure consolidated everything into MoveAddressModal.*
@@ -273,6 +273,23 @@
 - [x] ~~Server-side source tx cache~~ — **DONE 2026-04-13** (in-memory Map in `/api/tx-hex`, 2000-entry LRU). IndexedDB not needed — the server-side cache solves the WoC rate-limit problem for all clients.
 - [ ] **Client-side IndexedDB source-tx cache** — nice-to-have future optimization. Current server-side cache handles the main problem. Client-side cache would eliminate the server round-trip entirely. Low priority.
 - [ ] **Refactor `clientSideBoot` + `consolidateUtxos`** — current state still has some duplication across broadcast-result classification blocks. Architecture review (2026-04-11) flagged as frankenstein. Several tech debt items from that review are now resolved — refactor is lower priority. Revisit if/when the file grows further.
+
+## Phase 6.6: Mobile/PWA hardening (E1–E32) — COMPLETE
+
+The E-series (E1–E32, 2026-05-08 → 2026-06-03) hardened the recovery, key-rotation, and install flows for production. See SESSION_LOG.md for per-session detail and DECISIONS.md for the locked-in patterns.
+
+- [x] Mobile modal restructure — 6 modals adopt the AgentChat bottom-sheet pattern (LAUNCH_PLAN Bucket 1)
+- [x] Welcome gate + install pitch (LAUNCH_PLAN Bucket 3a) — `useStandaloneMode`, `useInstallPlatform`, `InstallContext`, `InstallPitch`, `InstallBookmark`, `HomeScreenWelcomeGate`, `IosStorageToast`, `FirstEarningToast`
+- [x] Recovery file hardening (E1–E25) — combined recovery file, iOS Quick Look compatibility (static-render + inverse-noscript + form-control text selection), Web Share API on iOS, lazy backup payload to survive iOS transient activation
+- [x] E26 — explicit save acknowledgement instead of auto-download
+- [x] E27 — restore-from-encrypted-file adopts the file's passphrase
+- [x] E28a/b/c — PWA share fixes for iOS standalone
+- [x] E29 — block restore of any key with forward migrations (closes "new device adopts stale key" vector)
+- [x] E29a — desktop skips Web Share API
+- [x] E30 — stale-key session-lockout (`StaleKeyModal`, polling sends `x-bsvibes-pubkey`, server returns `key_status` gated by `E30_STALE_KEY_ENABLED` env flag). Closes "existing device unaware its key was revoked elsewhere"
+- [x] E31 — block rotate-from-stale + `cleanupMigrations` deleted (closes the symmetric server-side vector E30 left open)
+- [x] E32 — install pitch UX overhaul: slide-up sheet → bookmark chip pattern, no timer-based dismissal, Android Chrome one-tap restored, centered bookmark, modal-overlap ref-counter, geometry parity with Ask AI pill
+- [x] Android device-testing fixes (2026-06-03): UTXO outpoint dedup in `sweepFunds` / `autoTransferFunds` (catches WhatsOnChain duplicate-outpoint responses that produced `bad-txns-inputs-duplicate`); site-wide `vh` → `svh` modal sweep across 7 centered modals (fixes Android Chrome address-bar clip)
 
 ## Phase 7: The Recursive Model — PLANNED
 
