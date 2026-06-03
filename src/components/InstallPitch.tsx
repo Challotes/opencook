@@ -235,12 +235,9 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
           <div className="px-6 pb-6 pt-1 text-center">
             {/* 64px BSVibes app icon — the actual home-screen preview, with
                 amber glow shadow so it reads as "premium" without shouting.
-                `floatBob` keyframe gives it a gentle up-and-down float (6px,
-                2.5s loop, GPU-only via translate3d) — the "won a prize" feel
-                the project owner requested. `motion-safe:` prefix respects
-                prefers-reduced-motion (icon stays still for users who opted
-                out of animation). Decorative — aria-hidden because the
-                headline does the lifting. */}
+                Static (the prior floatBob animation was removed per project
+                owner — implied false affordance on a non-interactive element).
+                Decorative — aria-hidden because the headline does the lifting. */}
             {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}
             <img
               src="/icon-192.png"
@@ -248,15 +245,14 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
               aria-hidden="true"
               width={64}
               height={64}
-              className="rounded-xl mx-auto mb-4 shadow-[0_4px_16px_rgba(245,158,11,0.25)] motion-safe:animate-[floatBob_2.5s_ease-in-out_infinite]"
+              className="rounded-xl mx-auto mb-4 shadow-[0_4px_16px_rgba(245,158,11,0.25)]"
             />
-            {/* Locked headline — DECISIONS.md "Notification copy discipline" */}
-            <p className="text-lg font-semibold text-amber-400 leading-snug mb-2">
-              Get notified when you earn.
-            </p>
-            {/* Supporting line — possession framing, no fear */}
-            <p className="text-sm text-zinc-400 leading-relaxed mb-5">
-              Your earnings live on your phone, not a tab you&apos;ll close.
+            {/* Headline — DECISIONS.md "Notification copy discipline" rule
+                allows the install-pitch headline to diverge from the literal
+                push-permission copy. "Get the APP experience" is direct,
+                category-naming, no hedging. Single-line discipline preserved. */}
+            <p className="text-lg font-semibold text-amber-400 leading-snug mb-5">
+              Get the APP experience
             </p>
             <div className="space-y-3">
               {renderSheetCTA(installType, platform, canPromptInstall, handleInstallTap)}
@@ -397,7 +393,7 @@ function renderSheetCTA(
   }
 
   // installType === "unsupported" or null — should never reach here.
-  return <span className="text-[13px] text-zinc-400">Get notified when you earn.</span>;
+  return <span className="text-[13px] text-zinc-400">Get the APP experience</span>;
 }
 
 /**
@@ -420,7 +416,7 @@ function renderStripContent(
       return (
         <div className="space-y-1">
           <span className="text-[12px] text-amber-400 font-medium block">
-            Get notified when you earn.
+            Get the APP experience
           </span>
           <span className="text-[11px] text-zinc-400 block">{fallback}</span>
         </div>
@@ -428,7 +424,7 @@ function renderStripContent(
     }
     return (
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[12px] text-amber-400 font-medium">Get notified when you earn.</span>
+        <span className="text-[12px] text-amber-400 font-medium">Get the APP experience</span>
         <button
           type="button"
           onClick={handleInstallTap}
@@ -491,9 +487,7 @@ function renderStripContent(
       );
     return (
       <div className="space-y-1">
-        <span className="text-[12px] text-amber-400 font-medium block">
-          Get notified when you earn.
-        </span>
+        <span className="text-[12px] text-amber-400 font-medium block">Get the APP experience</span>
         {instructions}
       </div>
     );
@@ -502,13 +496,11 @@ function renderStripContent(
   if (installType === "open-in-safari") {
     return (
       <div className="space-y-1">
-        <span className="text-[12px] text-amber-400 font-medium block">
-          Get notified when you earn.
-        </span>
+        <span className="text-[12px] text-amber-400 font-medium block">Get the APP experience</span>
         <span className="text-[11px] text-zinc-400 block">Open BSVibes in Safari to install.</span>
       </div>
     );
   }
 
-  return <span className="text-[12px] text-zinc-400">Get notified when you earn.</span>;
+  return <span className="text-[12px] text-zinc-400">Get the APP experience</span>;
 }

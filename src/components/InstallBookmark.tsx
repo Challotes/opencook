@@ -7,24 +7,32 @@ import { useStandaloneMode } from "@/hooks/useStandaloneMode";
 import { shouldShowInstallPitch } from "@/lib/install-pitch";
 
 /**
- * Install bookmark chip — the minimised state of the install pitch. Sits in
- * normal page flow in the left third of `Feed.tsx`'s footer row (next to
- * "created with bopen.ai"). Tap to re-open the slide-up sheet (`<InstallPitch
- * variant="banner" />`).
+ * Install bookmark — the minimised state of the install pitch. Sits in the
+ * PostForm's footer row next to the Ask AI button. Tap to re-open the slide-up
+ * sheet (`<InstallPitch variant="banner" />`).
  *
- * Design: chip shape matching the Ask AI pill (`rounded-full border px-2.5 py-2`)
- * with the 18px BSVibes app icon inside. Visible by default — does NOT hide
- * itself with low opacity. The user opted to minimise rather than dismiss;
- * the chip is the persistent reminder + tap-target. The 4-condition gate
- * (now 5 with `protected`) naturally hides it once the user installs.
+ * Design (settled 2026-06-03): bare 20px app icon, no chip border at rest,
+ * subtle `p-1 rounded-sm hover:bg-zinc-800` so it reads as interactive on
+ * tap. Sized to match the Ask AI button's visible height without competing
+ * with the Ask AI pill's chip shape — Ask AI is "do an action" (chat),
+ * bookmark is "your account is here" (the app logo, shrunk down).
  *
- * On collapse from the sheet, the chip fires an Ask-AI-style highlight flash
- * (amber border + bg + scale-110 + glow + pulsing dot) for 2000ms so the
- * user's eye locks onto where the sheet collapsed TO. Identical visual
- * treatment as `AgentChat`'s `highlight` state.
+ * On collapse from the sheet, fires an Ask-AI-style highlight flash (amber
+ * ring + scale-110 + pulsing dot) for 2000ms so the user's eye locks onto
+ * where the sheet collapsed TO. Identical visual treatment as `AgentChat`'s
+ * `highlight` state.
  *
- * Rationale + pattern decided 2026-06-02. See DECISIONS.md install-pitch
- * entries + the E32 install-pitch refinements session.
+ * Visibility = the same 5-condition `shouldShowInstallPitch` gate PLUS
+ * `installSheetMode === "bookmark"`. While the sheet is open or hidden, this
+ * component renders nothing.
+ *
+ * History (2026-06-02 → 2026-06-03):
+ * - First shipped as a small icon in Feed.tsx's footer row next to bopen.ai
+ *   link. Found to be too easy to mis-tap the link.
+ * - Promoted to chip styling matching Ask AI dimensions. Felt visually
+ *   "shouty" alongside the Ask AI pill — two pills side by side competed.
+ * - Now: bare icon, PostForm row, same row as Ask AI. Reads as a personal-
+ *   account indicator (the app logo) rather than a competing CTA.
  */
 export function InstallBookmark(): React.JSX.Element | null {
   const { installType } = useInstallPlatform();
@@ -48,9 +56,7 @@ export function InstallBookmark(): React.JSX.Element | null {
   // Ask-AI-style highlight flash — fires when the sheet collapses to here so
   // the user's eye tracks the destination. Local state, not context, because
   // only this component cares about the transient. Watches installSheetMode
-  // so it fires exactly once per "sheet → bookmark" transition. Re-fires if
-  // the user reopens + minimises again — intentional, the eye-track serves
-  // its purpose every collapse.
+  // so it fires exactly once per "sheet → bookmark" transition.
   const [highlight, setHighlight] = useState(false);
   useEffect(() => {
     if (installSheetMode !== "bookmark") return;
@@ -67,10 +73,10 @@ export function InstallBookmark(): React.JSX.Element | null {
       type="button"
       onClick={openSheetFromBookmark}
       aria-label="Open install prompt"
-      className={`relative flex items-center justify-center border rounded-full px-2.5 py-2 transition-all mt-1 animate-[fadeIn_0.3s_ease-out_backwards] ${
+      className={`relative p-1 rounded-sm transition-all ${
         highlight
-          ? "border-amber-500 bg-amber-500/10 scale-110 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
-          : "border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
+          ? "ring-2 ring-amber-500 bg-amber-500/10 scale-110 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+          : "hover:bg-zinc-800 active:bg-zinc-700"
       }`}
     >
       {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}
@@ -78,8 +84,8 @@ export function InstallBookmark(): React.JSX.Element | null {
         src="/icon-192.png"
         alt=""
         aria-hidden="true"
-        width={18}
-        height={18}
+        width={20}
+        height={20}
         className="rounded-sm"
       />
       {/* Amber pinging dot during flash — matches Ask AI's highlight dot pattern */}

@@ -622,14 +622,21 @@ export function IdentityChip(): React.JSX.Element | null {
             // back into a freshly-locked You modal adds nothing. They
             // land on the page with the updated chip. Cancel mid-wizard
             // (no completion) keeps the You modal open under the old
-            // passphrase. closeManageModal() handles all the gate state
-            // teardown (manageAuthed, gate inputs, reAuthPassphraseRef).
+            // passphrase.
+            //
+            // closeManageModal() is deferred via queueMicrotask so it runs
+            // AFTER React commits the setShowMoveModal(false) update +
+            // MoveAddressModal's unmount + its install-pitch unblock
+            // cleanup. Without the defer, the close was racing against
+            // those unmount-effects and the You modal was sometimes left
+            // visible behind the install pitch sheet that fires next.
+            const completed = moveCompletedRef.current;
+            moveCompletedRef.current = false;
             setShowMoveModal(false);
             setMovePassphrase("");
-            if (moveCompletedRef.current) {
-              closeManageModal();
+            if (completed) {
+              queueMicrotask(() => closeManageModal());
             }
-            moveCompletedRef.current = false;
           }}
         />
       )}

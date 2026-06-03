@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { BootToast } from "@/components/BootToast";
 import { HomeScreenWelcomeGate } from "@/components/HomeScreenWelcomeGate";
-import { InstallBookmark } from "@/components/InstallBookmark";
 import { InstallPitch } from "@/components/InstallPitch";
 import { IosStorageToast } from "@/components/IosStorageToast";
 import { SignInModal } from "@/components/SignInModal";
@@ -316,26 +315,18 @@ function FeedContent({
             onPostRejected={handlePostRejected}
             agentHighlight={agentHighlight}
           />
-          {/* Three-column row at the footer: left third holds the install
-              bookmark (only visible when the sheet has been minimised), middle
-              third holds the bopen.ai attribution link, right third is empty
-              for symmetry. The bookmark is positioned far from bopen.ai so
-              taps don't accidentally hit the link. */}
-          <div className="grid grid-cols-3 items-center mt-1">
-            <div className="flex justify-center">
-              <InstallBookmark />
-            </div>
-            <div className="flex justify-center">
-              <a
-                href="https://bopen.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] text-zinc-700 hover:text-zinc-500 transition-colors"
-              >
-                created with bopen.ai
-              </a>
-            </div>
-            <div />
+          {/* Attribution — centered. Install bookmark moved to PostForm row
+              next to the Ask AI button (2026-06-03), so this row is just the
+              bopen.ai link now. */}
+          <div className="flex justify-center mt-1">
+            <a
+              href="https://bopen.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-zinc-700 hover:text-zinc-500 transition-colors"
+            >
+              created with bopen.ai
+            </a>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { InstallBookmark } from "@/components/InstallBookmark";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { AgentChat } from "./AgentChat";
 import { createPost } from "./actions";
@@ -421,7 +422,14 @@ export function PostForm({
           </span>
         </div>
         <p className="text-[11px] text-zinc-600 sm:hidden">&nbsp;</p>
-        <AgentChat highlight={agentHighlight} />
+        <div className="flex items-center gap-2">
+          {/* Install bookmark — bare app-icon button visible only when the
+              install sheet has been minimised. Self-gates via the 5-condition
+              shouldShowInstallPitch. Sits next to Ask AI as a personal-
+              account-residency indicator, not a competing CTA. */}
+          <InstallBookmark />
+          <AgentChat highlight={agentHighlight} />
+        </div>
       </div>
     </form>
   );
