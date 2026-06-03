@@ -149,16 +149,19 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
   }
 
   // ─── Inline variant (inside You modal) ─────────────────────────────────────
-  // Whole row is clickable — tapping it opens the slide-up sheet for the full
-  // install experience. The inline row is the permanent escape hatch; the
-  // sheet (one tier higher visually + with platform-specific CTA) is where
-  // the actual install happens. Trailing chevron-right signals tappability.
+  // Whole row is clickable. On one-tap platforms (Android Chrome / desktop
+  // Chrome with `beforeinstallprompt` captured) tapping fires `promptInstall`
+  // directly — single tap → native install dialog. On manual-instructions /
+  // open-in-safari / unsupported platforms the row opens the slide-up sheet
+  // which carries the platform-specific instructions. Trailing chevron-right
+  // signals tappability in both cases.
   if (variant === "inline") {
+    const isOneTap = installType === "one-tap" && canPromptInstall;
     return (
       <button
         type="button"
-        onClick={openSheetFromBookmark}
-        aria-label="Open install prompt"
+        onClick={isOneTap ? handleInstallTap : openSheetFromBookmark}
+        aria-label={isOneTap ? "Install BSVibes" : "Open install prompt"}
         className="w-full text-left px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/30 flex items-center gap-3 hover:bg-amber-500/15 active:bg-amber-500/20 transition-colors"
       >
         <svg

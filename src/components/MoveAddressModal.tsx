@@ -630,9 +630,12 @@ export function MoveAddressModal({
         />
       )}
 
-      {/* Modal — pinned to top of viewport (iOS-native pattern). */}
-      <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[8vh] pointer-events-none">
-        <div className="w-full max-w-md rounded-2xl bg-[#0f0f0f] border border-amber-400/20 shadow-2xl max-h-[80vh] overflow-y-auto pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] p-5">
+      {/* Modal — pinned near top of viewport (iOS-native pattern). Uses `svh`
+          units throughout so Android Chrome's collapsible address bar can't
+          push the card out of the visible area when the body is tall (e.g.
+          sweep-failure retry stage). */}
+      <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
+        <div className="w-full max-w-md rounded-2xl bg-[#0f0f0f] border border-amber-400/20 shadow-2xl max-h-[80svh] overflow-y-auto pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] p-5">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div>

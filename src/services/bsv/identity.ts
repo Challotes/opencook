@@ -346,6 +346,42 @@ async function fetchSourceTxsBatched(
 }
 
 /**
+ * Dedup a UTXO list by outpoint `(tx_hash, tx_pos)`. WhatsOnChain's indexer
+ * has occasionally returned the same outpoint twice in `/address/<addr>/unspent`
+ * responses; building a sweep tx from that raw list produces a
+ * `bad-txns-inputs-duplicate` rejection at the BSV peer. This helper is the
+ * structural safety net — same idea as `utxoKey` dedup in `client-boot.ts`.
+ *
+ * Two distinct UTXOs cannot share `(tx_hash, tx_pos)` (Bitcoin protocol
+ * invariant), so dedup only removes structural duplicates and is safe to call
+ * unconditionally.
+ */
+function dedupeUtxos<T extends { tx_hash: string; tx_pos: number; value: number }>(
+  utxos: T[]
+): T[] {
+  const seen = new Map<string, T>();
+  for (const u of utxos) {
+    const key = `${u.tx_hash}:${u.tx_pos}`;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, u);
+    } else if (u.value > existing.value) {
+      // Defensive — same outpoint should report the same value. If a misbehaving
+      // indexer disagrees, prefer the larger (the one we'd actually be able to
+      // spend if both were real, which they can't be).
+      seen.set(key, u);
+    }
+  }
+  if (seen.size !== utxos.length) {
+    console.warn(
+      `[BSVibes] dedupeUtxos: removed ${utxos.length - seen.size} duplicate outpoint(s) from UTXO list`,
+      { kept: seen.size, original: utxos.length }
+    );
+  }
+  return Array.from(seen.values());
+}
+
+/**
  * Auto-transfer ALL funds from old address to new address during upgrade.
  * Builds a single P2PKH transaction spending every UTXO from old → new.
  *
@@ -380,7 +416,8 @@ async function autoTransferFunds(
       return { txid: null, transferredSats: 0, noFunds: true };
     }
 
-    const utxos = utxoData as Array<{ tx_hash: string; tx_pos: number; value: number }>;
+    const rawUtxos = utxoData as Array<{ tx_hash: string; tx_pos: number; value: number }>;
+    const utxos = dedupeUtxos(rawUtxos);
     const totalSats = utxos.reduce((sum, u) => sum + u.value, 0);
     if (totalSats === 0) {
       return { txid: null, transferredSats: 0, noFunds: true };
@@ -613,7 +650,8 @@ export async function sweepFunds(
       return { txid: null, transferredSats: 0, noFunds: true };
     }
 
-    const utxos = utxoData as Array<{ tx_hash: string; tx_pos: number; value: number }>;
+    const rawUtxos = utxoData as Array<{ tx_hash: string; tx_pos: number; value: number }>;
+    const utxos = dedupeUtxos(rawUtxos);
     const totalSats = utxos.reduce((sum, u) => sum + u.value, 0);
     if (totalSats === 0) {
       return { txid: null, transferredSats: 0, noFunds: true };
