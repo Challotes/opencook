@@ -111,10 +111,10 @@ export function SignInModal(): React.JSX.Element | null {
           slides up beneath it without overlap. iOS auto-scroll-into-view
           never triggers because the input is already above the keyboard
           zone. */}
-      <div className="fixed inset-0 z-[80] flex items-start justify-center px-6 pt-[8vh] pointer-events-none">
+      <div className="fixed inset-0 z-[80] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
         <div
           key={shakeKey === 0 ? "modal" : `modal-shake-${shakeKey}`}
-          className={`w-full max-w-sm rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto max-h-[80vh] overflow-y-auto ${
+          className={`w-full max-w-sm rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto max-h-[80svh] overflow-y-auto ${
             shakeKey > 0
               ? "animate-[shake_0.5s_ease-in-out]"
               : "animate-[slideUp_0.3s_ease-out_backwards]"

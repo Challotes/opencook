@@ -35,9 +35,9 @@ export function FundAddress({ address, bootPrice, balance, onClose }: FundAddres
 
       {/* Modal — pinned to top of viewport (iOS-native pattern, shared
           with the other modals for visual consistency). */}
-      <div className="fixed inset-0 z-[60] flex items-start justify-center px-6 pt-[8vh] pointer-events-none">
+      <div className="fixed inset-0 z-[60] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
         <div
-          className="w-full max-w-sm rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] max-h-[80vh] overflow-y-auto"
+          className="w-full max-w-sm rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] max-h-[80svh] overflow-y-auto"
           style={{ backgroundColor: "#0f0f0f" }}
         >
           {/* Gold top stripe */}

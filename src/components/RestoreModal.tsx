@@ -493,9 +493,9 @@ export function RestoreModal({
       {/* Modal — pinned to top of viewport (iOS-native pattern). */}
       {/* z-[100]: above SignInModal (z-[80]) AND E30's StaleKeyModal (z-[90]) */}
       {/* so the restore flow always sits on top when chained from either modal. */}
-      <div className="fixed inset-0 z-[100] flex items-start justify-center px-6 pt-[8vh] pointer-events-none">
+      <div className="fixed inset-0 z-[100] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
         <div
-          className="w-full max-w-md rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] max-h-[80vh] overflow-y-auto"
+          className="w-full max-w-md rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] max-h-[80svh] overflow-y-auto"
           style={{ backgroundColor: "#0f0f0f" }}
         >
           <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
