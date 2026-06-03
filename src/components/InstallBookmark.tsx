@@ -64,10 +64,10 @@ export function InstallBookmark(): React.JSX.Element | null {
       type="button"
       onClick={openSheetFromBookmark}
       aria-label="Open install prompt"
-      className={`p-1 rounded-sm transition-all ${
+      className={`h-[34px] w-[34px] flex items-center justify-center rounded-sm border transition-all mt-1 ${
         highlight
-          ? "ring-2 ring-amber-500 bg-amber-500/10 scale-110 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
-          : "ring-1 ring-zinc-700 hover:bg-zinc-800 active:bg-zinc-700"
+          ? "border-amber-500 bg-amber-500/10 scale-110 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+          : "border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
       }`}
     >
       {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}

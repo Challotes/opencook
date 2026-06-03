@@ -123,11 +123,11 @@ body {
   }
   60% {
     opacity: 0.5;
-    transform: translate3d(-30vw, 10px, 0) scale(0.2);
+    transform: translate3d(0, 10px, 0) scale(0.2);
   }
   100% {
     opacity: 0;
-    transform: translate3d(-33vw, 20px, 0) scale(0.05);
+    transform: translate3d(0, 20px, 0) scale(0.05);
   }
 }
 
