@@ -302,11 +302,12 @@ function FeedContent({
 
       {/* Pinned bottom — compose area */}
       <div className="shrink-0">
-        {/* Install pitch banner — full-width strip above the compose. The
-            component self-gates: only shows when recovery file saved, not
-            already standalone, supported platform, not suppressed. X-tap
-            triggers 30d suppression via InstallContext (banner unmounts on
-            next render because isSuppressed flips true). */}
+        {/* Install pitch banner — full-width slide-up sheet above the compose.
+            Self-gates via the 5-condition `shouldShowInstallPitch`: backed up,
+            protected, not standalone, supported platform, not engaged. The
+            chevron-tap minimises to the bookmark in PostForm (no timer-based
+            suppression — see DECISIONS.md "Install pitch surfaces — no
+            timer-based dismissal"). */}
         <InstallPitch variant="banner" />
 
         <div className="mx-auto max-w-2xl px-4 pb-4 pt-2">

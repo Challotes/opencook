@@ -7,7 +7,7 @@ describe("shouldShowInstallPitch", () => {
     protected: true,
     standalone: false,
     installType: "one-tap" as const,
-    suppressed: false,
+    engaged: false,
   };
 
   it("shows the pitch when all five conditions are met", () => {
@@ -38,8 +38,8 @@ describe("shouldShowInstallPitch", () => {
     expect(shouldShowInstallPitch({ ...allTrue, installType: "unsupported" })).toBe(false);
   });
 
-  it("hides when the user has dismissed or already engaged", () => {
-    expect(shouldShowInstallPitch({ ...allTrue, suppressed: true })).toBe(false);
+  it("hides when the user has already engaged with install (accepted native prompt / appinstalled fired)", () => {
+    expect(shouldShowInstallPitch({ ...allTrue, engaged: true })).toBe(false);
   });
 
   it("shows for manual-instructions installType (iOS Safari, desktop Safari, Firefox Android)", () => {

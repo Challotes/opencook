@@ -9,27 +9,23 @@ import {
   useRef,
   useState,
 } from "react";
-import { isSuppressedAt } from "@/lib/install-suppression";
 import { isEffectivelyProtected } from "@/services/bsv/identity";
 
-const DISMISSED_UNTIL_KEY = "bsvibes_install_pitch_dismissed_until";
 const ENGAGED_KEY = "bsvibes_install_engaged";
 const BACKED_UP_KEY = "bsvibes_identity_backed_up";
 const SHEET_SHOWN_KEY = "bsvibes_install_sheet_shown"; // sessionStorage
-const DAY_MS = 24 * 60 * 60 * 1000;
-const DISMISS_DAYS_DEFAULT = 30;
 const SHEET_DELAY_MS = 800;
 
 /**
  * Install pitch mode — drives which surface (sheet vs bookmark) is currently
- * rendered when the user passes the 4-condition visibility gate.
+ * rendered when the user passes the visibility gate.
  *
  * - `"hidden"` — initial state; no surface visible. Used both before gate
  *   passes (no recovery file yet, etc.) AND during the first 800ms after the
  *   gate passes (gives the user a moment to land on the page).
  * - `"sheet"` — full slide-up sheet. The big-impact post-save moment.
- * - `"bookmark"` — minimised state. Small app-icon bookmark sits next to the
- *   "created with bopen.ai" link in Feed.tsx. Quietly visible, tap to re-open.
+ * - `"bookmark"` — minimised state. Small app-icon button in PostForm's row
+ *   next to Ask AI. Quietly visible, tap to re-open.
  */
 export type InstallSheetMode = "hidden" | "sheet" | "bookmark";
 
@@ -41,16 +37,28 @@ interface InstallContextValue {
    * if no prompt is available (e.g., on iOS where `beforeinstallprompt` never
    * fires). Defensive-return matches `requireIdentity()` — callers narrow with
    * `if (outcome === null) return;` rather than try/catch.
+   *
+   * Outcome handling (revised 2026-06-03):
+   * - `"accepted"` → set `engaged = true` permanently. The browser will fire
+   *   `appinstalled` shortly; the engaged flag bridges the gap between accept
+   *   and standalone-mode-detection in the lingering tab.
+   * - `"dismissed"` → NO suppression. The native OS prompt cancel is the tail
+   *   of an engagement we delivered, not a rejection of our pitch. The browser
+   *   self-regulates `beforeinstallprompt` re-fire cadence anyway; the
+   *   deferred event is consumed regardless. Hiding the install path on
+   *   native cancel was an implementation conflation with the X-tap
+   *   suppression that no longer exists (X-tap was replaced with
+   *   chevron-minimise-to-bookmark 2026-06-02).
    */
   promptInstall: () => Promise<"accepted" | "dismissed" | null>;
   /**
-   * Derived on every render — true if the user dismissed within the last 30
-   * days OR has engaged with the install flow (accepted prompt OR `appinstalled`
-   * event fired).
+   * True if the user has engaged with the install flow — either accepted the
+   * native prompt OR `appinstalled` event fired. Permanent suppression. The
+   * gate's main suppression mechanism after the 30-day timer was removed
+   * (2026-06-03). Mostly covers the "lingering browser tab after install"
+   * edge case; the `standalone` gate handles all other post-install loads.
    */
-  isSuppressed: boolean;
-  /** Set `dismissedUntil = now + days × DAY_MS`. Called by `promptInstall` on dismissed outcome. */
-  suppressForDays: (days: number) => void;
+  engaged: boolean;
   /** Mark the user as having engaged the install path. Permanent. */
   markEngaged: () => void;
   /**
@@ -89,18 +97,6 @@ interface InstallContextValue {
   /**
    * Called by `InstallPitch` once it determines the visibility gate has passed
    * for the first time this session. Idempotent — re-calls are no-ops.
-   *
-   * Behavior:
-   * - First-ever call this tab session (no sessionStorage flag): sets the flag
-   *   synchronously to prevent reload-during-delay double-fire, schedules
-   *   `installSheetMode = "sheet"` after 800ms.
-   * - Subsequent sessions (flag already set): `installSheetMode = "bookmark"`
-   *   immediately. The user has already seen the sheet once; the bookmark is
-   *   the persistent reminder.
-   *
-   * sessionStorage failure (private browsing / quota) is fail-open: behave as
-   * "first time" each render, which means the user gets the sheet again. Worse
-   * than ideal but better than crashing.
    */
   initializeSheetMode: () => void;
   /** Chevron tap on the sheet — minimises to the bookmark. */
@@ -111,41 +107,19 @@ interface InstallContextValue {
    * Ref-counted block on the install-pitch sheet appearance — mirror of the
    * `blockSessionClear` pattern in IdentityContext. Used by rotation modals
    * (MoveAddressModal / ChangePassphraseModal / RestoreModal) to suppress the
-   * sheet during their lifecycle: when those modals are mounted, `markBackedUp`
-   * may fire mid-flow but the install pitch must not appear on top of an
-   * active modal. Modals mount → `blockInstallPitch()`, unmount → `unblockInstallPitch()`.
-   * Once the count returns to zero, the install pitch's gate re-evaluates and
-   * fires the sheet (or bookmark) at a clean moment.
-   *
-   * Ref-counted so overlapping modals (e.g. RestoreModal stacked on top of
-   * StaleKeyModal) compose safely.
+   * sheet during their lifecycle. Modals mount → `blockInstallPitch()`,
+   * unmount → `unblockInstallPitch()`. Once the count returns to zero, the
+   * install pitch's gate re-evaluates and fires the sheet at a clean moment.
    */
   blockInstallPitch: () => void;
   unblockInstallPitch: () => void;
   /** Reader for the block ref — true if any modal is currently blocking the pitch. */
   isInstallPitchBlocked: () => boolean;
-  /**
-   * Tick that increments whenever the block count returns to zero — forces
-   * `InstallPitch` to re-render and re-check the gate even though the ref
-   * count itself isn't React state. Consumers read this to participate in
-   * the React lifecycle; don't read the ref directly.
-   */
+  /** Tick that increments whenever the block count returns to zero. */
   installPitchBlockTick: number;
 }
 
 const InstallContext = createContext<InstallContextValue | null>(null);
-
-function readDismissedUntil(): number | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(DISMISSED_UNTIL_KEY);
-    if (raw === null) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-  } catch {
-    return null;
-  }
-}
 
 function readEngaged(): boolean {
   if (typeof window === "undefined") return false;
@@ -176,7 +150,6 @@ function readProtected(): boolean {
 
 export function InstallProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [canPromptInstall, setCanPromptInstall] = useState(false);
-  const [dismissedUntil, setDismissedUntil] = useState<number | null>(() => readDismissedUntil());
   const [engaged, setEngaged] = useState<boolean>(() => readEngaged());
   const [backedUp, setBackedUp] = useState<boolean>(() => readBackedUp());
   const [installSheetMode, setInstallSheetMode] = useState<InstallSheetMode>("hidden");
@@ -227,16 +200,15 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
       // Deferred event is single-use per spec — clear regardless of outcome.
       deferredPromptRef.current = null;
       setCanPromptInstall(false);
-      // Per architect refinement: both outcomes count as engagement, but dismissed
-      // gets 30-day suppression (consistent with X-tap), accepted gets permanent.
       if (result.outcome === "accepted") {
         window.localStorage.setItem(ENGAGED_KEY, "1");
         setEngaged(true);
-      } else {
-        const until = Date.now() + DISMISS_DAYS_DEFAULT * DAY_MS;
-        window.localStorage.setItem(DISMISSED_UNTIL_KEY, String(until));
-        setDismissedUntil(until);
       }
+      // Dismissed outcome: no suppression. User cancelled the OS dialog;
+      // browser will not re-fire beforeinstallprompt immediately (it
+      // self-regulates), and the deferred event is consumed. Pitch stays
+      // findable for when the user is ready. See DECISIONS.md "Install
+      // pitch — no timer-based suppression" (revised 2026-06-03).
       return result.outcome;
     } catch {
       // Browser refused to show prompt (rare — e.g., already in flight). Treat
@@ -245,22 +217,12 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
     }
   }, []);
 
-  const suppressForDays = useCallback((days: number): void => {
-    const until = Date.now() + days * DAY_MS;
-    try {
-      window.localStorage.setItem(DISMISSED_UNTIL_KEY, String(until));
-    } catch {
-      // localStorage write failed (private browsing quota, etc.) — still update
-      // in-memory state so this session suppresses.
-    }
-    setDismissedUntil(until);
-  }, []);
-
   const markEngaged = useCallback((): void => {
     try {
       window.localStorage.setItem(ENGAGED_KEY, "1");
     } catch {
-      // Same fallback as above — in-memory still flips.
+      // localStorage write failed (private browsing quota, etc.) — still flip
+      // in-memory so the banner reacts this session.
     }
     setEngaged(true);
   }, []);
@@ -280,38 +242,18 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
   }, []);
 
   // Cross-tab protection sync — storage events fire when ANOTHER tab writes
-  // to localStorage. Same-tab writes (after rotation flow in MoveAddressModal /
-  // ChangePassphraseModal / RestoreModal) don't fire `storage`, so those modals
-  // must call `refreshProtected()` explicitly after their commit step.
+  // to localStorage. Same-tab writes (after rotation flow) don't fire
+  // `storage`, so those modals must call `refreshProtected()` explicitly
+  // after their commit step.
   useEffect(() => {
     if (typeof window === "undefined") return;
     function handleStorage(e: StorageEvent): void {
-      // Both plaintext + encrypted store key changes affect isEffectivelyProtected().
       if (e.key === "bfn_keypair" || e.key === "bfn_keypair_enc") {
         setProtectedState(readProtected());
       }
     }
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, []);
-
-  const blockInstallPitch = useCallback((): void => {
-    installPitchBlockRef.current += 1;
-  }, []);
-
-  const unblockInstallPitch = useCallback((): void => {
-    installPitchBlockRef.current = Math.max(0, installPitchBlockRef.current - 1);
-    if (installPitchBlockRef.current === 0) {
-      // Force re-render of consumers (InstallPitch) so the gate re-evaluates
-      // and initializeSheetMode fires now that the modal is gone. Counter
-      // (not boolean) so two close-in-time tick increments are still treated
-      // as distinct events.
-      setInstallPitchBlockTick((t) => t + 1);
-    }
-  }, []);
-
-  const isInstallPitchBlocked = useCallback((): boolean => {
-    return installPitchBlockRef.current > 0;
   }, []);
 
   const initializeSheetMode = useCallback((): void => {
@@ -323,7 +265,6 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
     // would double-fire the impactful surface.
     try {
       if (window.sessionStorage.getItem(SHEET_SHOWN_KEY)) {
-        // Already shown this tab session — straight to bookmark.
         setInstallSheetMode("bookmark");
         return;
       }
@@ -340,9 +281,6 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
   }, []);
 
   const minimiseToBookmark = useCallback((): void => {
-    // If the timer is still pending (user shouldn't be able to act on a hidden
-    // sheet, but defensive), clear it so the sheet doesn't pop up after they
-    // already minimised.
     if (sheetTimerRef.current !== null) {
       clearTimeout(sheetTimerRef.current);
       sheetTimerRef.current = null;
@@ -352,6 +290,21 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
 
   const openSheetFromBookmark = useCallback((): void => {
     setInstallSheetMode("sheet");
+  }, []);
+
+  const blockInstallPitch = useCallback((): void => {
+    installPitchBlockRef.current += 1;
+  }, []);
+
+  const unblockInstallPitch = useCallback((): void => {
+    installPitchBlockRef.current = Math.max(0, installPitchBlockRef.current - 1);
+    if (installPitchBlockRef.current === 0) {
+      setInstallPitchBlockTick((t) => t + 1);
+    }
+  }, []);
+
+  const isInstallPitchBlocked = useCallback((): boolean => {
+    return installPitchBlockRef.current > 0;
   }, []);
 
   // Clean up any pending timer on provider unmount (HMR, route change).
@@ -364,19 +317,12 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
     };
   }, []);
 
-  // Derived on every render. Calling Date.now() here means a mid-session
-  // expiry of dismissedUntil only becomes visible on the next render — fine
-  // for this use case because consumers only render when something else
-  // (state change, user interaction) prompts them.
-  const isSuppressed = isSuppressedAt(Date.now(), dismissedUntil, engaged);
-
   return (
     <InstallContext.Provider
       value={{
         canPromptInstall,
         promptInstall,
-        isSuppressed,
-        suppressForDays,
+        engaged,
         markEngaged,
         backedUp,
         markBackedUp,

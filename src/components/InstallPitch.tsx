@@ -33,27 +33,28 @@ interface InstallPitchProps {
 /**
  * Install pitch sheet — full-impact slide-up surface for the first-tab-session
  * appearance after a recovery file save. See LAUNCH_PLAN.md decision #10 +
- * DECISIONS.md "Install pitch dual-surface with calibrated dismissal" +
- * 2026-06-02 bookmark pattern.
+ * DECISIONS.md "Install pitch surfaces — no timer-based dismissal".
  *
- * Visibility is a four-condition gate (see `shouldShowInstallPitch`): recovery
- * file saved AND not already standalone AND supported platform AND not
- * suppressed. Returns `null` when any condition fails.
+ * Visibility is a 5-condition gate (see `shouldShowInstallPitch`): backed up
+ * AND protected AND not standalone AND supported platform AND not engaged.
+ * Returns `null` when any condition fails.
  *
  * State machine (per-session-per-tab, lives in `InstallContext`):
  * - `"hidden"` → initial. While the gate is closed OR during the 800ms reveal
  *   delay after the gate opens.
  * - `"sheet"` → after the 800ms reveal: the slide-up sheet. Chevron tap →
  *   `"bookmark"`.
- * - `"bookmark"` → the minimised state. Sheet not rendered; a small icon next
- *   to the bopen.ai link signals the install pitch is still available. Tap
- *   the bookmark → back to `"sheet"`. The 30-day suppression is NOT applied
- *   on chevron-minimise — the bookmark IS the persistent reminder.
+ * - `"bookmark"` → the minimised state. Sheet not rendered; a small icon
+ *   centered in the PostForm footer row signals the install pitch is still
+ *   available. Tap the bookmark → back to `"sheet"`. There is NO timer-based
+ *   dismissal anywhere — the bookmark IS the persistent reminder, and the
+ *   visibility gate self-resolves on install (`appinstalled` → `engaged`).
  *
  * Platform branching (from `useInstallPlatform`):
  * - `one-tap` (Android Chrome/Brave/Edge/Samsung, desktop Chrome/Edge) — real
- *   button calling `promptInstall()`. Internal logic in `promptInstall`:
- *   accepted = permanent engagement; dismissed = 30-day suppression.
+ *   button calling `promptInstall()`. Accepted outcome → `engaged` flag set
+ *   (gate closes). Dismissed outcome → no-op; browser self-regulates re-fire
+ *   cadence for `beforeinstallprompt`.
  * - `manual-instructions` — iOS Safari, desktop Safari, Firefox Android.
  *   Visual instructions with the platform's actual install steps. iOS gets
  *   inline pill labels with Share + Add-to-Home-Screen icons + "scroll down"
@@ -72,11 +73,12 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
   const {
     backedUp,
     protected: isProtected,
-    isSuppressed,
+    engaged,
     canPromptInstall,
     promptInstall,
     installSheetMode,
     initializeSheetMode,
+    openSheetFromBookmark,
     minimiseToBookmark,
     isInstallPitchBlocked,
     installPitchBlockTick,
@@ -87,7 +89,7 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
     protected: isProtected,
     standalone,
     installType,
-    suppressed: isSuppressed,
+    engaged,
   });
 
   // Banner only — kick off the mode initialisation (sessionStorage check +
@@ -132,8 +134,8 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
   async function handleInstallTap(): Promise<void> {
     if (!canPromptInstall) return;
     await promptInstall();
-    // promptInstall handles suppression internally (accepted → engaged,
-    // dismissed → 30d).
+    // promptInstall sets `engaged` on accepted; dismissed is a no-op (browser
+    // self-regulates beforeinstallprompt re-fire cadence).
   }
 
   function handleChevronTap(): void {
@@ -146,10 +148,19 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
     }, COLLAPSE_MS);
   }
 
-  // ─── Inline variant (inside You modal done-state) ──────────────────────────
+  // ─── Inline variant (inside You modal) ─────────────────────────────────────
+  // Whole row is clickable — tapping it opens the slide-up sheet for the full
+  // install experience. The inline row is the permanent escape hatch; the
+  // sheet (one tier higher visually + with platform-specific CTA) is where
+  // the actual install happens. Trailing chevron-right signals tappability.
   if (variant === "inline") {
     return (
-      <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/30 flex items-start gap-3">
+      <button
+        type="button"
+        onClick={openSheetFromBookmark}
+        aria-label="Open install prompt"
+        className="w-full text-left px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/30 flex items-center gap-3 hover:bg-amber-500/15 active:bg-amber-500/20 transition-colors"
+      >
         <svg
           width="18"
           height="18"
@@ -160,8 +171,9 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden="true"
-          className="text-amber-400 shrink-0 mt-0.5"
+          className="text-amber-400 shrink-0"
         >
+          <title>Install</title>
           <path d="M12 2v8" />
           <path d="m16 6-4 4-4-4" />
           <rect x="3" y="14" width="18" height="8" rx="2" />
@@ -169,7 +181,22 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
         <div className="flex-1 min-w-0">
           {renderStripContent(installType, platform, canPromptInstall, handleInstallTap)}
         </div>
-      </div>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="text-zinc-500 shrink-0"
+        >
+          <title>Open</title>
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
     );
   }
 
@@ -205,9 +232,9 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
           {/* Gold top stripe — same as StaleKeyModal / SignInModal / FundAddress */}
           <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
 
-          {/* Chevron-down (minimise) at top center. Replaces the prior X to
-              signal "minimise to bookmark" rather than "destroy with 30-day
-              suppression". The bookmark in Feed.tsx is the persistent reminder. */}
+          {/* Chevron-down (minimise) at top center. There is no X — the only
+              way out of the sheet is minimise-to-bookmark. The bookmark in
+              PostForm is the persistent reminder. */}
           <div className="flex justify-center pt-2 pb-1">
             <button
               type="button"
@@ -405,7 +432,7 @@ function renderStripContent(
   installType: ReturnType<typeof useInstallPlatform>["installType"],
   platform: InstallPlatform | null,
   canPromptInstall: boolean,
-  handleInstallTap: () => Promise<void>
+  _handleInstallTap: () => Promise<void>
 ): React.JSX.Element {
   if (installType === "one-tap") {
     if (!canPromptInstall) {
@@ -422,16 +449,16 @@ function renderStripContent(
         </div>
       );
     }
+    // Visual-only label — the outer inline `<button>` (in the inline variant
+    // above) is the actual tap target. A nested <button> here would produce
+    // invalid HTML. The user's tap opens the slide-up sheet which has its own
+    // real install button calling `promptInstall`.
     return (
       <div className="flex items-center justify-between gap-3">
         <span className="text-[12px] text-amber-400 font-medium">Get the APP experience</span>
-        <button
-          type="button"
-          onClick={handleInstallTap}
-          className="bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg px-3 py-1.5 text-[11px] font-medium hover:bg-amber-500/30 transition-colors"
-        >
+        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg px-3 py-1.5 text-[11px] font-medium">
           Add to home
-        </button>
+        </span>
       </div>
     );
   }

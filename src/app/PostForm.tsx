@@ -411,7 +411,13 @@ export function PostForm({
           {micError}
         </button>
       )}
-      <div className="flex items-center justify-between mt-1 ml-1 mr-1">
+      {/* Three-column grid — helper text left (desktop only), install bookmark
+          center, Ask AI right. Bookmark is centered relative to the textarea
+          above. When the bookmark is not rendered (most of the time — only
+          visible after the user has saved + protected + minimised the sheet),
+          the center cell collapses gracefully. Mobile (helper text hidden)
+          uses a sm:hidden spacer to hold the left cell's shape. */}
+      <div className="grid grid-cols-3 items-center mt-1 ml-1 mr-1">
         <div className="hidden sm:flex items-center gap-2">
           <p className="text-[11px] text-zinc-600">Enter to post, Shift+Enter for new line</p>
           <span
@@ -421,13 +427,11 @@ export function PostForm({
             Posted
           </span>
         </div>
-        <p className="text-[11px] text-zinc-600 sm:hidden">&nbsp;</p>
-        <div className="flex items-center gap-2">
-          {/* Install bookmark — bare app-icon button visible only when the
-              install sheet has been minimised. Self-gates via the 5-condition
-              shouldShowInstallPitch. Sits next to Ask AI as a personal-
-              account-residency indicator, not a competing CTA. */}
+        <div className="sm:hidden" />
+        <div className="flex justify-center">
           <InstallBookmark />
+        </div>
+        <div className="flex justify-end">
           <AgentChat highlight={agentHighlight} />
         </div>
       </div>
