@@ -2,6 +2,32 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-04 / 2026-06-05 — MD audit follow-ups: Tier 2 (drift) + Tier 3 (polish) shipped
+
+Category: documentation accuracy. Continuation of the 2026-06-03 MD audit. Tier 2 + Tier 3 both shipped; Tier 4 (two LOW-severity code fixes) remains for next session.
+
+**Commit `4c3ead8` — Tier 2 drift fixes across 4 docs:**
+- DECISIONS.md — FirstEarningToast localStorage key drift fixed (`bsvibes_first_earning_save_offered` → actual `bsvibes_first_earning_save_dismissed_until` timestamp with 48h backoff). Service-worker scope-discipline + notification-copy-discipline entries gained "Forward-looking — not yet built" qualifiers so future readers don't grep for `public/sw.js`.
+- FAIRNESS.md — Parameters table extended with 4 missing constants (Boot price cache TTL, Weights cache TTL, Active window definition, Free boots per user). Implementation note added: `poolShare: 0.8` is documented but DERIVED in `split.ts` (dead config field). "Server-side for Phase 1" claim updated — paid boots are client-side now, only free boots remain server-side. Open Questions reorganized into "Settled in code" (Boot price dynamic, separate-tx-per-boot, unsigned posts rejected, day-one payments) and "Still open" (Genesis-contributor weight).
+- LAUNCH_PLAN.md — "Where we are now" table refreshed: 4 rows flipped from "Not implemented" to "SHIPPED" (Bucket 1 modal restructure, Bucket 3a `beforeinstallprompt` + standalone-mode detection). Q1 (save trigger), Q3 (start fresh semantics), Q6 (in-app browser read-only) marked RESOLVED with backlinks.
+- SECURITY_AUDIT.md — M5 updated (still unauthenticated but rate-limited 20/min/IP). New OBSERVATIONS section logging 4 silent improvements (OBS-S1 to S4: `/api/posts` rate limit, `/api/restore-eligibility` public endpoint, `dedupeUtxos` in sweep, E30 stale-key cross-ref) and 2 new audit findings (OBS-N1 `/api/agent` IP header parsing, OBS-N2 BootContext.claimBoot non-atomic) — both flagged for Tier 4 follow-up.
+
+**Commit `d6236f6` — Tier 3 polish across 3 docs:**
+- FUTURE.md — Dropped "Device sync via QR" spec bullet (full design lives in LAUNCH_PLAN.md Bucket 6; pointed to canonical source). Reframed "Patterns We've Noticed" section with per-bullet "shipped in-app" / "future reusable primitive" markers so future readers understand the in-app implementations are current reality, not future work.
+- DIRECTION.md — Added canonical tagline + subtitle near top matching CLAUDE.md / README.md. Reconciled the two phase-numbering systems — renamed fairness phases to "Fairness Phase 1/2/3" and clarified "Phase 7" is from the build roadmap.
+- README.md — Added Node 20+ requirement under Quick Start.
+
+### Tier 4 still pending — two LOW-severity code fixes for next session
+
+Both captured in SECURITY_AUDIT.md as OBS-N1 and OBS-N2; full fix detail in memory `project_md_audit_2026_06_03.md`:
+
+1. **`src/app/api/agent/route.ts:28`** — `x-forwarded-for` header doesn't split on `,`. Other routes use `header.split(",")[0].trim()`. An attacker can prepend a fake IP to extend rate-limit budget. One-line fix. Needs auditor pre + post.
+2. **`src/contexts/BootContext.tsx:50-57`** — `claimBoot` lock uses React `setState` (asynchronous). Two concurrent calls can both observe `null` and proceed. Fix: switch to `useRef` (synchronous read). Bounded by downstream locks (server rate limit + client-boot mutex + on-chain double-spend rejection) so impact is LOW.
+
+Each fix is small (~5 lines) but touches a critical path (rate limiting / boot single-flight), so each should get its own auditor pass and its own commit.
+
+**Push status:** 16 commits unpushed pre-push, then everything pushed to origin at end of session per Nige's explicit approval (Hard Rule #8 satisfied).
+
 ## 2026-06-02 / 2026-06-03 — E32 install pitch overhaul + Android device fixes + MD audit
 
 Category: UX polish + Android device-test bug fixes + documentation accuracy sweep. 14 commits across two days, plus a comprehensive MD audit at end of session.
