@@ -49,6 +49,8 @@ The fairness formula (Phase 1): contribution weight = `sqrt(engagement) × time_
 
 ## Quick start
 
+**Requires Node 20+** (Next.js 16 + React 19.2 + Turbopack).
+
 ```bash
 git clone https://github.com/Challotes/bsvibes-
 cd bsvibes-

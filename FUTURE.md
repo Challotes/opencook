@@ -70,28 +70,28 @@ Early thinking on how revenue could flow between parent and child projects.
 
 ## Patterns We've Noticed
 
-The codebase has started doing things we didn't fully plan. A few pieces have grown complex enough that they could live on their own.
+The codebase has started doing things we didn't fully plan. Most of these are already built INSIDE BSVibes — what's still future is extracting them as standalone primitives anyone could reuse without adopting the whole platform.
 
-**Revenue distribution that governs itself.** The fairness logic has tunable parameters, scoring weights, and decay curves. The obvious next step is letting an AI watch the numbers and adjust those knobs — tighten the gaming resistance when someone's exploiting it, widen the grants when the platform's healthy. We built the surface. We haven't built the watcher yet.
+**Revenue distribution that governs itself** *(surface shipped, watcher future)*. The fairness logic has tunable parameters, scoring weights, and decay curves. The obvious next step is letting an AI watch the numbers and adjust those knobs — tighten the gaming resistance when someone's exploiting it, widen the grants when the platform's healthy. We built the surface. We haven't built the watcher yet.
 
-**Trustless split payments.** The boot payment flow is browser-native and zero-custody. The browser builds the transaction, the browser broadcasts it, the server never touches the money. That turned out to be a useful pattern independent of BSVibes — any situation where you want to split a payment across contributors without a middleman holding funds.
+**Trustless split payments** *(shipped in-app — Phase 6 / `client-boot.ts`; standalone primitive future)*. The boot payment flow is browser-native and zero-custody. The browser builds the transaction, the browser broadcasts it, the server never touches the money. As an in-app feature it's live; the future work is packaging this as a standalone library or pattern so any app can split a payment across contributors without a middleman holding funds.
 
-**Crypto identity without the crypto part.** Sign-in here requires no wallet, no app install, no seed phrase. A key is generated on arrival. Most people never know it happened. That pattern is reusable anywhere you want signed, attributable actions without asking people to "get into crypto" first.
+**Crypto identity without the crypto part** *(shipped in-app — Phase 1+ / `useIdentity` + encrypted store; standalone primitive future)*. Sign-in here requires no wallet, no app install, no seed phrase. A key is generated on arrival. Most people never know it happened. That pattern is reusable anywhere you want signed, attributable actions without asking people to "get into crypto" first.
 
-**Wallet health as a background concern.** UTXOs fragment. Fees creep up. The wallet quietly monitors and consolidates. That kind of low-level maintenance could report upward — cost trends, fragmentation alerts, fee anomalies. Right now it just acts. It could also explain.
+**Wallet health as a background concern** *(act-half shipped, explain-half future)*. UTXOs fragment. Fees creep up. The wallet quietly monitors and consolidates. That kind of low-level maintenance could report upward — cost trends, fragmentation alerts, fee anomalies. Right now it just acts. It could also explain.
 
-**Scoring without a committee.** Contribution weight is calculated from behavior: post frequency, engagement, recency, chain depth. No one votes. No one decides. It just runs. That model applies anywhere you're trying to fairly compensate a group without central control — open source projects, co-ops, DAOs.
+**Scoring without a committee** *(shipped in-app — Phase 6 / `src/services/fairness/weights.ts`; standalone primitive future)*. Contribution weight is calculated from behavior: post frequency, engagement, recency, chain depth. No one votes. No one decides. It just runs. That model applies anywhere you're trying to fairly compensate a group without central control — open source projects, co-ops, DAOs.
 
-**The chain as the audit log.** Every post has an on-chain fingerprint. In theory you can cross-reference the database against the chain and find discrepancies. Nobody's built that check yet. It's just waiting there.
+**The chain as the audit log** *(data substrate shipped — posts + payouts + migrations all have on-chain fingerprints; verifier future)*. Every post has an on-chain fingerprint. In theory you can cross-reference the database against the chain and find discrepancies. Nobody's built that check yet. It's just waiting there.
 
-None of this is roadmap. It's what the code is quietly becoming.
+The in-app versions are running. The future is the extracted, reusable form of each.
 
 ## Security Upgrades (Deferred)
 
 Features noted for when real money flows at scale:
 
 - **Session timeout** — auto-lock after 30 min tab hidden. *Stage 7 (2026-04-30) shipped tab-blur destroy on the manage gate (`manageAuthed` cleared on `visibilitychange === "hidden"`); the underlying decrypted-key cache (`_cachedWif` / `_sessionIdentity`) still stays unlocked until tab close.* Full app-wide auto-lock with a configurable timer (e.g. 30 min idle) remains deferred. Not needed at current stakes.
-- **Device sync via QR** — scan QR on Device B to import identity from Device A. Faster than file transfer.
+- **Device sync via QR** — full design lives in `LAUNCH_PLAN.md` Bucket 6 (post-launch). Encrypted envelope on a short-lived server record, decryption key in the QR, plaintext WIF never leaves the source device. Don't duplicate the spec here — single source of truth.
 - **Passkey wrapping (WebAuthn)** — biometric unlock instead of passphrase. Firefox fallback needed.
 - **PBKDF2 increase to 600k iterations** — currently 100k. Increase when real funds flow.
 

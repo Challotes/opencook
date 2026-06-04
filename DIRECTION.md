@@ -4,6 +4,9 @@
 
 ## The Vision
 
+**Tagline:** *A platform that builds itself, then lets anyone do the same.*
+**Subtitle:** *Agentic Fairness*
+
 Start with literally nothing — just a board for posting ideas. Every post is logged on-chain (BSV). A fairness agent tracks contributions. The platform evolves based on what users request. Eventually, any post can become its own project with the same model.
 
 **"The first proof that this works is the platform itself."**
@@ -53,7 +56,7 @@ This works across forks. BSVibes is open source. Anyone can fork it, improve it,
 
 **What exists today:** On-chain posts, contribution scoring, trustless split payments, identity with migration chains. The foundation.
 
-**What comes next:** Cross-project contribution tracking, code-commit linking to on-chain identity, a shared protocol for forks to recognise each other's contributors. Phase 7 (the recursive model) is the first step toward this.
+**What comes next:** Cross-project contribution tracking, code-commit linking to on-chain identity, a shared protocol for forks to recognise each other's contributors. Phase 7 of the build roadmap (see `ROADMAP.md` — "The Recursive Model") is the first step toward this. (Note: this Phase 7 is from the build roadmap, distinct from the fairness-system phases listed in the next section.)
 
 ## Where We Are Now
 
@@ -61,10 +64,10 @@ BSVibes is the first project built on this model — the proof that it works bef
 
 **The fairness system is live but in trial mode.** Right now it rewards posting and boot activity. This is the working proof of concept — real money flows, real payments split, real on-chain records. But it's Phase 1.
 
-**What's coming:**
-- Phase 1 (now): Fairness rewards posts and boots. Proves the mechanics work. Rules are being refined.
-- Phase 2: Fairness starts tracking real contributions — code that ships, ideas that get built, bugs that get fixed. The AI agent evaluates actual impact, not just activity.
-- Phase 3: The AI adjusts its own parameters within bounded ranges. Boot signals are one input into governance alongside project owners and human oversight. The balance between agentic and human control will evolve.
+**What's coming** (fairness-system phases — separate numbering from the build roadmap):
+- Fairness Phase 1 (now): Fairness rewards posts and boots. Proves the mechanics work. Rules are being refined.
+- Fairness Phase 2: Fairness starts tracking real contributions — code that ships, ideas that get built, bugs that get fixed. The AI agent evaluates actual impact, not just activity.
+- Fairness Phase 3: The AI adjusts its own parameters within bounded ranges. Boot signals are one input into governance alongside project owners and human oversight. The balance between agentic and human control will evolve.
 
 **Important for contributors:**
 - The existing fairness splits are a working prototype, not the final system
