@@ -36,8 +36,14 @@ User's share = their weight / total weight of all contributors
 | Engagement multiplier | 1.5x per boot | How much boots amplify a post's weight | 1-3x |
 | Scaling function | sqrt | Diminishing returns on quantity | sqrt or cbrt |
 | Minimum payout | 1 sat | Every non-zero share is paid in the same tx — no accumulation, no IOUs | N/A |
+| Boot price cache TTL | 1 hour | How often the dynamic-price recompute runs | tunable |
+| Weights cache TTL | 30 seconds | How often the contributor-weight recompute runs | tunable |
+| Active window | 30 days | "Active contributor" = distinct pubkey with a post in the last 30 days (used by dynamic pricing) | tunable |
+| Free boots per user | 15 | Each new account gets 15 floor-priced boots before self-funding kicks in | tunable |
 
 All parameters are exposed for the fairness agent to adjust in later phases. They are the governance surface — the agent tunes knobs, it doesn't rewrite the formula.
+
+**Implementation note:** the contributor pool 80% is currently DERIVED in `split.ts` as `bootFeeSats - platformSats - bonusSats` — the `poolShare: 0.8` field in `FAIRNESS_CONFIG` is documented for clarity but not actually read by code. Treat the table value as the documented intent; the source of truth is the platformCut + creatorBonus subtraction. Rounding dust from the pool floor() is added to the creator's bonus payout so every sat of the boot is accounted for in the same tx.
 
 ### Payout Split (on a 10,000 sat boot)
 
@@ -175,10 +181,10 @@ No `contributor_balances` table — true no-custody means no stored balances.
 
 ### BSV Transaction
 
-- Server-side for Phase 1 (server builds the multi-output split transaction)
-- Migrate to client-side when self-funded posting is live
-- Uses `@bsv/sdk` Transaction with N P2PKH outputs
-- OP_FALSE OP_RETURN for audit trail (BSV standard, provably unspendable)
+- **Free boots: server-side.** `boot-orchestrator.ts` + `wallet.ts` build the multi-output split tx using the server wallet's funds, then consume a `boot_grant` row.
+- **Paid boots: client-side, zero custody.** `client-boot.ts` (browser) fetches contributor shares from `/api/boot-shares`, builds the multi-output P2PKH tx, signs and broadcasts via ARC, then notifies `/api/boot-confirm` with the raw tx for server verification + recording. The server never holds the funds.
+- Uses `@bsv/sdk` Transaction with N P2PKH outputs.
+- OP_FALSE OP_RETURN for audit trail (BSV standard, provably unspendable).
 
 ### Migration Chain Resolution
 
@@ -223,8 +229,13 @@ Do you get it, anon?
 
 ## Open Questions
 
-- **Boot price**: Fixed (e.g., 10,000 sats) or dynamic (increases the longer someone holds the spot)?
-- **Multiple boots in quick succession**: Does each boot trigger a separate split transaction, or batch them?
-- **Unsigned posts**: Should posts without a valid signature earn contribution weight? Currently they would — but the contributor can't receive payment without an address.
-- **Genesis contributors**: Should the founding conversation participants get a permanent base weight, or do they enter the decay curve like everyone else?
-- **When to start**: Do we enable payments from day one, or run the weight calculation visibly (show users their share) before real money flows?
+### Settled in code (resolved 2026-06-03 audit)
+
+- **Boot price**: **Dynamic.** `pricing.ts` recomputes from `max(1000, min(250000, active_contributors × 156))` with a 1-hour cache. Floor 1,000 sats, ceiling 250,000 sats. Active = distinct pubkey with a post in the last 30 days.
+- **Multiple boots in quick succession**: **Separate tx per boot, no batching.** The trustless split model requires per-boot finality on-chain — batching would require the server (or another party) to hold sats between events, which contradicts the no-custody rule. The 3-second UI throttle (`BootContext`) prevents accidental rapid-fire double-clicks; deliberate concurrent boots from different users each get their own split tx.
+- **Unsigned posts**: **No weight, no boot eligibility.** `weights.ts:125` filters `WHERE p.pubkey IS NOT NULL`; `boot-orchestrator.ts:43-50` rejects boots on unsigned posts. An unsigned post is visible in the feed but contributes nothing to its author's weight and cannot be spotlighted via boot.
+- **When to start**: **Day one.** Phase 6 shipped with payments live — real BSV moving, fairness payments accruing on every boot.
+
+### Still open
+
+- **Genesis contributors**: Should the founding conversation participants get a permanent base weight, or do they enter the decay curve like everyone else? Currently they enter the decay curve.

@@ -48,19 +48,19 @@ This plan captures the strategic decisions reached during the 2026-05-09 brainst
 
 ## Where we are now (verified)
 
-**Verified by code reads on 2026-05-09:**
+**Originally verified 2026-05-09. Refreshed 2026-06-04 — Bucket 1 and Bucket 3a have shipped since:**
 
 | Surface | Current state |
 |---------|---------------|
 | `public/manifest.json` | Exists. `display: standalone`, theme `#f59e0b`, three icon sizes, `start_url: /`. Ready for install. |
 | `src/app/layout.tsx` | Full PWA metadata: `manifest`, `appleWebApp.capable`, `mobile-web-app-capable`, `theme-color`, `apple-touch-icon`. Ready. |
 | `AgentChat.tsx` | **Already has the bottom-sheet-on-mobile / centered-on-desktop pattern** (line 207–209). Pure Tailwind, no library. The pattern is `flex items-end sm:items-center` + `w-full sm:max-w-lg` + `rounded-t-2xl sm:rounded-2xl`. |
-| `SignInModal`, `IdentityBar` (You modal), `MoveAddressModal`, `RestoreModal`, `ChangePassphraseModal`, `FundAddress` | All centered-only on mobile. Use `max-w-sm` + `flex items-center`. Don't restructure for small screens. |
-| Service worker | **Does not exist.** Required before push notifications. |
-| `beforeinstallprompt` capture | **Not implemented anywhere.** Android one-tap install never fires. |
-| `display-mode: standalone` detection | **Not implemented anywhere.** Cannot suppress install pitch for already-installed users. |
-| In-app browser detection | **Not implemented anywhere.** X/Instagram/Discord webview users hit the live app and create sandboxed identities they will lose. |
-| QR sync | Not implemented. Manifest of recovery file (`backup-template.ts`) is the only cross-device bridge today. |
+| `SignInModal`, `IdentityBar` (You modal), `MoveAddressModal`, `RestoreModal`, `ChangePassphraseModal`, `FundAddress` | **SHIPPED (Bucket 1):** all converted to the bottom-sheet pattern. Also: all 7 centered modals use `svh` instead of `vh` for top-offset + max-height so Android Chrome's toolbar can't clip them (2026-06-03). |
+| Service worker | **Does not exist.** Required before push notifications. Bucket 3b. |
+| `beforeinstallprompt` capture | **SHIPPED (Bucket 3a):** captured in `InstallContext`, consumed by `promptInstall()`. Android Chrome single-tap install works via `<InstallPitch>`. |
+| `display-mode: standalone` detection | **SHIPPED (Bucket 3a):** `useStandaloneMode` hook. Install pitch hides automatically when already installed. |
+| In-app browser detection | **Not implemented anywhere.** X/Instagram/Discord webview users hit the live app and create sandboxed identities they will lose. Bucket 2. |
+| QR sync | Not implemented. Manifest of recovery file (`backup-template.ts`) is the only cross-device bridge today. Bucket 6 (post-launch). |
 
 **The pattern is in-house.** AgentChat proves the responsive bottom-sheet works in this codebase. We don't need vaul or any other library — adopting the same Tailwind classes across the other modals is the work.
 
@@ -346,17 +346,9 @@ Then sequential:
 
 These need decisions before the corresponding work can ship.
 
-### Q1. What's the trigger for "save your recovery file"?
+### Q1. ~~What's the trigger for "save your recovery file"?~~ — RESOLVED (Status #4, shipped)
 
-The current You modal has a "Save your recovery file" amber banner that pulses until saved + acknowledged. The install pitch is gated behind that banner being satisfied. But what *prompts* the user to open the You modal in the first place to encounter the banner?
-
-Options:
-- (a) Continue current behavior — banner only visible inside You modal, user discovers it on their own. Lowest friction but slowest to first save.
-- (b) After first earning > some threshold (~$0.05?), surface a one-time "your earnings are growing — save your recovery file to keep them safe" toast.
-- (c) After N posts/boots, same toast.
-- (d) Some combination.
-
-**Recommendation pending designer + marketer agent review.** The intuition: an earning event is a high-investment moment ("I just made money on this thing"), the right time to ask for a save action.
+Resolved via Option (b): **first-earning trigger.** `<FirstEarningToast>` fires from the 30-second `/api/earnings` poll when `total_sats > 0`, with a 48h backoff via `bsvibes_first_earning_save_dismissed_until` localStorage timestamp. The toast CTA flows into the save-recovery-file path. The amber "Unsaved key" dot in IdentityBar remains the persistent fallback between re-fires. See DECISIONS.md "First earning toast trigger wires to `/api/earnings` polling".
 
 ### Q2. Notification frequency / batching policy
 
@@ -364,11 +356,9 @@ If a user gets 50 boots in an hour (popular post), do they get 50 notifications 
 
 **Recommendation pending review.** Likely: dedupe within a 60-second window, send "X+ new boots" if multiple fire close together.
 
-### Q3. What "starting fresh" means in the welcome gate
+### Q3. ~~What "starting fresh" means in the welcome gate~~ — RESOLVED (Status #9, shipped)
 
-If a user picks "Start fresh" on the home-screen welcome gate, does the previous in-browser identity (the one they had before installing) stay accessible from the regular browser tab? Or do we wipe it?
-
-**Recommendation:** leave it. The home-screen install creates a separate sandbox anyway (on non-Safari iOS browsers). The user who picks "Start fresh" implicitly means "this new identity from now on." If they want to consolidate later, they have the recovery file.
+Resolved as recommended: **leave the previous in-browser identity intact.** `<HomeScreenWelcomeGate>` only generates a new keypair in the standalone tab; the regular browser tab keeps its own identity. Users who want to bring posts/earnings across use the "I have a recovery file" branch instead of "Start fresh".
 
 ### Q4. Push notification cost / scale
 
@@ -382,11 +372,9 @@ Edge case: user generates QR, then on source device rotates passphrase BEFORE de
 
 **Recommendation:** invalidate any in-flight sync envelopes on rotation. Source device hits `DELETE /api/sync/:id` when passphrase rotates. Destination sees "transfer expired" and starts over. Cheap, correct.
 
-### Q6. Should the in-app browser splash allow read-only access?
+### Q6. ~~Should the in-app browser splash allow read-only access?~~ — RESOLVED (Status #7, deferred-to-Bucket-2)
 
-Currently specced as hard block. Alternative: let them read the manifesto + see the feed, but block any action that requires identity.
-
-**Recommendation:** hard block. The "join the platform that builds itself" pitch is incompatible with passive viewing, and the read-only path adds confusion when they tap to post. But this is the kind of decision worth marketer agent input.
+Resolved as **hard block** per Status #7. When Bucket 2 ships, X/Instagram/Discord webviews will get a full-page "Open in Safari/Chrome" splash with no read-only fallback — passive viewing is incompatible with the "join the platform that builds itself" pitch, and read-only adds confusion when the user taps to post. Implementation pending Bucket 2.
 
 ---
 

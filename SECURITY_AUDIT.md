@@ -99,7 +99,7 @@
 - M2: Backup file contains plaintext WIF — PARTIAL (encrypted with passphrase for protected users; unprotected users still get plaintext WIF via doDownloadPlaintext path at IdentityBar.tsx:282-297). **Update (2026-04-30, Stage 7):** the combined recovery file produced by MoveAddressModal now also encrypts the *prior* key (`oldWif_encrypted`) under the new passphrase, so even during rotation no plaintext old WIF is written to disk for protected users. The remaining plaintext exposure is limited to the unprotected-user "Show recovery key" / "Save recovery file" paths.
 - M3: Migration signature has no timestamp validation
 - M4: Rate limiter is in-memory, resets on restart
-- M5: /api/earnings exposes full financial history unauthenticated
+- M5: /api/earnings exposes full financial history unauthenticated — **PARTIAL.** Silently rate-limited 20/min/IP (`earnings/route.ts:87`). Still unauthenticated — the financial data exposure is unchanged, but enumeration is now bounded by IP. Promote to authenticated read once user accounts exist.
 - M6: WIF reveal has no auto-hide timeout. **Partial mitigation (2026-05-01, Stage 8 C6):** the Show-recovery-key panel now requires an explicit `[Reveal key]` click to expose the WIF (no longer revealed by default), and shows a red warning above the masked key (*"Anyone with this key owns your account and any funds in it. Never share it."*). Replaces the previous always-visible-until-Hide pattern. Auto-hide timer still TODO.
 - M7: /api/boot-shares triggers full weight calc with no cache — FIXED (30s TTL cache added)
 - M8: Posts during upgrade window may be unsigned
@@ -148,3 +148,40 @@
 
 **Cross-reference:** DECISIONS.md "E30 stale-key session-lockout (Design: UI-layer only)" · CLAUDE.md Hard Rule #7 (`requireIdentity()` universal pattern)
 **Status:** DEFERRED — acceptable risk at current scale. Promote if griefing observed.
+
+## OBSERVATIONS — silent improvements + new findings (logged 2026-06-04 audit)
+
+These were surfaced by the full-repo MD vs code audit on 2026-06-03. None are regressions. The silent improvements (OBS-S1–S4) are hardening that landed without a dedicated SECURITY_AUDIT entry at the time — logging here so the record matches reality. OBS-N1–N2 are new LOW findings from the audit (Hard Rule #3 surfacing).
+
+### OBS-S1: `/api/posts` rate limit added — 120/min/IP
+Read-only feed polling was historically unrate-limited by design (every client hits it every 5s). The Phase 6.2 audit (2026-04-09) added a 120/min/IP limit as defense-in-depth. CLAUDE.md previously stated the route was "unrate-limited by design" — the rate limit is generous enough that the original intent (no real client should hit it) holds, but the floor is now bounded.
+**Status:** mitigation in place; doc reconciliation noted in 2026-06-04 audit follow-up.
+
+### OBS-S2: `/api/restore-eligibility` (E29) — public read-only endpoint disclosing migration graph
+**Severity:** LOW — discloses nothing not already on-chain.
+Endpoint returns `{allowed: boolean}` for a given pubkey, where `false` means the pubkey has a forward migration record. The information disclosed (which keys have been rotated) is already public on-chain in OP_RETURN migration records — `RestoreModal` and `MoveAddressModal` use this endpoint as a preflight to spare the user a failed sweep when their key is stale. Rate-limited 30/min/IP. The endpoint is intentionally public because the alternative (require signed challenge) trades a key-derivation step for zero privacy gain.
+**Status:** acceptable risk; tracked for visibility.
+
+### OBS-S3: `dedupeUtxos()` in sweep flow — funds-safety hardening
+`autoTransferFunds` and `sweepFunds` in `identity.ts` now route the raw `/api/unspent` response through `dedupeUtxos()` keyed on `(tx_hash, tx_pos)` before tx construction. Defeats the `bad-txns-inputs-duplicate` peer rejection that occurs when WhatsOnChain's indexer transiently returns the same outpoint twice (confirmed in Android device testing 2026-06-03 — two consecutive failures with identical txid `8fc71ef6…`, third attempt succeeded). Not a vulnerability fix — a structural safety net analogous to `client-boot.ts`'s existing `utxoKey` dedup. See DECISIONS.md "UTXO outpoint dedup on sweep paths".
+**Status:** shipped 2026-06-03 commit `7891355`.
+
+### OBS-S4: E30 stale-key detection in `/api/posts`
+Already documented in L7; noted here for cross-reference. Polling sends `x-bsvibes-pubkey` header; server returns `key_status: { stale: true }` gated by `E30_STALE_KEY_ENABLED` env flag (strict `=== "true"` check, fail-open if absent). Closes the "device unaware its key was revoked elsewhere" risk class at the UI layer.
+**Status:** shipped 2026-05-29.
+
+### OBS-N1: `/api/agent` rate-limit header parsing inconsistency
+**Severity:** LOW — minor rate-limit bypass vector.
+**File:** `src/app/api/agent/route.ts:28`.
+Other API routes extract the client IP from `x-forwarded-for` via `header.split(",")[0].trim()` (take the first hop, which is the client IP set by our trusted proxy). The agent route uses the raw header value, which includes all proxy hops. An attacker can prepend a fake IP (`X-Forwarded-For: 1.2.3.4, real.ip.here`) so the rate-limit key becomes the full string — effectively a different bucket per fake-IP prefix.
+**Impact:** allows extending rate-limit budget on `/api/agent` (Claude chat — Anthropic API costs). Bounded by Anthropic's own rate limits on our key; impact is cost rather than abuse.
+**Fix:** one-line change — match the pattern used by other routes.
+**Status:** TRACKED — fix queued as Tier 4 follow-up.
+
+### OBS-N2: `BootContext.claimBoot` non-atomic lock
+**Severity:** LOW — bounded by multiple downstream locks.
+**File:** `src/contexts/BootContext.tsx:50-57`.
+The "global single-flight" boot lock is enforced via `setBootingPostId` (React state, asynchronous). Two near-simultaneous calls to `claimBoot` can both observe `bootingPostId === null` and proceed, both returning `true`.
+**Impact:** bounded by (a) pubkey-keyed server rate limit on `bootPost`, (b) deeper synchronous mutex in `client-boot.ts`, (c) on-chain double-spend rejection. Worst-case practical impact is one redundant server roundtrip per concurrent click → server returns TX_CONFLICT.
+**Fix:** use a `useRef` boolean (synchronous read) inside the provider instead of relying on state.
+**Status:** TRACKED — fix queued as Tier 4 follow-up.
