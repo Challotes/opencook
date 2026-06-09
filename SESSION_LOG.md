@@ -2,6 +2,42 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-10 — MD audit Tier 4 complete (OBS-N1 + OBS-N2 closed)
+
+Category: security hardening — the two LOW-severity findings surfaced by the 2026-06-03 MD audit. Both touched critical paths (rate limiting, boot single-flight) so each got an auditor pre-check on the proposed fix shape + post-check on the diff before commit.
+
+**Commit `002788c` — OBS-N1: `/api/agent` x-forwarded-for parsing.**
+Rate-limit IP extraction was using the raw `x-forwarded-for` header value. Other routes use `.split(",")[0]?.trim()` to take just the real client IP (first proxy hop). The agent route's raw-string key meant an attacker could prepend arbitrary IPs to get a fresh rate-limit bucket per crafted header — effectively bypassing the 30/min limit on the Anthropic-API-calling route. Bounded by Anthropic's own key rate limits, so worst case = "burn our budget faster" not "DOS forever."
+
+Auditor pre-check upgraded the proposed one-line fix to also include the `x-real-ip` fallback used by 3 other external-API-proxying routes (`balance`, `tx-hex`, `unspent`) — without it, Vercel deploys would collapse to one shared "unknown" bucket since Vercel sets `x-real-ip` not `x-forwarded-for`. Final pattern matches those 3 routes verbatim.
+
+**Commit `074937f` — OBS-N2: `BootContext.claimBoot` non-atomic lock.**
+The "global single-flight" boot lock was using React state (asynchronous). Two near-simultaneous calls could both observe `bootingPostId === null` and proceed, both returning `true`. The caller in `useBoot.ts` made it worse with a separate `if (bootingPostId !== null) return` check before `claimBoot` — textbook TOCTOU against stale React state. Worst case bounded by 3 downstream locks (server rate limit, `client-boot.ts` mutex, on-chain double-spend rejection) → one redundant server roundtrip per concurrent click. No funds at risk; no state corruption.
+
+Fix: new `bootingPostIdRef` (synchronous useRef) as authoritative lock. `claimBoot` does atomic check-and-claim and returns the actual result. `releaseBoot` / `failBoot` clear both ref and state. Caller switched from check-then-claim to atomic `if (!claimBoot(postId)) return`. `bootingPostId` dropped from `boot()`'s useCallback deps (no longer read inside). Auditor pre-check folded in two corrections (drop the stale "client-boot.ts mutex covers this" comment — wrong; drop deps entry — perf win).
+
+### MD audit project — fully closed
+
+| Tier | Commit | Closure date |
+|---|---|---|
+| 1 — Must-fix contradictions | `ddd3f97` | 2026-06-03 |
+| 2 — Drift cleanup | `4c3ead8` | 2026-06-04 |
+| 3 — Polish | `d6236f6` | 2026-06-05 |
+| 4a — OBS-N1 | `002788c` | 2026-06-05 |
+| 4b — OBS-N2 | `074937f` | 2026-06-05 |
+
+Every observation logged in SECURITY_AUDIT.md now reflects code reality. The 5-day MD-vs-code audit project is done. Memory file `project_md_audit_2026_06_03.md` updated to mark all tiers complete.
+
+### Next session — open items
+
+Nothing from the audit is pending. Outstanding launch-prep work remains:
+- LAUNCH_PLAN Bucket 2 — In-app browser splash (not started)
+- LAUNCH_PLAN Bucket 3b — Notifications (blocked on Bucket 4)
+- LAUNCH_PLAN Bucket 4 — Server-side resilience (`/api/broadcast` proxy)
+- LAUNCH_PLAN Bucket 5 — Deploy (need to set `E30_STALE_KEY_ENABLED=true` on Railway/Vercel)
+
+No technical-debt cliff. Pick up wherever feels right.
+
 ## 2026-06-04 / 2026-06-05 — MD audit follow-ups: Tier 2 (drift) + Tier 3 (polish) shipped
 
 Category: documentation accuracy. Continuation of the 2026-06-03 MD audit. Tier 2 + Tier 3 both shipped; Tier 4 (two LOW-severity code fixes) remains for next session.
