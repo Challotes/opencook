@@ -37,6 +37,12 @@ export function BootProvider({ children }: { children: React.ReactNode }) {
   const [consolidationWarningDismissed, setConsolidationWarningDismissed] = useState(false);
   const failTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Authoritative lock — synchronous read/write so concurrent claimBoot() calls
+  // can't both observe null and proceed (a real risk with React's batched
+  // setState updates). The `bootingPostId` state mirrors this ref for render
+  // purposes (disabled buttons etc.) but is NOT the source of truth for the
+  // lock. See SECURITY_AUDIT.md OBS-N2.
+  const bootingPostIdRef = useRef<number | null>(null);
 
   const startThrottle = useCallback(() => {
     setThrottled(true);
@@ -48,12 +54,11 @@ export function BootProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const claimBoot = useCallback((postId: number): boolean => {
-    // Reject if another boot is already running
-    setBootingPostId((prev) => {
-      if (prev !== null) return prev; // no change — already claimed
-      return postId;
-    });
-    return true; // caller checks bootingPostId before calling
+    // Atomic check-and-claim. Returns false if another boot is in flight.
+    if (bootingPostIdRef.current !== null) return false;
+    bootingPostIdRef.current = postId;
+    setBootingPostId(postId);
+    return true;
   }, []);
 
   const setStatus = useCallback((status: BootStatus) => {
@@ -65,6 +70,7 @@ export function BootProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(failTimerRef.current);
       failTimerRef.current = null;
     }
+    bootingPostIdRef.current = null;
     setBootingPostId(null);
     setBootStatus("idle");
     setBootError(null);
@@ -75,6 +81,7 @@ export function BootProvider({ children }: { children: React.ReactNode }) {
     (message: string) => {
       setBootStatus("failed");
       setBootError(message);
+      bootingPostIdRef.current = null;
       setBootingPostId(null);
       if (failTimerRef.current) clearTimeout(failTimerRef.current);
       failTimerRef.current = setTimeout(() => {

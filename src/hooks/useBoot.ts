@@ -44,15 +44,11 @@ export function useBoot(opts: UseBootOptions = {}) {
       postId: number,
       identity: { wif: string; address: string; name: string }
     ): Promise<BootResult> => {
-      // Guard: only one boot globally at a time
-      if (bootingPostId !== null) return { success: false };
-
-      // Claim the global boot lock for this post
+      // claimBoot is atomic — returns false if another boot is in flight.
+      // The previous check-then-claim pattern was a TOCTOU race; the lock now
+      // lives in a synchronous ref inside BootContext. See SECURITY_AUDIT.md OBS-N2.
+      if (!claimBoot(postId)) return { success: false };
       setStatus("pending");
-      // We set bootingPostId via claimBoot — but since React state is async,
-      // we call setStatus first then immediately proceed (the claim is effectively
-      // sequential because the mutex in client-boot.ts also guards concurrent builds).
-      claimBoot(postId);
 
       // 2s timer: upgrade "pending" → "sending" if still pending
       const extendedTimer = setTimeout(() => {
@@ -204,7 +200,6 @@ export function useBoot(opts: UseBootOptions = {}) {
       }
     },
     [
-      bootingPostId,
       claimBoot,
       setStatus,
       releaseBoot,

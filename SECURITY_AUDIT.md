@@ -179,10 +179,18 @@ Other API routes extract the client IP from `x-forwarded-for` via `header.split(
 **Follow-up (non-blocking):** the IP-extraction pattern is now repeated across 9 routes. Extracting a `parseClientIp(headers)` helper to `src/lib/rate-limit.ts` with a 4-case test would deduplicate and prevent future drift. Also `posts/route.ts:51` uses `.split(",")[0].trim()` without the optional chain — functionally equivalent, cosmetically inconsistent.
 **Status:** FIXED.
 
-### OBS-N2: `BootContext.claimBoot` non-atomic lock
+### OBS-N2: `BootContext.claimBoot` non-atomic lock — FIXED 2026-06-05
 **Severity:** LOW — bounded by multiple downstream locks.
-**File:** `src/contexts/BootContext.tsx:50-57`.
-The "global single-flight" boot lock is enforced via `setBootingPostId` (React state, asynchronous). Two near-simultaneous calls to `claimBoot` can both observe `bootingPostId === null` and proceed, both returning `true`.
-**Impact:** bounded by (a) pubkey-keyed server rate limit on `bootPost`, (b) deeper synchronous mutex in `client-boot.ts`, (c) on-chain double-spend rejection. Worst-case practical impact is one redundant server roundtrip per concurrent click → server returns TX_CONFLICT.
-**Fix:** use a `useRef` boolean (synchronous read) inside the provider instead of relying on state.
-**Status:** TRACKED — fix queued as Tier 4 follow-up.
+**File:** `src/contexts/BootContext.tsx:50-57`, `src/hooks/useBoot.ts:48-55`.
+The "global single-flight" boot lock was enforced via `setBootingPostId` (React state, asynchronous). Two near-simultaneous calls to `claimBoot` could both observe `bootingPostId === null` and proceed, both returning `true`. The caller in `useBoot.ts` made it worse by doing a separate `if (bootingPostId !== null) return` check before calling `claimBoot` — a textbook TOCTOU race against stale React state.
+**Impact (pre-fix):** bounded by (a) pubkey-keyed server rate limit on `bootPost`, (b) deeper synchronous mutex in `client-boot.ts`, (c) on-chain double-spend rejection. Worst-case practical impact was one redundant server roundtrip per concurrent click → server returns TX_CONFLICT. No user-visible state corruption; no funds at risk.
+**Fix shipped 2026-06-05:**
+- Added `bootingPostIdRef` (`useRef<number | null>`) as the authoritative lock. Synchronous read/write — no batching window.
+- `claimBoot` now does atomic check-and-claim against the ref and returns the actual claim result (was previously always returning `true`).
+- `releaseBoot` and `failBoot` clear the ref alongside the existing state clear.
+- The React state `bootingPostId` continues to mirror the ref for render purposes (disabled buttons, `isBooting` flag) — consumers (`Bootboard.tsx`, `PostList.tsx`) unchanged.
+- Caller in `useBoot.ts` switched from `if (bootingPostId !== null) return; claimBoot(postId);` to `if (!claimBoot(postId)) return; setStatus("pending");` — single atomic gate. The stale "client-boot.ts mutex covers this" comment was removed (it was always wrong — that mutex runs after the server roundtrip).
+- `bootingPostId` removed from `boot()`'s useCallback deps (no longer read inside) — small perf win since `boot()` no longer rebuilds on every lock flip.
+
+Auditor verified diff: no fourth writer to ref or state; consumers correctly continue reading React state (intentional one-tick lag is harmless — any race-window click re-enters `claimBoot` which the ref blocks).
+**Status:** FIXED.
