@@ -25,7 +25,17 @@ export async function POST(req: Request) {
     return new Response("Agent is busy — try again in a moment.", { status: 429 });
   }
 
-  const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+  // Match the canonical pattern used by other external-API-proxying routes
+  // (balance, tx-hex, unspent). Without `.split(",")[0]?.trim()` the raw
+  // header (which contains all proxy hops) is used as the rate-limit key —
+  // an attacker can prepend arbitrary IPs to extend their budget. The
+  // `x-real-ip` fallback covers Vercel deploys where `x-forwarded-for` may
+  // be absent; without it, every Vercel request collapses to one shared
+  // "unknown" bucket. See SECURITY_AUDIT.md OBS-N1.
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    req.headers.get("x-real-ip") ??
+    "unknown";
   const rl = rateLimit(`agent:${ip}`, { limit: 30, windowMs: 60_000 });
   if (!rl.success) {
     return new Response("Slow down — too many questions.", { status: 429 });

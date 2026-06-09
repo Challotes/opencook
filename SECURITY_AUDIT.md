@@ -170,13 +170,14 @@ Endpoint returns `{allowed: boolean}` for a given pubkey, where `false` means th
 Already documented in L7; noted here for cross-reference. Polling sends `x-bsvibes-pubkey` header; server returns `key_status: { stale: true }` gated by `E30_STALE_KEY_ENABLED` env flag (strict `=== "true"` check, fail-open if absent). Closes the "device unaware its key was revoked elsewhere" risk class at the UI layer.
 **Status:** shipped 2026-05-29.
 
-### OBS-N1: `/api/agent` rate-limit header parsing inconsistency
+### OBS-N1: `/api/agent` rate-limit header parsing inconsistency — FIXED 2026-06-05
 **Severity:** LOW — minor rate-limit bypass vector.
 **File:** `src/app/api/agent/route.ts:28`.
-Other API routes extract the client IP from `x-forwarded-for` via `header.split(",")[0].trim()` (take the first hop, which is the client IP set by our trusted proxy). The agent route uses the raw header value, which includes all proxy hops. An attacker can prepend a fake IP (`X-Forwarded-For: 1.2.3.4, real.ip.here`) so the rate-limit key becomes the full string — effectively a different bucket per fake-IP prefix.
+Other API routes extract the client IP from `x-forwarded-for` via `header.split(",")[0].trim()` (take the first hop, which is the client IP set by our trusted proxy). The agent route used the raw header value, which includes all proxy hops. An attacker can prepend a fake IP (`X-Forwarded-For: 1.2.3.4, real.ip.here`) so the rate-limit key becomes the full string — effectively a different bucket per fake-IP prefix.
 **Impact:** allows extending rate-limit budget on `/api/agent` (Claude chat — Anthropic API costs). Bounded by Anthropic's own rate limits on our key; impact is cost rather than abuse.
-**Fix:** one-line change — match the pattern used by other routes.
-**Status:** TRACKED — fix queued as Tier 4 follow-up.
+**Fix shipped 2026-06-05:** switched to the canonical pattern used by 3 other external-API-proxying routes (`balance`, `tx-hex`, `unspent`) — `header.get("x-forwarded-for")?.split(",")[0]?.trim() ?? header.get("x-real-ip") ?? "unknown"`. The `x-real-ip` fallback covers Vercel deploys where `x-forwarded-for` may be absent. Auditor pre-check upgraded the proposed one-line fix to include the Vercel fallback (without it, every Vercel request would collapse to one shared "unknown" bucket — same DOS class the original fix was supposed to close).
+**Follow-up (non-blocking):** the IP-extraction pattern is now repeated across 9 routes. Extracting a `parseClientIp(headers)` helper to `src/lib/rate-limit.ts` with a 4-case test would deduplicate and prevent future drift. Also `posts/route.ts:51` uses `.split(",")[0].trim()` without the optional chain — functionally equivalent, cosmetically inconsistent.
+**Status:** FIXED.
 
 ### OBS-N2: `BootContext.claimBoot` non-atomic lock
 **Severity:** LOW — bounded by multiple downstream locks.
