@@ -2,6 +2,18 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-12 — Contributor report assessment + two server-wallet resilience notes
+
+Category: assessment + documentation (no code touched). A contributor sent a "Repository Report: State & Needs" (dated 2026-06-08) — an outside read of the project. Ran three parallel agents to fact-check it against the real code and settled decisions rather than take it at face value.
+
+**Verdict on the report:** mostly a faithful mirror of the repo's own MDs, written against a ~April snapshot. Accurate on all dependency versions, CSP/HSTS/Biome/React-Compiler, and the live-feature inventory. Real errors: fabricated `src/services/db/` path (DB is `src/lib/db.ts`); stale "27 tests" (actual 83 across 9 files); "32 sessions" mischaracterizes the E1–E32 *enhancements*; omits the key-rotation/migration subsystem; overstates the migration-orphan risk (E29/E31 already gate it); understates rate-limit severity (pubkey-keyed limits are Sybil-trivial). All 11 recommendations are already on the roadmap — none new, none contradicting a settled decision. Useful as independent confirmation that Phase 6.5 is the right backlog, not as new direction.
+
+**Two genuinely-new findings our agents surfaced that the report missed** (both confirmed against `wallet.ts` by a second agent pass):
+- **Multi-instance double-spend (pre-scale-out gate).** Wallet mutex + UTXO reservation + double-spend blacklist are in-process memory. Safe on one instance; 2+ instances against one `BSV_SERVER_WIF` would spend the same UTXOs. Dormant until horizontal scale-out — not a launch blocker.
+- **Broadcast-proxy timeout scope.** The planned `/api/broadcast` 10s timeout only wraps broadcast; three other un-timed in-mutex network calls (`wallet.ts:89,167,323`) can each freeze all posts/boots. Folds into the existing proxy work.
+
+**Documented (4 edits, additions to existing entries — not new sections):** ROADMAP Phase 6.5 SSE-Ops bullet + `/api/broadcast` build-spec; DECISIONS server-wallet-resilience entry + SSE horizontal-scale corollary. Kept the doc notes in-house (these were our agents' findings, not the contributor's) and discussed handing the contributor the actual *code* fix as a real, attributable PR instead.
+
 ## 2026-06-10 — MD audit Tier 4 complete (OBS-N1 + OBS-N2 closed)
 
 Category: security hardening — the two LOW-severity findings surfaced by the 2026-06-03 MD audit. Both touched critical paths (rate limiting, boot single-flight) so each got an auditor pre-check on the proposed fix shape + post-check on the diff before commit.
