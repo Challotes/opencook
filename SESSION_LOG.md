@@ -2,6 +2,18 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-13 (cont. 2) — Phase 1 audit + first code (R1 restore key-loss hotfix)
+
+Category: audit + one safety fix. Opened Phase 1 (remove rotation + encrypt-in-place) with a 4-agent parallel audit: removal-completeness (exhaustive file:line deletion contract), key-safety (encrypt-in-place design + adversarial risk list), money-integrity (simplified keying + the in-scope fixes), and sequencing (on-chain v:1 spec + 8-commit safe surgery order).
+
+**Caught a real latent bug (audit finding R1):** `importEncryptedIdentity` (restore path) removed the plaintext key BEFORE writing the encrypted store — an interruption between the two writes left NEITHER key = permanent loss of the just-restored identity. Fixed (commit `6d85d9d`): flipped to write-encrypted-then-remove-plaintext (strict improvement — worst case becomes "retry," not "loss"). Biome clean.
+
+**Owner confirmations (recorded in DECISIONS.md):** money surfaces key on BSV address (pubkey kept only for sig verification); free-boot path consumes grant before paying (nuances C5, protects server wallet); dev local.db wiped at the migrations-table step.
+
+**Agreed 8-commit surgery sequence (in task #2):** 1 on-chain v:1 (irreversible-first) → 2 encrypt-in-place (before deleting rotation; safe write order: encrypt→verify-decrypt→setItem(enc)→removeItem(plain), inside blockSessionClear; close the 3 plaintext-export paths) → 3 consistent address keying + BUG-6 → 4 delete rotation/migration → 5 delete chain resolvers + drop migrations table + wipe dev DB → 6 per-IP free-boot cap → 7 boot-confirm auth + record-from-on-chain-outputs → 8 free-boot idempotency. Each commit: build + test + manual checkpoint; auditor verifies each diff.
+
+**Other audit findings (all scheduled, none dismissed):** 3 live plaintext-export paths (step 2), BUG-6 paid-boot misattribution (steps 3+7), server-wallet drain via fresh-identity free boots (step 6). Next: start at step 1 (v:1 format).
+
 ## 2026-06-13 (cont.) — Key rotation REMOVED, encrypt-in-place adopted (DECISION — no code touched)
 
 Category: architecture decision. A contributor questioned whether key rotation is even necessary. Ran three independent agent reviews (irreversibility/extensibility, threat-model, removal-feasibility) — all unbiased, explicitly told not to assume the current design is right.
