@@ -1010,3 +1010,158 @@ export async function importEncryptedIdentity(
 
   return { name: identityName, address, wif: trimmed, pubkey };
 }
+
+/**
+ * Encrypt the user's EXISTING plaintext key in place under a passphrase.
+ *
+ * Encrypt-in-place: same key, same address, no new key, no migration, no sweep.
+ * This is the "add a passphrase" path for an UNPROTECTED user. (DECISIONS.md
+ * "Key rotation REMOVED in favor of encrypt-in-place".)
+ *
+ * Post-conditions (mirror importEncryptedIdentity for cache coherence):
+ * - ENCRYPTED_KEY populated with { encrypted, name, address, hint? }
+ * - STORAGE_KEY removed (so isEffectivelyProtected() returns true)
+ * - session caches primed to the SAME key so signPost fires without re-unlock
+ *
+ * SAFE ORDER: encrypt → verify-decrypt → write encrypted → remove plaintext.
+ * We verify-decrypt the ciphertext before persisting so we never write an
+ * unreadable encrypted store, and we write the encrypted key FIRST / remove the
+ * plaintext SECOND so an interruption can never leave NEITHER key present
+ * (key-safety audit finding R1).
+ */
+export async function encryptInPlace(passphrase: string, hint?: string): Promise<Identity> {
+  if (typeof window === "undefined") {
+    throw new Error("encryptInPlace can only run in the browser");
+  }
+  if (!passphrase) throw new Error("Passphrase is required");
+  if (isIdentityEncrypted()) {
+    // Already has an encrypted store — adding a passphrase is the wrong tool.
+    // Changing it is changePassphrase()'s job.
+    throw new Error("Identity is already protected — use changePassphrase");
+  }
+
+  // Resolve the current plaintext identity WITHOUT generating a fresh key.
+  const identity = await getIdentity({ allowAutoGen: false });
+  if (!identity) throw new Error("No key to protect");
+
+  const { name, address, wif, pubkey } = identity;
+
+  const { PrivateKey } = await getBsvSdk();
+
+  // Encrypt the EXISTING wif (same key, same address).
+  const encrypted = await encryptWif(wif, passphrase);
+
+  // Self-check: decrypt the ciphertext we just produced and assert it round-trips
+  // to the original WIF. Guarantees we never persist an unreadable encrypted
+  // store. If this fails we have NOT touched localStorage — plaintext is intact.
+  const roundTrip = await decryptWif(encrypted, passphrase);
+  if (roundTrip !== wif) {
+    throw new Error("Encryption self-check failed, key not changed");
+  }
+
+  const trimmedHint = (hint ?? "").trim();
+  const storePayload = {
+    encrypted,
+    name,
+    address,
+    ...(trimmedHint ? { hint: trimmedHint } : {}),
+  };
+
+  // Write the encrypted store FIRST, then remove the plaintext. Never the reverse:
+  // the reverse order risks an interruption (tab close, iOS backgrounding, a
+  // throwing setItem) leaving NEITHER key in localStorage. (Key-safety audit R1.)
+  localStorage.setItem(ENCRYPTED_KEY, JSON.stringify(storePayload));
+  localStorage.removeItem(STORAGE_KEY);
+
+  // Prime session caches to the SAME key so any follow-up signing works without
+  // forcing the user to re-unlock the passphrase they just set.
+  _sessionIdentity = { name, address, wif, pubkey };
+  _cachedWif = wif;
+  _cachedPrivateKey = PrivateKey.fromWif(wif);
+
+  return { name, address, wif, pubkey };
+}
+
+/**
+ * Change the passphrase guarding an already-PROTECTED identity.
+ *
+ * Decrypts the existing encrypted store with the old passphrase and re-encrypts
+ * the SAME key under the new passphrase. Same key, same address — only the
+ * passphrase (and the salt/iv baked into the ciphertext) change.
+ *
+ * Returns { ok: false, reason: "wrong_passphrase" } having touched NO storage if
+ * the old passphrase doesn't decrypt the store. The wrong-passphrase guard lives
+ * INSIDE this function by design: a caller must never overwrite the encrypted
+ * store with a key it didn't successfully decrypt.
+ */
+export async function changePassphrase(
+  oldPassphrase: string,
+  newPassphrase: string,
+  hint?: string
+): Promise<{ ok: true } | { ok: false; reason: "wrong_passphrase" }> {
+  if (typeof window === "undefined") {
+    throw new Error("changePassphrase can only run in the browser");
+  }
+
+  const raw = localStorage.getItem(ENCRYPTED_KEY);
+  if (!raw) throw new Error("No protected identity to change");
+
+  let encData: { encrypted: string; name: string; address: string };
+  try {
+    encData = JSON.parse(raw);
+  } catch {
+    throw new Error("Protected identity store is corrupted");
+  }
+
+  // Verify the OLD passphrase before touching anything. decryptWif returns null
+  // on a wrong passphrase (AES-GCM auth-tag failure) — it does not throw.
+  const wif = await decryptWif(encData.encrypted, oldPassphrase);
+  if (!wif) return { ok: false, reason: "wrong_passphrase" };
+
+  // Validate the new passphrase BEFORE any write.
+  if (!newPassphrase || newPassphrase.length < 8) {
+    throw new Error("New passphrase must be at least 8 characters");
+  }
+  if (newPassphrase === oldPassphrase) {
+    throw new Error("New passphrase must be different from the old one");
+  }
+
+  const { PrivateKey } = await getBsvSdk();
+
+  // Re-encrypt the SAME decrypted wif under the new passphrase.
+  const encrypted = await encryptWif(wif, newPassphrase);
+
+  // Self-check the NEW ciphertext round-trips BEFORE overwriting the old (still
+  // working) store. Without this, an unreadable new ciphertext would overwrite a
+  // good one and lock the user out of their own key on next load. Symmetric with
+  // encryptInPlace; the old store is left intact if this throws.
+  const roundTrip = await decryptWif(encrypted, newPassphrase);
+  if (roundTrip !== wif) {
+    throw new Error("Encryption self-check failed, passphrase not changed");
+  }
+
+  const trimmedHint = (hint ?? "").trim();
+  const storePayload = {
+    encrypted,
+    name: encData.name,
+    address: encData.address,
+    ...(trimmedHint ? { hint: trimmedHint } : {}),
+  };
+
+  // Single overwrite of the encrypted store — no remove, no neither-state.
+  localStorage.setItem(ENCRYPTED_KEY, JSON.stringify(storePayload));
+
+  // Prime caches to the same key (re-encrypting changed the ciphertext, not the
+  // key, so the in-memory WIF is still valid).
+  const key = PrivateKey.fromWif(wif);
+  _sessionIdentity = {
+    name: encData.name,
+    address: encData.address,
+    wif,
+    pubkey: key.toPublicKey().toString(),
+  };
+  _cachedWif = wif;
+  _cachedPrivateKey = key;
+
+  return { ok: true };
+}
