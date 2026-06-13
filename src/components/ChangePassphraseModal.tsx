@@ -1,23 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { migrateIdentity, verifyMigrationChain } from "@/app/actions";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { useInstallContext } from "@/contexts/InstallContext";
-import { type BackupData, downloadBackup, getStoredHint } from "@/services/bsv/backup-template";
-import { encryptWif } from "@/services/bsv/crypto";
 import {
-  commitUpgrade,
-  derivePubkeyFromWif,
-  unlockIdentity,
-  upgradeIdentity,
-} from "@/services/bsv/identity";
+  type BackupData,
+  downloadBackup,
+  getStoredHint,
+  shareOrDownloadBackup,
+} from "@/services/bsv/backup-template";
+import { changePassphrase, unlockIdentity } from "@/services/bsv/identity";
 import type { Identity } from "@/types";
 
 interface ChangePassphraseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (newIdentity: Identity, transferMsg: string | null) => void;
+  /** Fires when the passphrase change itself succeeds (storage updated). Address unchanged. */
+  onSuccess: () => void;
+  /**
+   * Fires ONLY after the user explicitly saves the recovery file — never on
+   * success alone. Parent uses it to flip markBackedUp() (DECISIONS.md
+   * "Per-address saved flag" + "No auto-download on rotation; explicit Save").
+   */
+  onSaved: () => void;
   currentIdentity: Identity;
   /**
    * Passphrase that was already verified at the parent gate (manage modal entry).
@@ -30,26 +35,28 @@ export function ChangePassphraseModal({
   isOpen,
   onClose,
   onSuccess,
+  onSaved,
   currentIdentity,
   preVerifiedPassphrase,
 }: ChangePassphraseModalProps): React.JSX.Element | null {
   const [step, setStep] = useState<"verify" | "newpass" | "done">(
     preVerifiedPassphrase ? "newpass" : "verify"
   );
-  // Store BackupData from successful change so "Download again" can re-fire it
-  const [doneBackup, setDoneBackup] = useState<Parameters<typeof downloadBackup>[0] | null>(null);
+  // Store BackupData from a successful change so "Download" can re-fire it.
+  const [doneBackup, setDoneBackup] = useState<BackupData | null>(null);
   const [currentPass, setCurrentPass] = useState(preVerifiedPassphrase ?? "");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [hint, setHint] = useState("");
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
-  const [chainWarning, setChainWarning] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  // Suppress pagehide-driven session wipe from the moment rotation starts until
-  // the user dismisses "done". iOS Save-Password sheet on PWA fires pagehide;
-  // without this the encrypted store unlocks but the in-memory session is
-  // torched and the modal renders into a re-locked state.
+  // Suppress pagehide-driven session wipe from the moment the change starts
+  // until the user dismisses "done". iOS Save-Password sheet on PWA fires
+  // pagehide; without this the encrypted store updates but the in-memory
+  // session is torched and the modal renders into a re-locked state.
   const { blockSessionClear, unblockSessionClear } = useIdentityContext();
   const blockedRef = useRef(false);
   const block = () => {
@@ -64,8 +71,8 @@ export function ChangePassphraseModal({
       unblockSessionClear();
     }
   };
-  // Safety net: if the modal unmounts mid-flow without handleClose firing
-  // (e.g., parent re-renders the tree), make sure we release our block.
+  // Safety net: if the modal unmounts mid-flow without handleClose firing,
+  // make sure we release our block.
   useEffect(() => {
     return () => {
       if (blockedRef.current) {
@@ -77,9 +84,7 @@ export function ChangePassphraseModal({
 
   // E32: block the install pitch while this modal is mounted (prevents the
   // pitch from sliding up over the done state when the user saves their new
-  // recovery file). Released on unmount → install pitch fires at a clean
-  // moment. Also call refreshProtected after commitUpgrade so the gate's
-  // protected condition flips for users who passphrase-changed.
+  // recovery file). Released on unmount → install pitch fires at a clean moment.
   const { blockInstallPitch, unblockInstallPitch, refreshProtected } = useInstallContext();
   useEffect(() => {
     blockInstallPitch();
@@ -94,8 +99,9 @@ export function ChangePassphraseModal({
     setConfirmPass("");
     setHint("");
     setError("");
-    setChainWarning(false);
     setDoneBackup(null);
+    setSharing(false);
+    setSaved(false);
     onClose();
   }
 
@@ -118,6 +124,7 @@ export function ChangePassphraseModal({
   }
 
   async function handleChange() {
+    const resolvedOldPass = preVerifiedPassphrase ?? currentPass;
     if (newPass.length < 8) {
       setError("Passphrase must be at least 8 characters");
       return;
@@ -126,150 +133,101 @@ export function ChangePassphraseModal({
       setError("Passphrases don't match");
       return;
     }
-    if (newPass === currentPass) {
+    if (newPass === resolvedOldPass) {
       setError("New passphrase must be different");
       return;
     }
-
-    // Pre-rotation chain verification
-    if (!chainWarning) {
-      try {
-        const { PrivateKey } = await import("@bsv/sdk");
-        const currentPubkey = PrivateKey.fromWif(currentIdentity.wif).toPublicKey().toString();
-        const chain = await verifyMigrationChain(currentPubkey);
-        if (!chain.healthy) {
-          setError(
-            `Warning: ${chain.orphanedCount} of your previous identities may lose their connection to your posts. Tap "Change passphrase" again to proceed anyway.`
-          );
-          setChainWarning(true);
-          return;
-        }
-      } catch {
-        // Non-blocking
-      }
+    if (!hint.trim()) {
+      setError("Add a memory clue — it's your only reminder if you forget.");
+      return;
     }
 
     setWorking(true);
     setError("");
-    // Hold the session lock from this point through the "done" step — iOS may
-    // fire pagehide on its Save-Password sheet. Released in handleClose.
+    // Hold the session lock from here through the "done"/save step — iOS may
+    // fire pagehide on its Save-Password sheet. Released in handleClose / on error.
     block();
     try {
-      // E31 client-side preflight: reject rotation if the current key has a
-      // forward migration on-chain. Without this check, `upgradeIdentity`
-      // would run the sweep BEFORE the server-side `migrateIdentity` reject
-      // — leaving funds at a new address the server can't recognise.
-      // Fail-CLOSED on network errors so we don't proceed without verification.
-      try {
-        const currentPubkey = await derivePubkeyFromWif(currentIdentity.wif);
-        const res = await fetch(
-          `/api/restore-eligibility?pubkey=${encodeURIComponent(currentPubkey)}`
-        );
-        if (!res.ok) throw new Error(`status ${res.status}`);
-        const data = (await res.json()) as { allowed: boolean };
-        if (!data.allowed) {
-          setError(
-            "This key has already been replaced on another device. Restore your most recent recovery file to continue."
-          );
-          setWorking(false);
-          return;
-        }
-      } catch (e) {
-        // Bind the error so it can be logged for debugging — the user-facing
-        // copy stays generic (network failure, server hiccup, etc.) but we
-        // preserve the actual error in the console so future production
-        // issues can be traced. E31 auditor Low finding follow-up.
-        console.error("[BSVibes] ChangePassphraseModal: eligibility check failed", e);
-        setError("Couldn't verify your key — check your connection and try again.");
-        setWorking(false);
+      // Re-encrypt the SAME key under the new passphrase in place. No new key,
+      // no migration, no sweep — the address never changes.
+      const result = await changePassphrase(resolvedOldPass, newPass, hint.trim());
+
+      if (!result.ok) {
+        // The old passphrase no longer matches (e.g. a stale pre-verified value
+        // after the key was changed in another tab). Send the user back to verify.
+        setError("Wrong passphrase — please try again");
+        setStep("verify");
+        setCurrentPass("");
+        unblock();
         return;
       }
 
-      const result = await upgradeIdentity(
-        newPass,
-        currentIdentity.wif,
-        currentIdentity.name,
-        hint.trim() || undefined
-      );
-
-      const migrationResult = await migrateIdentity(
-        result.migration.oldPubkey,
-        result.migration.newPubkey,
-        result.migration.migrationSignature,
-        result.migration.migrationMessage
-      );
-
-      if (!migrationResult.success) {
-        // E31: surface the stale-key case with specific copy. Other failure
-        // reasons fall through to the generic catch-block message.
-        if (migrationResult.reason === "stale_key") {
-          throw new Error(
-            "This key has already been replaced on another device. Restore your most recent recovery file to continue."
-          );
-        }
-        throw new Error("Migration failed — passphrase change aborted.");
-      }
-
-      commitUpgrade(result.encStore, result.identity);
-      // E32: protection state didn't change here (user was already protected
-      // — this is a passphrase CHANGE not an UPGRADE), but call for parity
-      // with MoveAddressModal's pattern. Cheap idempotent re-read.
+      // Address/key unchanged; only the protection-state gate needs refreshing.
       refreshProtected();
 
-      const newIdentity = result.identity;
-      let encryptedWif: string;
+      // Read the freshly-written encrypted store to build the recovery file —
+      // no re-encrypt, and NEVER a plaintext fallback (no unencrypted key ever
+      // leaves the device).
+      let encryptedWif: string | undefined;
       try {
-        const parsedStore = JSON.parse(result.encStore) as { encrypted?: string };
-        encryptedWif = parsedStore.encrypted ?? (await encryptWif(newIdentity.wif, newPass));
+        const raw = localStorage.getItem("bfn_keypair_enc");
+        if (raw) encryptedWif = (JSON.parse(raw) as { encrypted?: string }).encrypted;
       } catch {
-        encryptedWif = await encryptWif(newIdentity.wif, newPass);
+        // fall through to the guard below
       }
+      if (!encryptedWif) {
+        throw new Error("Couldn't prepare your recovery file — try saving from the You menu.");
+      }
+
       const backupPayload: BackupData = {
-        name: newIdentity.name,
-        address: newIdentity.address,
+        name: currentIdentity.name,
+        address: currentIdentity.address,
         wif_encrypted: encryptedWif,
-        // oldAddress intentionally undefined — passphrase rotation keeps the same address
-        pathType: "rotation",
+        pathType: "save",
         createdAt: new Date().toISOString(),
         note: "Use your new passphrase to restore.",
+        hint: hint.trim(),
       };
-      if (hint.trim()) backupPayload.hint = hint.trim();
-      backupPayload.oldWif_encrypted = await encryptWif(currentIdentity.wif, newPass);
-
-      downloadBackup(backupPayload);
       setDoneBackup(backupPayload);
-
-      let transferMsg: string | null = null;
-      if (result.fundTransfer.txid) {
-        const sats = result.fundTransfer.transferredSats.toLocaleString();
-        transferMsg = `Transferred ${sats} sats to your new address.`;
-      } else if (result.fundTransfer.error) {
-        transferMsg = `Note: fund transfer failed — ${result.fundTransfer.error}. Your previous key is in the recovery file.`;
-      } else if (result.fundTransfer.noFunds) {
-        transferMsg = `No funds found at your previous address — nothing to transfer.`;
-      }
-
-      onSuccess(newIdentity, transferMsg);
       setStep("done");
+      // Notify the parent AFTER committing the local done-state, so a parent
+      // re-render can't unmount this modal before "done" renders (DECISIONS.md
+      // "Local state commits BEFORE parent notification").
+      onSuccess();
     } catch (e) {
-      // Preserve specific error messages (e.g. E31 stale-key copy) when the
-      // thrown error already carries actionable user-facing text. Generic
-      // failures fall back to the boilerplate message.
       const msg = e instanceof Error ? e.message : "";
-      setError(
-        msg && msg !== "Migration failed — passphrase change aborted."
-          ? msg
-          : "Something went wrong — try again"
-      );
+      setError(msg || "Something went wrong — try again");
       console.error("BSVibes: passphrase change failed", e);
+      unblock();
     } finally {
       setWorking(false);
+    }
+  }
+
+  // Explicit save — Web Share on iOS, <a download> fallback elsewhere. block()
+  // is already held from handleChange; idempotent. Fires onSaved ONLY on a real
+  // save (not on cancel).
+  async function handleSaveBackup(): Promise<void> {
+    if (!doneBackup || sharing) return;
+    setSharing(true);
+    block();
+    try {
+      const result = await shareOrDownloadBackup(doneBackup);
+      if (result.cancelled) return; // user dismissed the share drawer — keep done state
+      if (result.shared) {
+        setSaved(true);
+        onSaved();
+      }
+    } finally {
+      setSharing(false);
     }
   }
 
   if (!isOpen) return null;
 
   const storedHint = getStoredHint();
+  const canSubmitNew =
+    newPass.length >= 8 && newPass === confirmPass && Boolean(hint.trim()) && !working;
 
   return (
     <>
@@ -296,7 +254,9 @@ export function ChangePassphraseModal({
               <p className="text-[11px] text-zinc-500 mt-0.5">
                 {step === "verify"
                   ? "Verify your current passphrase first"
-                  : "A new recovery file will be downloaded"}
+                  : step === "done"
+                    ? "Save your updated recovery file"
+                    : "A new recovery file will be ready to save"}
               </p>
             </div>
             <button
@@ -324,33 +284,60 @@ export function ChangePassphraseModal({
           {/* Body */}
           <div className="px-5 py-5 space-y-3">
             {step === "done" ? (
-              <>
-                <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
-                  <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                    Your new recovery file should have downloaded &mdash; check your downloads
-                    folder before continuing. This file contains both your old and new key &mdash;
-                    keep it somewhere safe.
-                  </p>
-                </div>
-                <div className="flex gap-2 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (doneBackup) downloadBackup(doneBackup);
-                    }}
-                    className="flex-1 bg-zinc-900 text-zinc-300 border border-amber-400/20 rounded-lg px-3 py-2 text-xs font-medium hover:bg-zinc-800 transition-colors"
-                  >
-                    Download again
-                  </button>
+              saved ? (
+                <>
+                  <div className="border-l-2 border-emerald-500/60 pl-2.5 py-0.5">
+                    <p className="text-[11px] text-emerald-400/90 leading-relaxed">
+                      Recovery file saved. Keep it somewhere safe &mdash; it&apos;s your only way
+                      back into your account.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="flex-1 bg-amber-500/10 text-amber-400 border border-amber-500/40 rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+                    >
+                      Got it
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
+                    <p className="text-[11px] text-amber-400/90 leading-relaxed">
+                      Passphrase changed. Save your updated recovery file now &mdash; your old file
+                      no longer works.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (doneBackup) downloadBackup(doneBackup);
+                      }}
+                      className="flex-1 bg-zinc-900 text-zinc-300 border border-amber-400/20 rounded-lg px-3 py-2 text-xs font-medium hover:bg-zinc-800 transition-colors"
+                    >
+                      Download
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveBackup()}
+                      disabled={sharing}
+                      className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {sharing ? "Saving..." : "Save recovery file"}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="flex-1 bg-amber-500/10 text-amber-400 border border-amber-500/40 rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+                    className="w-full text-center text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors pt-1"
                   >
-                    Got it
+                    I&apos;ll do it later
                   </button>
-                </div>
-              </>
+                </>
+              )
             ) : step === "verify" ? (
               <>
                 <input
@@ -363,7 +350,7 @@ export function ChangePassphraseModal({
                     setError("");
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && currentPass) handleVerify();
+                    if (e.key === "Enter" && currentPass) void handleVerify();
                   }}
                   className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                 />
@@ -383,7 +370,7 @@ export function ChangePassphraseModal({
                   </button>
                   <button
                     type="button"
-                    onClick={handleVerify}
+                    onClick={() => void handleVerify()}
                     disabled={!currentPass || working}
                     className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -392,9 +379,26 @@ export function ChangePassphraseModal({
                 </div>
               </>
             ) : (
-              <>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (canSubmitNew) void handleChange();
+                }}
+                className="space-y-3"
+              >
+                {/* iCloud Keychain anchor — hidden username so Keychain matches
+                    this form to the existing credential and fires "Update
+                    Password?" (DECISIONS.md "iCloud Keychain requires a username
+                    anchor"). identity.name is stable, so iOS sees an update. */}
+                <input
+                  type="text"
+                  autoComplete="username"
+                  value={currentIdentity.name}
+                  readOnly
+                  hidden
+                />
                 <p className="text-[11px] text-amber-400/80 leading-relaxed">
-                  Your old recovery file will stop working. A new one will be downloaded.
+                  Your old recovery file will stop working. You&apos;ll save a new one next.
                 </p>
                 <input
                   type="password"
@@ -416,19 +420,10 @@ export function ChangePassphraseModal({
                     setConfirmPass(e.target.value);
                     setError("");
                   }}
-                  onKeyDown={(e) => {
-                    if (
-                      e.key === "Enter" &&
-                      newPass.length >= 8 &&
-                      newPass === confirmPass &&
-                      !working
-                    )
-                      handleChange();
-                  }}
                   className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                 />
 
-                {/* Memory clue — always visible, amber accent */}
+                {/* Memory clue — always visible, amber accent, mandatory */}
                 <div className="border-l-2 border-amber-500/60 pl-2.5 space-y-1">
                   <label
                     htmlFor="change-hint"
@@ -466,17 +461,14 @@ export function ChangePassphraseModal({
                     Cancel
                   </button>
                   <button
-                    type="button"
-                    onClick={handleChange}
-                    disabled={
-                      newPass.length < 8 || newPass !== confirmPass || !hint.trim() || working
-                    }
+                    type="submit"
+                    disabled={!canSubmitNew}
                     className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {working ? "Changing..." : "Change passphrase"}
                   </button>
                 </div>
-              </>
+              </form>
             )}
           </div>
         </div>
