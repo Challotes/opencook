@@ -2,6 +2,31 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-14 — Phase 0 + Phase 1 Steps 1–2 implemented (encrypt-in-place COMPLETE)
+
+Category: implementation (launch-critical-path execution). First code-cutting session after the planning/audit work. Each commit got Biome + tsc + 90 tests + a code-auditor pass on the diff. All pushed to origin/master (`a857f20..31d0ecd`, 13 commits incl. the pre-existing `c9ffa84`).
+
+**Phase 0 (launch hygiene) — DONE.** Global daily spend cap on `/api/agent` (`AGENT_DAILY_LIMIT`, default 2000) — `6d5c50a`. Owner rotated the Anthropic key + set a console monthly spend limit.
+
+**Phase 1 progress:**
+- **R1 hotfix** (`6d85d9d`): `importEncryptedIdentity` removed the plaintext key BEFORE writing the encrypted store — an interruption could lose the just-restored key. Flipped to write-encrypted-then-remove (strict improvement).
+- **Step 1** (`9c2dbc3`): on-chain `v:1` envelope version on post + boot_split payloads; boot_split discriminator `action`→`type`. Irreversible-first.
+- **Step 2 (encrypt-in-place) — COMPLETE:**
+  - 2a (`804a91c`): `encryptInPlace` + `changePassphrase` primitives — safe write order + verify-decrypt both directions, 7 new tests (`encrypt-in-place.test.ts`).
+  - 2b-i (`aa3eaae`): `ChangePassphraseModal` → `changePassphrase`.
+  - 2b-ii-a (`dfc689f`): new `ProtectModal` → `encryptInPlace`.
+  - 2b-ii-b (`b13f7b3`): IdentityBar wiring (Passphrase row protected→change / unprotected→protect; nudge + banner → protect; `MoveAddressModal` unwired).
+  - 2c-i (`6b112fa`): unprotected Save → ProtectModal (no plaintext download); RestoreModal `restore-pre` plaintext branch gated.
+  - 2c-ii (`31d0ecd`): dropped `BackupData.wif` + removed the plaintext template branch (compile-time guarantee no plaintext file can be produced); MoveAddressModal `pre-rotation` plaintext path closed. iOS Quick Look encrypted-variant machinery untouched.
+
+**Net:** protect/change flows now use encrypt-in-place (same key/address, no rotation/migration/sweep), and **no unencrypted recovery file can ever be produced** (type-enforced).
+
+**Tracked follow-ups (land with Step 4):** F1 — force re-encrypt on IMPORT of a legacy plaintext recovery file (`RestoreModal.handleImportFile` + `HomeScreenWelcomeGate.handleFile` still call `importIdentity`). And the `getIdentity` "prefer-and-reap encrypted when both present" (R4) change — deferred until rotation is deleted (both-present currently means two different keys while rotation coexists).
+
+**Still present but unwired (deleted in Step 4):** the rotation backend — `migration.ts`, `migrateIdentity`/`verifyMigrationChain`, `upgradeIdentity`/`resetIdentity`/sweep, `MoveAddressModal.tsx`, `StaleKeyModal`, E29/E30/E31, the `migrations` table.
+
+**Next session = Phase 1 Step 3** (consistent address keying + BUG-6: boot-confirm stores pubkey in `boosted_by` → paid boots invisible in earnings), then Step 4 (delete rotation backend + getIdentity reap + F1), Steps 5–8 (chain-resolver deletion + dev-DB wipe, per-IP free-boot cap, boot-confirm auth, free-boot idempotency). Full breakdown in Task #2.
+
 ## 2026-06-13 (cont. 2) — Phase 1 audit + first code (R1 restore key-loss hotfix)
 
 Category: audit + one safety fix. Opened Phase 1 (remove rotation + encrypt-in-place) with a 4-agent parallel audit: removal-completeness (exhaustive file:line deletion contract), key-safety (encrypt-in-place design + adversarial risk list), money-integrity (simplified keying + the in-scope fixes), and sequencing (on-chain v:1 spec + 8-commit safe surgery order).
