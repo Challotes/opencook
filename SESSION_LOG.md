@@ -2,6 +2,23 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-13 — OpenCook rebrand + launch-critical plan locked (PLANNING — no code touched)
+
+Category: strategy / planning / decision-recording. Owner dropped a large private brainstorm list and asked for a brief on what is genuinely launch-critical vs deferrable, so launch doesn't proceed without the irreversible pieces in place. No code changed this session — this was triage, agent review, and decision-recording.
+
+**Work done:**
+- Read full launch context (CLAUDE.md, LAUNCH_PLAN, ROADMAP, DECISIONS, DIRECTION, SECURITY_AUDIT).
+- Ran 3 verification agents over the factual claims in the list. **Confirmed three real economic bugs**, all instances of one seam (address-vs-migration-chain keying): (1) free boots regenerate on every key rotation (`pricing.ts:41`, `boot_grants` keyed by address) — violates "15 per identity, never reset"; (2) no per-IP cap on server-paid free boots → endless private tabs can drain the server wallet in minutes; (3) rotated users see blank earnings + no split notifications (`earnings/route.ts:27` seeds the chain from payouts, empty for a new address) and the 15% creator bonus pays the pre-rotation address (`boot-orchestrator.ts:67`) — irreversible fund misdirection.
+- Ran 3 review agents over the reframed plan: irreversibility/extensibility (architecture), adversarial money/identity (code-auditor), public-launch scope-gap. Surfaced: **on-chain payloads are permanent and unversioned** (need a `v:1` envelope field + harmonized discriminator before first broadcast); **NEW-1 creator-bonus-to-dead-address (critical, irreversible)**; **NEW-2 boot-confirm has no booter auth + no total check**; **NEW-3 free-boot broadcast-then-DB-crash = repeatable server pay**; and an entirely missing **governance layer** (content moderation, legal/ToS — genuinely launch-blocking for permanent-on-chain public UGC).
+
+**Decisions locked (recorded in DECISIONS.md → new "OpenCook Rebrand & Launch" section, all 9 entries agent-verified for code-accuracy and consistency before commit):** rebrand BSVibes→OpenCook before launch (name-only sweep, done last, code/repo history kept, atomic `app`-literal sweep hazard); fresh user data from post #1 (empty DB, on-chain tag→`opencook`, no storage migration); on-chain `v:1` version field + harmonized discriminator (Phase 1, additive to `formula_version`, feature-neutral); migration-chain-uniform keying (fixes the bug class, `boot_grants` re-keyed to chain-root, fail-toward-paid); per-IP free-boot cap (additive defense, depends on trusted x-forwarded-for); notifications deferred to fast-follow; thin-core moderation before launch (pre-publish filter + feed-hide + Report; supersedes the LAUNCH_PLAN scope-out); thin-core legal before launch (ToS + Privacy + permanence disclosure); and the honesty principle — don't deliberately pre-claim unbuilt features in commits (the timestamp is the arbiter; existing vision text kept).
+
+**Locked launch-critical path (≈12–14 focused days):** 0 hygiene (rotate Anthropic key, AI spend cap) → 1 wallet/on-chain integrity (deep audit + `v:1` + the keying class + per-IP cap + NEW-1/2/3 + idempotency) → 2 server resilience + kill-switch/low-balance alert → 3 governance (moderation + legal) → 4 in-app-browser splash + OG + AI cap → 5 observability (error reporting + health endpoint) → 6 e2e test harness → 7 rebrand → 8 cross-device QA → 9 deploy.
+
+**Explicitly OUT of launch (owner decision — honesty/attribution):** the forward feature ideas from the owner's private brainstorm are NOT built, documented, or committed — held in conversation only, so on-chain/commit timestamps attribute them honestly to whoever surfaces them first. ANTHROPIC KEY ROTATION is the owner's action item.
+
+**Next step:** open Phase 1 — dispatch the deep wallet/on-chain integrity audit (code-auditor + architecture-reviewer + bitcoin), translate findings to plain English, get owner approval on fix approach, then implement + re-audit. Nothing started yet; next session begins Phase 1.
+
 ## 2026-06-12 — Contributor report assessment + two server-wallet resilience notes
 
 Category: assessment + documentation (no code touched). A contributor sent a "Repository Report: State & Needs" (dated 2026-06-08) — an outside read of the project. Ran three parallel agents to fact-check it against the real code and settled decisions rather than take it at face value.
