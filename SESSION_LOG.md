@@ -2,6 +2,20 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-13 (cont.) — Key rotation REMOVED, encrypt-in-place adopted (DECISION — no code touched)
+
+Category: architecture decision. A contributor questioned whether key rotation is even necessary. Ran three independent agent reviews (irreversibility/extensibility, threat-model, removal-feasibility) — all unbiased, explicitly told not to assume the current design is right.
+
+**Findings (converged):**
+- The original rotation premise was partly over-sold: the scariest justification ("plaintext localStorage syncs to the cloud") is essentially false — browsers don't sync localStorage. The real plaintext-leak vector was the *downloaded unencrypted recovery file* syncing to cloud.
+- Rotation's genuine value is narrow: it uniquely neutralizes a key leaked *before* encryption (point-in-time malware/backup theft). It does nothing against a live/ongoing compromise. At idea-board / small-sats scale the complexity cost exceeds the benefit.
+- Rotation is the direct source of the launch-critical economic bug class (free-boot reset, blank earnings, creator-bonus-to-dead-address) + ~2.5–3.5k LOC + the entire E29/E30/E31 security layer.
+- Removal is ~6–7 focused days, comes out CLEAN in code (deletes the bug class rather than fixing it; boot-grant keying gets *more* correct). The orphaned-data scar is moot (fresh-from-post-#1 empty DB). Recoverable from git if ever re-added (as an opt-in "key exposed" reclaim, not rotation-on-upgrade).
+
+**Decision (owner signed off):** REMOVE rotation; adopt encrypt-in-place. Adding a passphrase encrypts the existing key in place (key/address never changes). Recovery-file export is gated behind setting a passphrase → no unencrypted file ever leaves the device (closes the real vector). Recorded in DECISIONS.md "Key rotation REMOVED in favor of encrypt-in-place", which SUPERSEDES the rotation premise + E29/E30/E31 + pre-rotation verification + the migration-chain-uniform-keying entry. **Security regression acknowledged per Hard Rule #3:** loss of in-app revocation of a pre-protection-leaked key — accepted at launch scale, re-addable later.
+
+**Plan impact:** Phase 1 reshaped (task #2) — now "remove rotation + encrypt-in-place + passphrase-gated save + consistent keying"; the rotation-coupled bug class is deleted, not fixed. Still in Phase 1: on-chain v:1 version field, per-IP free-boot cap, boot-confirm auth, free-boot idempotency. Rebrand task (#8) loses the migration-signature sweep hazard.
+
 ## 2026-06-13 — OpenCook rebrand + launch-critical plan locked (PLANNING — no code touched)
 
 Category: strategy / planning / decision-recording. Owner dropped a large private brainstorm list and asked for a brief on what is genuinely launch-critical vs deferrable, so launch doesn't proceed without the irreversible pieces in place. No code changed this session — this was triage, agent review, and decision-recording.
