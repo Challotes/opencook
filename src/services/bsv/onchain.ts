@@ -23,6 +23,7 @@ interface PostData {
 export async function logPostOnChain(postData: PostData): Promise<string | null> {
   const attempt = async (): Promise<string | null> => {
     const payload = JSON.stringify({
+      v: 1,
       app: "bsvibes",
       type: "post",
       content: postData.content,

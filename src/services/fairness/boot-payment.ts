@@ -62,8 +62,9 @@ export async function buildSplitTransaction(
 
   // OP_RETURN audit trail
   const auditPayload = JSON.stringify({
+    v: 1,
     app: "bsvibes",
-    action: "boot_split",
+    type: "boot_split",
     post_id: postId,
     total: split.totalDistributed,
     recipients: outputsByAddress.size,
