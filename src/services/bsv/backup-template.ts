@@ -27,7 +27,6 @@ function svgToBase64(svg: string): string {
 export interface BackupData {
   name: string;
   address: string;
-  wif?: string; // plaintext — shown immediately, no passphrase needed
   wif_encrypted?: string; // AES-256-GCM encrypted — requires passphrase to reveal
   oldWif_encrypted?: string; // previous key after rotation (encrypted)
   oldAddress?: string; // present only for combined files (rotation) when old address differs
@@ -104,9 +103,9 @@ function buildFilename(data: BackupData): string {
  * Returns a complete, self-contained HTML document as a string.
  * Embed it in a Blob and download as `.html`.
  *
- * Behaviour:
- *  - If `wif` is present → WIF is displayed immediately on page load (unprotected).
- *  - If `wif_encrypted` is present → passphrase input + PBKDF2/AES-GCM decrypt flow.
+ * Behaviour: the embedded key is always encrypted (`wif_encrypted`) — the file
+ * shows a passphrase input + PBKDF2/AES-GCM decrypt flow. There is no plaintext
+ * variant; no unencrypted recovery file is ever produced.
  */
 export function generateBackupHtml(data: BackupData): string {
   const iconB64 = svgToBase64(ICON_SVG);
@@ -116,7 +115,6 @@ export function generateBackupHtml(data: BackupData): string {
   const dataJson = JSON.stringify(data);
 
   const title = `BSVibes Recovery — ${data.name}`;
-  const isPlaintext = Boolean(data.wif) && !data.wif_encrypted;
 
   // Resolved at template-build time so iOS Files Quick Look (which blocks
   // inline JS in local HTML previews) renders these values without needing
@@ -129,9 +127,6 @@ export function generateBackupHtml(data: BackupData): string {
   // Sits beneath the metadata card. Tells the user what THIS file is and where
   // their posts/earnings live. One or two sentences, no jargon, variant-specific.
   function contextBlockText(): string {
-    if (isPlaintext) {
-      return "This file lets you recover your BSVibes account on any device. Because no passphrase was set, the secret key inside is readable by anyone who opens this file.";
-    }
     switch (data.pathType) {
       case "rotation":
         return "Your account has moved. Posts and earnings now go to the address above. This file holds both keys — your current key, and your previous key in case any funds were in transit during the move.";
@@ -172,161 +167,144 @@ export function generateBackupHtml(data: BackupData): string {
   // The current-key block does NOT repeat the public address — it's already in
   // the metadata card at the top. The previous-key block DOES show the previous
   // address, because that's the only place it appears.
-  const bodySection = isPlaintext
-    ? [
-        "    <!-- Plaintext recovery: WIF rendered statically (works in any HTML viewer, no JS required) -->",
-        '    <div class="plaintext-banner">',
-        "      &#9888; This file is not encrypted. Anyone who can open it can take your account.",
-        "    </div>",
-        '    <div class="card" id="plaintext-section">',
-        '      <div class="wif-block">',
-        '        <div class="wif-label">Your secret key (WIF)</div>',
-        `        <textarea class="wif-value" readonly rows="2">${escapeHtml(data.wif || "")}</textarea>`,
-        "      </div>",
-        wifWarningHtml(false),
-        "    </div>",
-      ].join("\n")
-    : [
-        "    <!-- Encrypted recovery file: passphrase required -->",
-        "    <!-- Quick Look notice: visible by default in renderers that don't run JS",
-        "         (iOS Files / Quick Look, email previews). The script block hides this",
-        "         on load when JS runs, so browsers see only the decrypt UI. We can't",
-        "         use <noscript> here because iOS Quick Look's WebKit reports scripting",
-        "         as 'enabled' at the engine level even when it never executes scripts. -->",
-        '    <div id="quicklook-notice" class="noscript-banner">',
-        "      <strong>Your keys are safe &mdash; but this preview can't decrypt them.</strong>",
-        "      <p>Apple's file preview can't run the code this file needs for decryption. Your recovery key is still securely encrypted with your passphrase.</p>",
-        "      <p><strong>Two ways to access it:</strong></p>",
-        "      <ul>",
-        "        <li><strong>From the BSVibes app:</strong> Open the You menu and tap <em>Restore key from file</em> &mdash; decryption happens inside the app itself.</li>",
-        "        <li><strong>From a browser:</strong> Open this file in Safari, Chrome, or Firefox on any Mac or PC to enter your passphrase and view your recovery key directly.</li>",
-        "      </ul>",
-        "    </div>",
-        '    <div class="card" id="decrypt-section">',
-        data.hint
-          ? `      <div class="hint-box"><strong>Memory clue:</strong> ${escapeHtml(data.hint)}</div>`
-          : "",
-        '      <label for="passphrase-input">Enter your passphrase to unlock your secret key</label>',
-        '      <input type="password" id="passphrase-input" placeholder="Your passphrase" autocomplete="current-password" />',
-        '      <button class="primary" id="decrypt-btn" onclick="handleDecrypt()">Decrypt all</button>',
-        "    </div>",
-        "",
-        '    <div id="spinner" class="spinner"></div>',
-        "",
-        '    <div class="card" id="result-section" style="display:none">',
-        '      <div class="success-header">',
-        '        <div class="check-icon">',
-        '          <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
-        '            <polyline points="2,6 5,9 10,3"></polyline>',
-        "          </svg>",
-        "        </div>",
-        "        <h3>Key unlocked</h3>",
-        "      </div>",
-        '      <div id="wif-primary-block" style="display:none">',
-        '        <div class="wif-block">',
-        '          <div class="wif-label">Your secret key (WIF)</div>',
-        '          <textarea class="wif-value" id="wif-primary" readonly rows="2"></textarea>',
-        "        </div>",
-        wifWarningHtml(false),
-        "      </div>",
-        '      <div id="wif-old-block" style="display:none">',
-        '        <div class="wif-block">',
-        '          <div class="wif-label">Previous secret key</div>',
-        '          <textarea class="wif-value" id="wif-old" readonly rows="2"></textarea>',
-        "        </div>",
-        wifWarningHtml(true),
-        "      </div>",
-        "    </div>",
-        "",
-        '    <div id="error-box" class="error-box">',
-        "      <strong>Decryption failed</strong>",
-        "      Wrong passphrase or corrupted data. Check your passphrase and try again.",
-        "    </div>",
-      ].join("\n");
+  const bodySection = [
+    "    <!-- Encrypted recovery file: passphrase required -->",
+    "    <!-- Quick Look notice: visible by default in renderers that don't run JS",
+    "         (iOS Files / Quick Look, email previews). The script block hides this",
+    "         on load when JS runs, so browsers see only the decrypt UI. We can't",
+    "         use <noscript> here because iOS Quick Look's WebKit reports scripting",
+    "         as 'enabled' at the engine level even when it never executes scripts. -->",
+    '    <div id="quicklook-notice" class="noscript-banner">',
+    "      <strong>Your keys are safe &mdash; but this preview can't decrypt them.</strong>",
+    "      <p>Apple's file preview can't run the code this file needs for decryption. Your recovery key is still securely encrypted with your passphrase.</p>",
+    "      <p><strong>Two ways to access it:</strong></p>",
+    "      <ul>",
+    "        <li><strong>From the BSVibes app:</strong> Open the You menu and tap <em>Restore key from file</em> &mdash; decryption happens inside the app itself.</li>",
+    "        <li><strong>From a browser:</strong> Open this file in Safari, Chrome, or Firefox on any Mac or PC to enter your passphrase and view your recovery key directly.</li>",
+    "      </ul>",
+    "    </div>",
+    '    <div class="card" id="decrypt-section">',
+    data.hint
+      ? `      <div class="hint-box"><strong>Memory clue:</strong> ${escapeHtml(data.hint)}</div>`
+      : "",
+    '      <label for="passphrase-input">Enter your passphrase to unlock your secret key</label>',
+    '      <input type="password" id="passphrase-input" placeholder="Your passphrase" autocomplete="current-password" />',
+    '      <button class="primary" id="decrypt-btn" onclick="handleDecrypt()">Decrypt all</button>',
+    "    </div>",
+    "",
+    '    <div id="spinner" class="spinner"></div>',
+    "",
+    '    <div class="card" id="result-section" style="display:none">',
+    '      <div class="success-header">',
+    '        <div class="check-icon">',
+    '          <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+    '            <polyline points="2,6 5,9 10,3"></polyline>',
+    "          </svg>",
+    "        </div>",
+    "        <h3>Key unlocked</h3>",
+    "      </div>",
+    '      <div id="wif-primary-block" style="display:none">',
+    '        <div class="wif-block">',
+    '          <div class="wif-label">Your secret key (WIF)</div>',
+    '          <textarea class="wif-value" id="wif-primary" readonly rows="2"></textarea>',
+    "        </div>",
+    wifWarningHtml(false),
+    "      </div>",
+    '      <div id="wif-old-block" style="display:none">',
+    '        <div class="wif-block">',
+    '          <div class="wif-label">Previous secret key</div>',
+    '          <textarea class="wif-value" id="wif-old" readonly rows="2"></textarea>',
+    "        </div>",
+    wifWarningHtml(true),
+    "      </div>",
+    "    </div>",
+    "",
+    '    <div id="error-box" class="error-box">',
+    "      <strong>Decryption failed</strong>",
+    "      Wrong passphrase or corrupted data. Check your passphrase and try again.",
+    "    </div>",
+  ].join("\n");
 
   // ── Variant-specific JS body (injected after the universal helpers) ─────────
-  // Plaintext files no longer need any JS — WIF, name, address, date are all
-  // rendered statically (works in iOS Quick Look, macOS Finder Quick Look,
-  // email preview, etc.). The Copy button on the metadata Address row still
-  // uses copyText() when JS is available; degrades to long-press select on
-  // Quick Look thanks to `user-select: all` on `.meta-value`.
-  const variantJs = isPlaintext
-    ? "    // No variant JS needed — plaintext fields render statically."
-    : [
-        "    // Crypto constants — must match src/services/bsv/crypto.ts exactly",
-        "    const PBKDF2_ITERATIONS = 100000;",
-        "    const SALT_BYTES = 16;",
-        "    const IV_BYTES = 12;",
-        "    const ENCRYPTED_PREFIX = 'enc:';",
-        "",
-        "    async function decryptStr(encryptedStr, passphrase) {",
-        "      if (!encryptedStr || !encryptedStr.startsWith(ENCRYPTED_PREFIX)) return null;",
-        "      try {",
-        "        const combined = Uint8Array.from(atob(encryptedStr.slice(ENCRYPTED_PREFIX.length)), c => c.charCodeAt(0));",
-        "        const salt = combined.slice(0, SALT_BYTES);",
-        "        const iv = combined.slice(SALT_BYTES, SALT_BYTES + IV_BYTES);",
-        "        const ciphertext = combined.slice(SALT_BYTES + IV_BYTES);",
-        "        const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);",
-        "        const key = await crypto.subtle.deriveKey(",
-        "          { name: 'PBKDF2', salt: salt.buffer, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },",
-        "          keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']",
-        "        );",
-        "        const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv.buffer }, key, ciphertext.buffer);",
-        "        return new TextDecoder().decode(plain);",
-        "      } catch { return null; }",
-        "    }",
-        "",
-        "    async function handleDecrypt() {",
-        "      const passphrase = document.getElementById('passphrase-input').value;",
-        "      document.getElementById('result-section').style.display = 'none';",
-        "      document.getElementById('error-box').style.display = 'none';",
-        "      if (!passphrase) { showError('Please enter your passphrase.'); return; }",
-        "      setLoading(true);",
-        "      try {",
-        "        const primaryWif = await decryptStr(BACKUP_DATA.wif_encrypted, passphrase);",
-        "        if (!primaryWif) { setLoading(false); showError(null); return; }",
-        "        let oldWif = null;",
-        "        if (BACKUP_DATA.oldWif_encrypted) oldWif = await decryptStr(BACKUP_DATA.oldWif_encrypted, passphrase);",
-        "        setLoading(false);",
-        "        showSuccess(primaryWif, oldWif);",
-        "      } catch (err) {",
-        "        setLoading(false);",
-        "        showError('Unexpected error: ' + err.message);",
-        "      }",
-        "    }",
-        "",
-        "    document.getElementById('passphrase-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleDecrypt(); });",
-        "",
-        "    function setLoading(on) {",
-        "      const btn = document.getElementById('decrypt-btn');",
-        "      const spinner = document.getElementById('spinner');",
-        "      btn.disabled = on; btn.textContent = on ? 'Decrypting…' : 'Decrypt all';",
-        "      spinner.style.display = on ? 'block' : 'none';",
-        "    }",
-        "",
-        "    function showSuccess(primary, old) {",
-        "      // Primary key block",
-        "      const pb = document.getElementById('wif-primary-block');",
-        "      document.getElementById('wif-primary').value = primary;",
-        "      pb.style.display = 'block';",
-        "      // Previous key block",
-        "      const ob = document.getElementById('wif-old-block');",
-        "      if (old) {",
-        "        document.getElementById('wif-old').value = old;",
-        "        ob.style.display = 'block';",
-        "      } else {",
-        "        ob.style.display = 'none';",
-        "      }",
-        "      document.getElementById('result-section').style.display = 'block';",
-        "    }",
-        "",
-        "    function showError(msg) {",
-        "      const el = document.getElementById('error-box');",
-        "      if (msg) el.innerHTML = '<strong>Error</strong>' + esc(msg);",
-        "      else el.innerHTML = '<strong>Decryption failed</strong>Wrong passphrase or corrupted data. Check your passphrase and try again.';",
-        "      el.style.display = 'block';",
-        "    }",
-      ].join("\n");
+  // Recovery files are always encrypted now — this is the decrypt flow. The
+  // Copy button on the metadata Address row uses copyText() when JS is
+  // available; it degrades to long-press select in iOS Quick Look thanks to
+  // the form-control text selection on `.meta-value`.
+  const variantJs = [
+    "    // Crypto constants — must match src/services/bsv/crypto.ts exactly",
+    "    const PBKDF2_ITERATIONS = 100000;",
+    "    const SALT_BYTES = 16;",
+    "    const IV_BYTES = 12;",
+    "    const ENCRYPTED_PREFIX = 'enc:';",
+    "",
+    "    async function decryptStr(encryptedStr, passphrase) {",
+    "      if (!encryptedStr || !encryptedStr.startsWith(ENCRYPTED_PREFIX)) return null;",
+    "      try {",
+    "        const combined = Uint8Array.from(atob(encryptedStr.slice(ENCRYPTED_PREFIX.length)), c => c.charCodeAt(0));",
+    "        const salt = combined.slice(0, SALT_BYTES);",
+    "        const iv = combined.slice(SALT_BYTES, SALT_BYTES + IV_BYTES);",
+    "        const ciphertext = combined.slice(SALT_BYTES + IV_BYTES);",
+    "        const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);",
+    "        const key = await crypto.subtle.deriveKey(",
+    "          { name: 'PBKDF2', salt: salt.buffer, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },",
+    "          keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']",
+    "        );",
+    "        const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv.buffer }, key, ciphertext.buffer);",
+    "        return new TextDecoder().decode(plain);",
+    "      } catch { return null; }",
+    "    }",
+    "",
+    "    async function handleDecrypt() {",
+    "      const passphrase = document.getElementById('passphrase-input').value;",
+    "      document.getElementById('result-section').style.display = 'none';",
+    "      document.getElementById('error-box').style.display = 'none';",
+    "      if (!passphrase) { showError('Please enter your passphrase.'); return; }",
+    "      setLoading(true);",
+    "      try {",
+    "        const primaryWif = await decryptStr(BACKUP_DATA.wif_encrypted, passphrase);",
+    "        if (!primaryWif) { setLoading(false); showError(null); return; }",
+    "        let oldWif = null;",
+    "        if (BACKUP_DATA.oldWif_encrypted) oldWif = await decryptStr(BACKUP_DATA.oldWif_encrypted, passphrase);",
+    "        setLoading(false);",
+    "        showSuccess(primaryWif, oldWif);",
+    "      } catch (err) {",
+    "        setLoading(false);",
+    "        showError('Unexpected error: ' + err.message);",
+    "      }",
+    "    }",
+    "",
+    "    document.getElementById('passphrase-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleDecrypt(); });",
+    "",
+    "    function setLoading(on) {",
+    "      const btn = document.getElementById('decrypt-btn');",
+    "      const spinner = document.getElementById('spinner');",
+    "      btn.disabled = on; btn.textContent = on ? 'Decrypting…' : 'Decrypt all';",
+    "      spinner.style.display = on ? 'block' : 'none';",
+    "    }",
+    "",
+    "    function showSuccess(primary, old) {",
+    "      // Primary key block",
+    "      const pb = document.getElementById('wif-primary-block');",
+    "      document.getElementById('wif-primary').value = primary;",
+    "      pb.style.display = 'block';",
+    "      // Previous key block",
+    "      const ob = document.getElementById('wif-old-block');",
+    "      if (old) {",
+    "        document.getElementById('wif-old').value = old;",
+    "        ob.style.display = 'block';",
+    "      } else {",
+    "        ob.style.display = 'none';",
+    "      }",
+    "      document.getElementById('result-section').style.display = 'block';",
+    "    }",
+    "",
+    "    function showError(msg) {",
+    "      const el = document.getElementById('error-box');",
+    "      if (msg) el.innerHTML = '<strong>Error</strong>' + esc(msg);",
+    "      else el.innerHTML = '<strong>Decryption failed</strong>Wrong passphrase or corrupted data. Check your passphrase and try again.';",
+    "      el.style.display = 'block';",
+    "    }",
+  ].join("\n");
 
   return (
     "<!DOCTYPE html>\n" +
@@ -362,11 +340,6 @@ export function generateBackupHtml(data: BackupData): string {
     "    }\n" +
     "    .offline-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; }\n" +
     "    .badge-wrap { display: flex; justify-content: center; }\n" +
-    "    .plaintext-banner {\n" +
-    "      background: #7f1d1d; border: 1px solid #dc2626; border-radius: 10px;\n" +
-    "      padding: 13px 16px; margin-bottom: 16px;\n" +
-    "      font-size: 13px; font-weight: 600; color: #fff; line-height: 1.5;\n" +
-    "    }\n" +
     "    /* Shown only when JS is disabled (iOS Quick Look, email previews, etc.) */\n" +
     "    .noscript-banner {\n" +
     "      background: #422006; border: 1px solid #b45309; border-radius: 10px;\n" +

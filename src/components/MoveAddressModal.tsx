@@ -310,17 +310,11 @@ export function MoveAddressModal({
       if (hint) backupPayload.hint = hint;
       return backupPayload;
     }
-    const backupPayload: BackupData = {
-      name: identity.name,
-      address: identity.address,
-      wif: identity.wif,
-      pathType: "pre-rotation",
-      createdAt: new Date().toISOString(),
-      note: "Previous identity — may hold unconfirmed UTXOs until mempool clears.",
-    };
-    const hint = getStoredHint();
-    if (hint) backupPayload.hint = hint;
-    return backupPayload;
+    // No plaintext export. Every rotation collects a passphrase, so the
+    // encrypted branch above always runs. (This modal is removed with the
+    // rotation backend in a later step; this guard preserves the no-plaintext
+    // rule until then.)
+    throw new Error("Cannot build a recovery file without a passphrase");
   }
 
   function downloadPreRotationBackup(): void {
