@@ -5,6 +5,29 @@ import { rateLimit } from "@/lib/rate-limit";
 let _activeRequests = 0;
 const MAX_CONCURRENT = 3;
 
+// Global daily request cap — a cost circuit-breaker that bounds total Anthropic
+// spend across ALL callers. The per-IP limit below is bypassable behind shared
+// NAT / many IPs / a viral spike, so the aggregate has no ceiling without this.
+// In-memory like _activeRequests + the rate limiter (single long-lived Node
+// process on Railway); resets on restart and at UTC midnight. Tunable via the
+// AGENT_DAILY_LIMIT env var (default 2000 ≈ ~$2/day worst case on Haiku).
+const _parsedDailyLimit = Number(process.env.AGENT_DAILY_LIMIT);
+const AGENT_DAILY_LIMIT =
+  Number.isFinite(_parsedDailyLimit) && _parsedDailyLimit > 0 ? _parsedDailyLimit : 2000;
+let _dailyCount = 0;
+let _dailyKey = ""; // UTC "YYYY-MM-DD"
+
+function checkDailyBudget(): boolean {
+  const today = new Date().toISOString().slice(0, 10); // UTC date
+  if (today !== _dailyKey) {
+    _dailyKey = today;
+    _dailyCount = 0;
+  }
+  if (_dailyCount >= AGENT_DAILY_LIMIT) return false;
+  _dailyCount++;
+  return true;
+}
+
 export async function POST(req: Request) {
   // Validate input
   let body: { messages?: { from: string; text: string }[] };
@@ -44,6 +67,12 @@ export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return new Response("Agent is offline — no API key configured.", { status: 503 });
+  }
+
+  // Global daily spend cap (cost circuit-breaker) — checked just before we commit
+  // to an Anthropic call, so only real upstream attempts count toward the budget.
+  if (!checkDailyBudget()) {
+    return new Response("The AI's taking a break — back tomorrow.", { status: 429 });
   }
 
   // Cap to last 20 messages and limit content length
