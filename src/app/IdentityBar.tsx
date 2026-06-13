@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatedBalance } from "@/components/AnimatedBalance";
+import { ChangePassphraseModal } from "@/components/ChangePassphraseModal";
 import { EarningsSparkline } from "@/components/EarningsSparkline";
 import { FirstEarningToast } from "@/components/FirstEarningToast";
 import { GoatModeToast } from "@/components/GoatModeToast";
 import { InstallPitch } from "@/components/InstallPitch";
-import { MoveAddressModal } from "@/components/MoveAddressModal";
+import { ProtectModal } from "@/components/ProtectModal";
 import { RestoreModal } from "@/components/RestoreModal";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { useInstallContext } from "@/contexts/InstallContext";
@@ -150,16 +151,17 @@ export function IdentityChip(): React.JSX.Element | null {
   // Restore modal
   const [showRestoreModal, setShowRestoreModal] = useState(false);
 
-  // Move Address Modal — row click goes straight to modal (no inline expand)
-  const [showMoveModal, setShowMoveModal] = useState(false);
-  const [movePassphrase, setMovePassphrase] = useState("");
+  // Passphrase flows (encrypt-in-place) — Protect (unprotected) + Change (protected)
+  const [showProtectModal, setShowProtectModal] = useState(false);
+  const [showChangePassModal, setShowChangePassModal] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const gateInputRef = useRef<HTMLInputElement>(null);
-  // Tracks whether MoveAddressModal reached "done" stage (vs Cancel mid-flow).
-  // Read in onClose to decide whether to clear the You modal's manage gate
-  // (rotation = new passphrase, old re-auth is stale) or just dismiss the wizard.
-  const moveCompletedRef = useRef(false);
+  // Track whether each passphrase flow reached "done" (vs Cancel mid-flow).
+  // Read in onClose to decide whether to close the You modal entirely (the
+  // manage gate's cached passphrase is stale after a change) or just dismiss.
+  const protectCompletedRef = useRef(false);
+  const changeCompletedRef = useRef(false);
 
   // ── Helpers defined early for use in effects ──────────────────────────────
 
@@ -298,17 +300,17 @@ export function IdentityChip(): React.JSX.Element | null {
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e: MouseEvent) {
-      // Don't close the dropdown if the upgrade modal or move modal is open — those
-      // modals render outside dropdownRef so every click inside them would otherwise
+      // Don't close the dropdown if a passphrase modal is open — those modals
+      // render outside dropdownRef so every click inside them would otherwise
       // trigger this handler.
-      if (showMoveModal) return;
+      if (showProtectModal || showChangePassModal) return;
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         closeDropdown();
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open, showMoveModal, closeDropdown]);
+  }, [open, showProtectModal, showChangePassModal, closeDropdown]);
 
   // Destroy manage session on tab blur — same pattern password managers use.
   useEffect(() => {
@@ -545,24 +547,24 @@ export function IdentityChip(): React.JSX.Element | null {
 
   // ── Modal launchers ────────────────────────────────────────────────────
 
-  function openMoveModal(pass: string): void {
-    // E31 trigger guard: if the local key is stale, intercept BEFORE we
-    // mount the rotation wizard. The wizard would otherwise let the user
-    // run the sweep and only fail at the server-side migrate step,
-    // leaving funds at an address the server can't recognise. The client
-    // preflight in MoveAddressModal.runCreating catches it too, but this
-    // saves the user the round-trip and gives them the right UI (restore
-    // flow, not rotation error). Three call sites in IdentityBar feed into
-    // this function (Passphrase row in You modal, Not Protected red banner,
-    // and the manage-gate fallback) — guarding here covers all of them.
+  // Stale-key guard: if the local key was revoked elsewhere, route to the
+  // restore flow instead of letting the user re-protect a dead key.
+  // Both launchers stack their modal over the You modal; Cancel returns to it,
+  // only successful completion closes it (via onClose below).
+  function openProtectModal(): void {
     if (staleKey) {
       openStaleKeyModal();
       return;
     }
-    setMovePassphrase(pass);
-    // Keep You modal mounted underneath — sub-modal stacks on top.
-    // Cancel returns to You modal; only successful completion closes both.
-    setShowMoveModal(true);
+    setShowProtectModal(true);
+  }
+
+  function openChangePassModal(): void {
+    if (staleKey) {
+      openStaleKeyModal();
+      return;
+    }
+    setShowChangePassModal(true);
   }
 
   // ── Loading / identity guards ──────────────────────────────────────────
@@ -588,52 +590,49 @@ export function IdentityChip(): React.JSX.Element | null {
   return (
     <>
       {/* Modals — rendered at root level to avoid dropdown stacking context */}
-      {showMoveModal && identity && (
-        <MoveAddressModal
+      {showProtectModal && identity && (
+        <ProtectModal
           identity={identity}
-          isProtected={isProtected}
-          passphrase={movePassphrase}
-          onComplete={(newIdentity) => {
-            // Wizard reached the "done" stage — update identity state but
-            // leave the wizard mounted so the user can see all status updates
-            // (completed steps, sats moved, recovery file note). The actual
-            // close happens when the user clicks "Continue" → onClose below.
-            // E27: do NOT call markBackedUp() here. With auto-download removed,
-            // reaching the done stage no longer implies the user has saved a
-            // file — they may still tap "I'll do it later." Saving fires
-            // separately via onSaved when the user explicitly taps Save and
-            // the share/download completes.
-            updateIdentity(newIdentity);
+          onComplete={() => {
+            // encryptInPlace committed — same key/address, now protected.
             setIsProtected(true);
-            moveCompletedRef.current = true;
+            protectCompletedRef.current = true;
           }}
           onSaved={() => {
-            // Fires from MoveAddressModal's done-state Save button after the
-            // Web Share / download completes successfully. ONLY now does the
-            // user actually have an externalized recovery file, so this is
-            // where global `backedUp` flips true.
+            // Fires only after the user explicitly saves the recovery file.
             markBackedUp();
           }}
           onClose={() => {
-            // Fires from: Cancel mid-wizard, Continue on done, X icon, or
-            // backdrop click. On successful rotation we close the You
-            // modal entirely — the user has just seen the wizard's done
-            // state and downloaded the recovery file, so dropping them
-            // back into a freshly-locked You modal adds nothing. They
-            // land on the page with the updated chip. Cancel mid-wizard
-            // (no completion) keeps the You modal open under the old
-            // passphrase.
-            //
-            // closeManageModal() is deferred via queueMicrotask so it runs
-            // AFTER React commits the setShowMoveModal(false) update +
-            // MoveAddressModal's unmount + its install-pitch unblock
-            // cleanup. Without the defer, the close was racing against
-            // those unmount-effects and the You modal was sometimes left
-            // visible behind the install pitch sheet that fires next.
-            const completed = moveCompletedRef.current;
-            moveCompletedRef.current = false;
-            setShowMoveModal(false);
-            setMovePassphrase("");
+            // queueMicrotask defer mirrors the old wizard pattern so the
+            // You-modal close runs AFTER the modal's unmount + install-pitch
+            // unblock cleanup (avoids the You modal lingering behind the
+            // install sheet that fires next).
+            const completed = protectCompletedRef.current;
+            protectCompletedRef.current = false;
+            setShowProtectModal(false);
+            if (completed) {
+              queueMicrotask(() => closeManageModal());
+            }
+          }}
+        />
+      )}
+      {showChangePassModal && identity && (
+        <ChangePassphraseModal
+          isOpen={showChangePassModal}
+          currentIdentity={identity}
+          preVerifiedPassphrase={reAuthPassphraseRef.current || undefined}
+          onSuccess={() => {
+            // Same key/address; only the passphrase changed. Mark completion so
+            // onClose closes the You modal (its cached passphrase is now stale).
+            changeCompletedRef.current = true;
+          }}
+          onSaved={() => {
+            markBackedUp();
+          }}
+          onClose={() => {
+            const completed = changeCompletedRef.current;
+            changeCompletedRef.current = false;
+            setShowChangePassModal(false);
             if (completed) {
               queueMicrotask(() => closeManageModal());
             }
@@ -877,10 +876,10 @@ export function IdentityChip(): React.JSX.Element | null {
                     </button>
                   )}
 
-                  {/* Passphrase — opens MoveAddressModal (rotates key + new passphrase) */}
+                  {/* Passphrase — protected: change; unprotected: add (encrypt-in-place) */}
                   <button
                     type="button"
-                    onClick={() => openMoveModal(reAuthPassphraseRef.current)}
+                    onClick={() => (isProtected ? openChangePassModal() : openProtectModal())}
                     disabled={!identity}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-400/5 transition-colors text-left disabled:opacity-40"
                   >
@@ -909,7 +908,7 @@ export function IdentityChip(): React.JSX.Element | null {
                         className={`text-[10px] block mt-0.5 ${isProtected ? "text-zinc-500" : "text-red-400/70"}`}
                       >
                         {isProtected
-                          ? "Move to a fresh key — earnings and posts stay synced"
+                          ? "Change the passphrase that protects your key"
                           : "Not set — add one so you can recover from any device"}
                       </span>
                     </div>
@@ -1253,11 +1252,11 @@ export function IdentityChip(): React.JSX.Element | null {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Stage 7+ flow: any path that produces a protected
-                  // identity (MoveAddressModal completion, RestoreModal
-                  // success) atomically sets backedUp=true. So this
-                  // banner is only reachable for unprotected users —
-                  // direct download, no re-auth needed.
+                  // Any path that produces an externalized recovery file
+                  // (ProtectModal save, ChangePassphraseModal save, RestoreModal
+                  // success) sets backedUp=true. So this banner is only
+                  // reachable for unprotected users — direct download, no
+                  // re-auth needed.
                   handleSaveFile();
                 }}
                 disabled={downloading}
@@ -1301,7 +1300,7 @@ export function IdentityChip(): React.JSX.Element | null {
                 // new exposure surface, so this fires on every save unless
                 // suppressed via "Not now" (30-day backoff). Both buttons
                 // acknowledge the save (markBackedUp + clear justDownloaded);
-                // Add passphrase additionally opens the Move modal.
+                // Add passphrase additionally opens the protect (encrypt-in-place) flow.
                 <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/30 flex items-start gap-3">
                   <svg
                     width="18"
@@ -1333,7 +1332,7 @@ export function IdentityChip(): React.JSX.Element | null {
                           e.stopPropagation();
                           markBackedUp();
                           setJustDownloaded(false);
-                          openMoveModal("");
+                          openProtectModal();
                         }}
                         className="bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg px-3 py-2 text-[11px] font-medium hover:bg-amber-500/30 transition-colors"
                       >
@@ -1416,7 +1415,7 @@ export function IdentityChip(): React.JSX.Element | null {
                   type="button"
                   onClick={() => {
                     closeDropdown();
-                    openMoveModal("");
+                    openProtectModal();
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 bg-red-950/20 hover:bg-red-950/40 transition-colors cursor-pointer text-left"
                 >
