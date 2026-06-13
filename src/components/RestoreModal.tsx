@@ -242,19 +242,12 @@ export function RestoreModal({
             note: "Previous identity saved before switching.",
             hint: getStoredHint(),
           };
-        } else if (!isProtected && currentIdentity) {
-          payload = {
-            name: currentIdentity.name,
-            address: currentIdentity.address,
-            wif: currentIdentity.wif,
-            pathType: "restore-pre",
-            createdAt: new Date().toISOString(),
-            note: "Previous identity saved before switching.",
-            hint: getStoredHint(),
-          };
         } else {
-          // Protected but no reAuthPassphrase available — can't build encrypted
-          // payload. Save button stays disabled; user must Skip-with-confirm.
+          // No encrypted payload available — either the outgoing identity is
+          // unprotected, or protected without the cached passphrase. We never
+          // produce a plaintext file (DECISIONS.md "no unencrypted recovery file
+          // ever leaves the device"), so the Save button stays disabled and the
+          // user proceeds via Skip-with-confirm.
           if (!cancelled) setOutgoingBackupPayload(null);
           return;
         }
@@ -633,15 +626,17 @@ export function RestoreModal({
                       </p>
                     ) : (
                       <p className="text-[11px] text-zinc-400 leading-relaxed">
-                        Save the current key&apos;s recovery file first if you might want to come
-                        back to it.
+                        {outgoingBackupPayload
+                          ? "Save the current key's recovery file first if you might want to come back to it."
+                          : "Your current key isn't protected — add a passphrase to keep it, or skip to continue."}
                       </p>
                     )}
                     {!skipConfirmed ? (
                       <>
                         <p className="text-[11px] text-zinc-400 leading-relaxed">
-                          Save its recovery file so you can come back to it later, or skip if you
-                          already have a backup elsewhere.
+                          {outgoingBackupPayload
+                            ? "Save its recovery file so you can come back to it later, or skip if you already have a backup elsewhere."
+                            : "An unprotected key can't be saved to a file here. Skip to continue — or cancel and add a passphrase first if you want to keep it."}
                         </p>
                         <div className="flex gap-2">
                           <button
@@ -652,14 +647,16 @@ export function RestoreModal({
                           >
                             Skip
                           </button>
-                          <button
-                            type="button"
-                            onClick={handleSaveOldKey}
-                            disabled={!outgoingBackupPayload || sharingOldKey || importing}
-                            className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            {sharingOldKey ? "Saving..." : "Save current key"}
-                          </button>
+                          {outgoingBackupPayload && (
+                            <button
+                              type="button"
+                              onClick={handleSaveOldKey}
+                              disabled={sharingOldKey || importing}
+                              className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {sharingOldKey ? "Saving..." : "Save current key"}
+                            </button>
+                          )}
                         </div>
                       </>
                     ) : (

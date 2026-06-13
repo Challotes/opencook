@@ -413,39 +413,12 @@ export function IdentityChip(): React.JSX.Element | null {
       }
       return;
     }
-    // Unprotected: plaintext download
+    // Unprotected: no plaintext export ever. Route to "set a passphrase" —
+    // ProtectModal encrypts the key in place and emits the ENCRYPTED recovery
+    // file itself (DECISIONS.md "passphrase-gated export — no unencrypted
+    // recovery file ever leaves the device").
     if (!identity) return;
-    void doDownloadPlaintext();
-  }
-
-  // E28b: route through shareOrDownloadBackup so iPhone gets the native share
-  // drawer ("Save to Files" one-tap) instead of the intrusive full-page download
-  // sheet. block()/unblock() wrap the share to suppress iOS's
-  // visibilitychange→hidden teardown that would otherwise re-lock the manage
-  // gate when the share drawer covers the page. `setJustDownloaded` only flips
-  // on real success — if user cancels the share drawer, no false "saved" signal.
-  async function doDownloadPlaintext(): Promise<void> {
-    if (!identity) return;
-    setDownloading(true);
-    blockSessionClear();
-    try {
-      const result = await shareOrDownloadBackup({
-        name: identity.name,
-        address: identity.address,
-        wif: identity.wif,
-        pathType: "save",
-        createdAt: new Date().toISOString(),
-        hint: getStoredHint(),
-      });
-      // Only flip the "saved" state if the share / download actually completed.
-      // Cancellation (AbortError on iOS share drawer) returns shared:false and
-      // must NOT light up the "Got it" confirmation UI.
-      if (result.shared && !result.cancelled) setJustDownloaded(true);
-    } finally {
-      unblockSessionClear();
-      // Stay in You modal — inline confirmation appears on the Save row.
-      setTimeout(() => setDownloading(false), 1000);
-    }
+    openProtectModal();
   }
 
   async function handleSaveEncrypted(passphrase: string): Promise<void> {
@@ -1273,7 +1246,7 @@ export function IdentityChip(): React.JSX.Element | null {
                   <span className="text-[10px] text-amber-400/70 block">
                     {isProtected
                       ? "One tap — lets you get back in from any device."
-                      : "One tap to save. Plain text for now — you can lock it later."}
+                      : "One tap to set a passphrase and save your recovery file."}
                   </span>
                 </div>
                 <svg
