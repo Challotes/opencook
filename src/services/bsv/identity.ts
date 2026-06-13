@@ -991,12 +991,14 @@ export async function importEncryptedIdentity(
     ...(trimmedHint ? { hint: trimmedHint } : {}),
   };
 
-  // Critical ordering: remove plaintext FIRST, then write encrypted store.
-  // If the order were reversed and the second write failed, we'd have BOTH
-  // keys in localStorage with mismatched identity — isEffectivelyProtected()
-  // would return false (plaintext present) and the user would be confused.
-  localStorage.removeItem(STORAGE_KEY);
+  // Write the encrypted store FIRST, then remove the plaintext. If interrupted
+  // between the two, the worst case is the encrypted (restored) key is present
+  // and a stale plaintext key lingers — recoverable, the user just retries. The
+  // reverse order risks an interruption (tab close, iOS backgrounding, a throwing
+  // setItem) leaving NEITHER key in localStorage, permanently losing the
+  // just-restored identity. (Key-safety audit finding R1, 2026-06-13.)
   localStorage.setItem(ENCRYPTED_KEY, JSON.stringify(storePayload));
+  localStorage.removeItem(STORAGE_KEY);
 
   // Prime session caches so any follow-up signing (post creation, boot, etc.)
   // works without forcing the user to re-unlock. The encrypted-store path
