@@ -219,9 +219,13 @@ const MAX_CONSOLIDATION_INPUTS = 20;
 /**
  * Estimate the fee for a transaction with N inputs and M outputs (P2PKH).
  * Byte formula: 10 (overhead) + 148 * inputs + 34 * outputs + 200 (OP_RETURN est.)
- * The OP_RETURN carries a JSON boot-audit record (~150-160 bytes); 200 leaves
+ * The OP_RETURN carries a JSON boot-audit record (~157 bytes); 200 leaves
  * margin. NOTE: this estimate only sizes UTXO selection — the actual fee is the
  * SDK's exact `tx.fee()` on the built tx, so the payload size can't underpay.
+ * If a future field is added to the boot-audit record (see lib/boot-audit.ts)
+ * and the payload grows past ~180 bytes, RAISE this 200 constant so selection
+ * keeps its margin (otherwise a wallet right at the balance edge could select
+ * one input too few and spuriously hit insufficient_funds).
  * Rate: 0.1 sat/byte (100 sat/kb) to match ARC's minimum policy.
  */
 function estimateFee(inputCount: number, outputCount: number): number {

@@ -5,6 +5,7 @@
 
 import type { LockingScript } from "@bsv/sdk";
 import { OP, Script } from "@bsv/sdk";
+import { onchainRecord } from "@/lib/onchain-record";
 import { buildAndBroadcast } from "./wallet";
 
 interface PostData {
@@ -22,15 +23,11 @@ interface PostData {
  */
 export async function logPostOnChain(postData: PostData): Promise<string | null> {
   const attempt = async (): Promise<string | null> => {
-    const payload = JSON.stringify({
-      v: 1,
-      app: "bsvibes",
-      type: "post",
+    const payload = onchainRecord("post", {
       content: postData.content,
       author: postData.author,
       sig: postData.signature,
       pubkey: postData.pubkey,
-      ts: Date.now(),
     });
 
     // Build OP_FALSE OP_RETURN script (BSV standard — provably unspendable)
