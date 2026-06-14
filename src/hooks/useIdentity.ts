@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { detectStandalone } from "@/hooks/useStandaloneMode";
-import { getIdentity, type Identity, isIdentityEncrypted, signPost } from "@/services/bsv/identity";
+import {
+  getIdentity,
+  hasEncryptedStorePresent,
+  type Identity,
+  isIdentityEncrypted,
+  signPost,
+} from "@/services/bsv/identity";
 
 /**
  * Internal state — a discriminated union prevents impossible states like
@@ -71,9 +77,13 @@ export function useIdentity(): UseIdentityReturn {
         // 1. Encrypted store exists → user must unlock
         // 2. Standalone + no identity → welcome gate must fire
         // 3. Browser tab + auto-gen failed (rare — disk full, private browsing quota)
+        // Use the presence-aware check: a corrupt/unparseable encrypted store
+        // makes isIdentityEncrypted() return false, but it's still a protected
+        // store and must route to unlock (not the browser-tab retry → hang).
+        // (Finding 3, deep audit 2026-06-15.)
         let encrypted = false;
         try {
-          encrypted = isIdentityEncrypted();
+          encrypted = isIdentityEncrypted() || hasEncryptedStorePresent();
         } catch {
           // localStorage threw (private browsing quota, etc.) — treat as no encrypted store
           encrypted = false;

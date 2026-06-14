@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { RestoreModal } from "@/components/RestoreModal";
 import { useIdentityContext } from "@/contexts/IdentityContext";
+import { useInstallContext } from "@/contexts/InstallContext";
 import { getStoredHint } from "@/services/bsv/backup-template";
 import { unlockIdentity } from "@/services/bsv/identity";
 
@@ -15,6 +17,7 @@ import { unlockIdentity } from "@/services/bsv/identity";
  */
 export function SignInModal(): React.JSX.Element | null {
   const { signInOpen, closeSignIn, updateIdentity } = useIdentityContext();
+  const { markBackedUp } = useInstallContext();
 
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState("");
@@ -22,6 +25,12 @@ export function SignInModal(): React.JSX.Element | null {
   const [shakeKey, setShakeKey] = useState(0);
   const [storedHint, setStoredHint] = useState<string | null>(null);
   const [hintRevealed, setHintRevealed] = useState(false);
+  // Finding 2 (deep audit 2026-06-15): always-available escape hatch. A user whose
+  // encrypted store is corrupt sees "wrong passphrase" on every attempt (decryptWif
+  // can't tell wrong-passphrase from corruption), and a forgotten-passphrase user
+  // is otherwise trapped — with rotation gone, the recovery file is the ONLY way
+  // back in. Opening RestoreModal here gives both a way out.
+  const [showRestore, setShowRestore] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -70,6 +79,7 @@ export function SignInModal(): React.JSX.Element | null {
       setError("");
       setUnlocking(false);
       setHintRevealed(false);
+      setShowRestore(false);
     }
   }, [signInOpen]);
 
@@ -198,9 +208,35 @@ export function SignInModal(): React.JSX.Element | null {
                 {unlocking ? "Signing in..." : "Sign in"}
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowRestore(true)}
+              className="block w-full text-center text-[11px] text-zinc-500 hover:text-amber-400/90 underline underline-offset-2 transition-colors pt-1"
+            >
+              Can&apos;t sign in? Restore from a saved file
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Always-available recovery escape — opens RestoreModal on top (z-[100] >
+          this modal's z-[80]). When locked there is no in-memory identity, so
+          currentIdentity is null (RestoreModal skips the save-outgoing-key prompt
+          and goes straight from passphrase decrypt → restore). */}
+      <RestoreModal
+        isOpen={showRestore}
+        onClose={() => {
+          setShowRestore(false);
+          closeSignIn();
+        }}
+        onSuccess={(imported) => {
+          updateIdentity(imported);
+          markBackedUp();
+        }}
+        currentIdentity={null}
+        isProtected={false}
+        reAuthPassphrase=""
+      />
     </>
   );
 }

@@ -126,6 +126,41 @@ export function isIdentityEncrypted(): boolean {
   return isEncrypted(raw);
 }
 
+/**
+ * Read the encrypted store's plaintext `address` metadata WITHOUT decrypting.
+ * Lets getIdentity tell an interrupted encrypt-in-place (SAME key) from an
+ * interrupted restore (DIFFERENT key) when both stores are present. Returns null
+ * if absent/unreadable. (Finding 1, deep audit 2026-06-15.)
+ */
+function getEncryptedStoreAddress(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(ENCRYPTED_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { address?: string };
+    return typeof parsed.address === "string" ? parsed.address : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True if a protected (encrypted) store is physically present — even if its JSON
+ * is corrupt/unparseable. getIdentity must NEVER auto-generate a fresh key over
+ * this: doing so would orphan the user's real posts/earnings behind a brand-new
+ * empty anon. (Finding 3, deep audit 2026-06-15. `isIdentityEncrypted()` returns
+ * false on a parse failure, so it alone does not guard this case.)
+ */
+export function hasEncryptedStorePresent(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem(ENCRYPTED_KEY);
+    return raw !== null && raw.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Check for old identity format (just a name string, no keypair). */
 function getOldIdentityName(): string | null {
   if (typeof window === "undefined") return null;
@@ -161,18 +196,40 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
   // If session has a decrypted identity, use it
   if (_sessionIdentity) return _sessionIdentity;
 
-  // If encrypted, check whether a plaintext identity also exists (interrupted
-  // encrypt-in-place: encryptInPlace writes the encrypted store then removes the
-  // plaintext one; a crash between those leaves both). Prefer the plaintext one
-  // so the user isn't locked out — it's the SAME key, so this is harmless.
+  // Both stores present? Distinguish an interrupted encrypt-in-place (SAME key —
+  // encryptInPlace writes the encrypted store then removes the plaintext; a crash
+  // between leaves both) from an interrupted RESTORE (DIFFERENT key —
+  // importEncryptedIdentity writes the encrypted NEW key then removes the OLD
+  // plaintext). Comparing the stores' plaintext address metadata tells them apart
+  // WITHOUT the passphrase. (Finding 1, deep audit 2026-06-15: the old code
+  // unconditionally preferred the plaintext, which silently REVERTED a restore to
+  // the user's old key.)
   if (isIdentityEncrypted()) {
     const plaintext = getStoredIdentity();
     if (plaintext) {
+      const encAddr = getEncryptedStoreAddress();
+      if (encAddr && encAddr === plaintext.address) {
+        // SAME key → interrupted encrypt-in-place. Use the plaintext so the user
+        // isn't locked out (same key/address).
+        console.warn(
+          "[BSVibes] getIdentity: both stores present, SAME address — interrupted " +
+            "encrypt-in-place. Using plaintext identity."
+        );
+        return await materializeFromStored(plaintext);
+      }
+      // DIFFERENT (or unreadable) address → interrupted RESTORE. The encrypted
+      // store is the intended NEWER key; the plaintext is the stale pre-restore
+      // key. Remove the stale plaintext and route to unlock so the user signs into
+      // the RESTORED key, not silently reverting to the old one. NEVER touch the
+      // encrypted store here — that's the just-restored identity (R1 invariant).
       console.warn(
-        "[BSVibes] getIdentity: encrypted key exists but plaintext key also present — " +
-          "likely an interrupted encrypt-in-place. Using plaintext identity."
+        "[BSVibes] getIdentity: both stores present, DIFFERENT address — interrupted " +
+          "restore. Removing stale plaintext; routing to unlock."
       );
-      return await materializeFromStored(plaintext);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+      return null;
     }
     return null;
   }
@@ -190,8 +247,12 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
     return await materializeFromStored(stored);
   }
 
-  // Don't generate a new key if an encrypted identity exists — user needs to unlock
-  if (isIdentityEncrypted()) return null;
+  // Don't generate a new key if an encrypted identity exists — OR if a raw
+  // encrypted store is physically present but unparseable (truncated/corrupt).
+  // Auto-genning over a corrupt-but-present protected store would orphan the
+  // user's real posts/earnings behind a fresh empty anon. Return null → unlock.
+  // (Finding 3, deep audit 2026-06-15.)
+  if (isIdentityEncrypted() || hasEncryptedStorePresent()) return null;
 
   // Caller (welcome gate in standalone mode) opted out of auto-generation.
   // Returning null here keeps localStorage clean so the user's restore-from-file
@@ -209,7 +270,7 @@ export async function getIdentity(options?: { allowAutoGen?: boolean }): Promise
 
   // Final guard before writing: re-check both keys in case a concurrent call
   // wrote something between the async getBsvSdk() await above.
-  if (isIdentityEncrypted()) return null;
+  if (isIdentityEncrypted() || hasEncryptedStorePresent()) return null;
   const raceCheck = getStoredIdentity();
   if (raceCheck) {
     return await materializeFromStored(raceCheck);
