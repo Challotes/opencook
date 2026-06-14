@@ -3,9 +3,7 @@ import { bootConfirmMessage } from "@/lib/boot-message";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { getServerAddress } from "@/services/bsv/wallet";
-import { getBootPrice } from "@/services/fairness/pricing";
-import { calculateSplit } from "@/services/fairness/split";
-import { calculateWeights } from "@/services/fairness/weights";
+import { FAIRNESS_CONFIG } from "@/services/fairness/config";
 
 interface BootConfirmBody {
   postId: number;
@@ -213,10 +211,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Server wallet not configured" }, { status: 503 });
   }
 
-  // Recalculate the split at current prices so we have accurate payout records
-  const bootPrice = getBootPrice(db);
-  const weights = calculateWeights(db);
-
+  // Finding 6 (deep audit 2026-06-15): the tx is self-authenticating
+  // (hash(rawTx)===txid, verified above) and has already been re-broadcast into
+  // ARC's mempool — the money has MOVED. RECORD what was actually paid on-chain;
+  // do NOT recompute a fresh split and reject on mismatch. The pool weights/price
+  // legitimately drift between the boot-shares quote and this confirm (every other
+  // boot mutates bootboard → weights; a new post moves the price), and a
+  // mismatch-reject would 400 an ALREADY-BROADCAST tx → the client retries →
+  // a NEW txid double-pays (the replay guard at the top is txid-only).
   let creatorAddress: string;
   try {
     const { PublicKey } = await import("@bsv/sdk");
@@ -225,31 +227,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid creator pubkey" }, { status: 422 });
   }
 
-  const split = calculateSplit(bootPrice, post.pubkey, creatorAddress, platformAddress, weights);
-
-  // Verify on-chain outputs match the expected split.
-  // Build a map of expected address → sats from the split.
-  const expectedOutputs = new Map<string, number>();
-  if (split.platform.sats > 0) {
-    expectedOutputs.set(
-      split.platform.address,
-      (expectedOutputs.get(split.platform.address) ?? 0) + split.platform.sats
-    );
-  }
-  if (split.creatorBonus.sats > 0) {
-    expectedOutputs.set(
-      split.creatorBonus.address,
-      (expectedOutputs.get(split.creatorBonus.address) ?? 0) + split.creatorBonus.sats
-    );
-  }
-  for (const r of split.pool) {
-    if (r.sats > 0) {
-      expectedOutputs.set(r.address, (expectedOutputs.get(r.address) ?? 0) + r.sats);
-    }
-  }
-
-  // Check that each expected recipient appears in the tx outputs with at least the expected sats.
-  // Allow 2 sat tolerance per output for fee rounding differences.
+  // Sum on-chain sats per recipient address (the OP_RETURN output is non-P2PKH →
+  // address null → naturally excluded).
   const onChainByAddr = new Map<string, number>();
   for (const vout of txVouts) {
     if (vout.address) {
@@ -257,21 +236,49 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  for (const [addr, expectedSats] of expectedOutputs) {
-    const actualSats = onChainByAddr.get(addr) ?? 0;
-    if (actualSats < expectedSats - 2) {
-      console.warn(
-        `[BSVibes] boot-confirm: output mismatch for ${addr} — expected ${expectedSats}, got ${actualSats}`
-      );
-      console.warn("[BSVibes] boot-confirm: expected split:", [...expectedOutputs.entries()]);
-      console.warn("[BSVibes] boot-confirm: on-chain outputs:", [...onChainByAddr.entries()]);
-      console.warn("[BSVibes] boot-confirm: boot price:", bootPrice);
-      return NextResponse.json(
-        { error: "Transaction outputs do not match expected split" },
-        { status: 400 }
-      );
-    }
+  // CONSERVATION FLOOR — the one enforced invariant: the platform must receive at
+  // least its floor-based cut. The platform address is the server wallet, NEVER
+  // the booter, so this can't false-reject. Using the FLOOR (not the drift-prone
+  // recomputed price) keeps it a fixed lower bound the client knows in advance, so
+  // legitimate price/weight drift never trips it. Prevents recording a boot that
+  // paid the platform ~nothing. ACCEPTED RESIDUAL: a client can under-pay the
+  // *non-platform* contributors and still get a boot recorded — but that's their
+  // own money, contributors are credited exactly what was sent on-chain (honest
+  // ledger), and a per-contributor floor is impossible because the booter can
+  // themselves be a pool recipient (it would false-reject a solo contributor).
+  const minPlatform = Math.floor(FAIRNESS_CONFIG.bootPriceFloor * FAIRNESS_CONFIG.platformCut) - 2;
+  const platformPaid = onChainByAddr.get(platformAddress) ?? 0;
+  if (platformPaid < minPlatform) {
+    console.warn(
+      `[BSVibes] boot-confirm: platform underpaid — got ${platformPaid}, min ${minPlatform}, txid ${txid.slice(0, 16)}…`
+    );
+    return NextResponse.json(
+      { error: "Transaction does not meet the minimum boot payout", code: "BOOT_UNDERPAID" },
+      { status: 422 }
+    );
   }
+
+  // Payout rows are built FROM the parsed on-chain outputs. The booter's change
+  // (P2PKH back to booterAddress) is excluded. recipient_pubkey is just an audit
+  // label — earnings joins on recipient_address (DECISIONS.md "Money surfaces key
+  // on the BSV address"), so "" is fine for chain-derived pool recipients.
+  const chainPayouts = txVouts
+    .filter((v) => v.address && v.address !== booterAddress && v.sats > 0)
+    .map((v) => {
+      const address = v.address as string;
+      if (address === platformAddress) {
+        return { address, sats: v.sats, payoutType: "platform", recipientPubkey: "platform" };
+      }
+      if (address === creatorAddress) {
+        return {
+          address,
+          sats: v.sats,
+          payoutType: "boost_bonus",
+          recipientPubkey: post.pubkey as string,
+        };
+      }
+      return { address, sats: v.sats, payoutType: "pool_share", recipientPubkey: "" };
+    });
 
   // All SQLite writes wrapped in a single transaction
   db.transaction(() => {
@@ -309,32 +316,12 @@ export async function POST(req: NextRequest) {
       ).run(booterAddress);
     }
 
-    // Record payouts for the audit trail
-    if (split.platform.sats > 0) {
+    // Record payouts FROM the verified on-chain outputs (Finding 6) — the earnings
+    // ledger reflects what was actually paid, not a recomputed (drift-prone) split.
+    for (const p of chainPayouts) {
       db.prepare(
         "INSERT INTO payouts (boot_event_id, recipient_pubkey, recipient_address, amount_sats, payout_type, txid) VALUES (?, ?, ?, ?, ?, ?)"
-      ).run(bootEventId, "platform", split.platform.address, split.platform.sats, "platform", txid);
-    }
-
-    if (split.creatorBonus.sats > 0) {
-      db.prepare(
-        "INSERT INTO payouts (boot_event_id, recipient_pubkey, recipient_address, amount_sats, payout_type, txid) VALUES (?, ?, ?, ?, ?, ?)"
-      ).run(
-        bootEventId,
-        split.creatorBonus.pubkey,
-        split.creatorBonus.address,
-        split.creatorBonus.sats,
-        "boost_bonus",
-        txid
-      );
-    }
-
-    for (const recipient of split.pool) {
-      if (recipient.sats > 0) {
-        db.prepare(
-          "INSERT INTO payouts (boot_event_id, recipient_pubkey, recipient_address, amount_sats, payout_type, txid) VALUES (?, ?, ?, ?, ?, ?)"
-        ).run(bootEventId, recipient.pubkey, recipient.address, recipient.sats, "pool_share", txid);
-      }
+      ).run(bootEventId, p.recipientPubkey, p.address, p.sats, p.payoutType, txid);
     }
   })();
 

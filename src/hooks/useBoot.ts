@@ -162,24 +162,53 @@ export function useBoot(opts: UseBootOptions = {}) {
               .toDER("hex") as string;
             const booterPubkey = bootKey.toPublicKey().toString();
 
-            const confirmRes = await fetch("/api/boot-confirm", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                postId,
-                txid: bootResult.txid,
-                rawTx: bootResult.rawTx,
-                booterPubkey,
-                signature,
-                booterName: identity.name,
-              }),
+            // The tx is ALREADY broadcast (we have a txid). On a confirm failure we
+            // must NEVER rebuild a NEW tx — that mints a new txid and DOUBLE-PAYS
+            // (the server replay guard is txid-only). Finding 6. So we re-POST the
+            // SAME confirm body (idempotent: a duplicate hits the server's 409 txid
+            // replay guard) and never re-enter the broadcast path on failure.
+            const confirmBody = JSON.stringify({
+              postId,
+              txid: bootResult.txid,
+              rawTx: bootResult.rawTx,
+              booterPubkey,
+              signature,
+              booterName: identity.name,
             });
+            const postConfirm = () =>
+              fetch("/api/boot-confirm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: confirmBody,
+              });
+
+            let confirmRes: Response;
+            try {
+              confirmRes = await postConfirm();
+              // Re-POST the SAME confirm (NOT a rebuild) up to 2× on a transient 503.
+              for (let attempt = 0; attempt < 2 && confirmRes.status === 503; attempt++) {
+                await new Promise((r) => setTimeout(r, 1500));
+                confirmRes = await postConfirm();
+              }
+            } catch (e) {
+              // The fetch itself THREW (offline, connection dropped, abort) AFTER a
+              // successful broadcast — the money is on-chain. Do NOT fall through to
+              // the outer catch, which would failBoot → "tap to retry" → rebuild a
+              // NEW tx → double-pay. This is the MOST LIKELY transient failure, so
+              // it must be handled here. Release quietly (the tx is recordable later
+              // by re-submitting the SAME txid → server 409 idempotent path). F6.
+              console.error("[useBoot] confirm fetch threw after broadcast — NOT retrying:", e);
+              releaseBoot();
+              return { success: false };
+            }
 
             // Treat 409 "already recorded" as idempotent success (prior confirm worked)
             if (confirmRes.ok || confirmRes.status === 409) {
               // Distinguish "already recorded" (good) from "conflict" (bad) via payload
               const confirmData = await confirmRes.json().catch(() => ({ error: "parse_failed" }));
               if (confirmRes.status === 409 && confirmData.code === "TX_CONFLICT") {
+                // Inputs already spent — the tx won't confirm, so it never landed;
+                // rebuilding with fresh UTXOs is SAFE (the only retry-rebuild case).
                 console.error("[useBoot] boot-confirm TX_CONFLICT:", confirmData);
                 failBoot("Payment couldn't be confirmed, tap to retry.");
                 return { success: false };
@@ -189,10 +218,19 @@ export function useBoot(opts: UseBootOptions = {}) {
               return { success: true };
             }
 
-            // Non-ok response — log and fail visibly so user sees what happened
+            // Terminal confirm failure AFTER a successful broadcast. The money is
+            // on-chain; do NOT offer "tap to retry" (which rebuilds + double-pays).
+            // Release quietly — a later identical re-submit of the SAME txid would
+            // hit the server's 409 idempotent path. After the server-side
+            // record-from-chain fix (Finding 6) this path is effectively
+            // unreachable for a legitimate client (drift no longer rejects).
             const errData = await confirmRes.json().catch(() => ({ error: "unknown" }));
-            console.error("[useBoot] boot-confirm failed:", confirmRes.status, errData);
-            failBoot("Boot failed, tap to retry.");
+            console.error(
+              "[useBoot] boot-confirm failed after broadcast — NOT retrying (tx already on-chain):",
+              confirmRes.status,
+              errData
+            );
+            releaseBoot();
             return { success: false };
           }
 
