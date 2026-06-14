@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { bootConfirmMessage } from "@/lib/boot-message";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { getServerAddress } from "@/services/bsv/wallet";
@@ -10,7 +11,8 @@ interface BootConfirmBody {
   postId: number;
   txid: string;
   rawTx?: string;
-  booterAddress: string;
+  booterPubkey: string; // hex compressed pubkey — VERIFIED; the credited address is derived from it
+  signature: string; // DER hex over bootConfirmMessage(postId, txid)
   booterName: string;
 }
 
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { postId, txid, rawTx, booterAddress, booterName } = body;
+  const { postId, txid, rawTx, booterPubkey, signature, booterName } = body;
 
   if (!Number.isInteger(postId) || postId <= 0) {
     return NextResponse.json({ error: "Invalid postId" }, { status: 400 });
@@ -49,6 +51,37 @@ export async function POST(req: NextRequest) {
     .get(txid.trim()) as { id: number } | undefined;
   if (existingPayout) {
     return NextResponse.json({ error: "Transaction already recorded" }, { status: 409 });
+  }
+
+  // Authenticate the booter: verify an ECDSA signature over the canonical boot
+  // message and DERIVE the credited address from the verified pubkey. This binds
+  // the boot record to the key that signed it, so a client cannot forge
+  // `boosted_by` (boot-attribution forgery / framing). Matches the createPost
+  // signature pattern. Fails closed (401) before any DB write or re-broadcast.
+  // See SECURITY_AUDIT.md C3 / Step 7. NOTE: this does NOT defend the narrow
+  // mempool-race where an attacker re-submits a victim's already-broadcast tx
+  // under the attacker's OWN key to self-credit (the victim's later confirm then
+  // 409s) — that requires winning a sub-second race against the victim's
+  // synchronous confirm and only yields self-credit, not framing. Tracked.
+  if (typeof booterPubkey !== "string" || booterPubkey.trim().length === 0) {
+    return NextResponse.json({ error: "Missing booterPubkey" }, { status: 400 });
+  }
+  if (typeof signature !== "string" || signature.trim().length === 0) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 400 });
+  }
+  let booterAddress: string;
+  try {
+    const { PublicKey, Signature } = await import("@bsv/sdk");
+    const message = bootConfirmMessage(postId, txid);
+    const messageBytes = Array.from(new TextEncoder().encode(message));
+    const pk = PublicKey.fromString(booterPubkey.trim());
+    const verified = pk.verify(messageBytes, Signature.fromDER(signature.trim(), "hex"));
+    if (!verified) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+    booterAddress = pk.toAddress().toString();
+  } catch {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   // Verify the transaction by parsing the raw tx hex sent by the client.
@@ -157,10 +190,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Could not parse rawTx" }, { status: 400 });
   }
 
-  if (typeof booterAddress !== "string" || booterAddress.trim().length === 0) {
-    return NextResponse.json({ error: "Missing booterAddress" }, { status: 400 });
-  }
-  // booterName defaults to booterAddress if not provided (backward compat)
+  // booterName defaults to the server-derived booterAddress if not provided
   const displayName =
     typeof booterName === "string" && booterName.trim().length > 0
       ? booterName.trim()

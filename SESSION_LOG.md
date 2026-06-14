@@ -2,7 +2,7 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
-## 2026-06-14 (cont.) — Phase 1 Steps 3–6 + doc-sync
+## 2026-06-14 (cont.) — Phase 1 Steps 3–7 + doc-sync
 
 Category: implementation (launch-critical-path execution). Continued Phase 1. Each group: agent design pass → plain-English to owner → edit → tsc + Biome + vitest → code-auditor on the diff → commit. All commits UNPUSHED (owner holding local). Findings validated against DECISIONS.md before acting; one agent claim about the post-Group-B state was wrong and caught by direct verification (RestoreModal no longer calls restore-eligibility).
 
@@ -15,9 +15,11 @@ Category: implementation (launch-critical-path execution). Continued Phase 1. Ea
 - **Doc-sync** (`3e1f8cf`): scrubbed CLAUDE.md/ROADMAP.md/FAIRNESS.md/SECURITY_AUDIT.md of deleted-as-live rotation/migration/E29-E30-E31 references (security findings annotated SUPERSEDED, history preserved); DECISIONS.md + SESSION_LOG.md updated; FAIRNESS.md AFP-novelty claim KEPT as a historical prior-art note (owner chose "keep" 2026-06-14). Reviewed each file's diff before commit.
 - **Step 6 — per-IP free-boot cap** (`<this commit>`): new `src/lib/free-boot-cap.ts` `tryConsumeFreeBootForIp` (in-memory, 40/IP/24h, reuses rate-limit.ts). `bootPost` reads IP via `await headers()` and consults the cap ONLY when the per-identity grant would make the boot free; on bind it demotes `isFree→false` (silent free→paid flip via existing `useBoot` handling) and recomputes the real `getBootPrice(db)` (grant path returns 0 — agent caught this). Fails toward PAID, never fail-open. 4 unit tests incl. the throwing-limiter catch branch. Auditor CLEAN (verified never-fail-open + paid boots can't be blocked).
 
-**Net:** key rotation is 100% gone from code AND docs. Protect + change-passphrase survive (same key, unlimited times) via ProtectModal/ChangePassphraseModal (encrypt-in-place). Per-IP free-boot cap bounds the fresh-identity-per-tab server-wallet drain.
+- **Step 7 — boot-confirm booter auth** (`<this commit>`): boot-confirm trusted a client `booterAddress` (→ `bootboard.boosted_by` + `boot_grants`) with no signature — boot-attribution forgery/framing. Now the booter signs `boot:<postId>:<txid>` (new shared `src/lib/boot-message.ts`) with their identity key; server verifies (createPost ECDSA pattern) and DERIVES the credited address from the verified pubkey. `useBoot` signs with `identity.wif` (pubkey derived from wif — useBoot only has wif/address/name). record-from-on-chain-outputs was ALREADY done (payouts come from the server-recomputed split, not client — verified). Fails closed (401) before any DB write/re-broadcast. 6 round-trip tests (sign↔verify, wrong-postId/txid/key). Auditor CLEAN, verdict ship-as-is. **Residual** (auditor-rated low, TRACKED in SECURITY_AUDIT C3-residual): mempool-race self-credit — an attacker can re-POST a victim's broadcast tx under their OWN key to self-credit before the victim's confirm; fund-safe (payouts fixed in the tx), racy, IP-rate-limited; proper fix (prove input ownership) deferred. Also folded in the Step 6 deploy caveat (both IP headers stripped → all free boots become paid).
 
-**Remaining in Phase 1 (server items, NOT started):** Step 7 — boot-confirm auth + record-from-on-chain-outputs; Step 8 — free-boot idempotency. Step 1 (on-chain `v:1`) + Step 2 (encrypt-in-place) done earlier. Then Phase-1 deep-audit/re-audit, then Phase 2+. NOT pushed yet — owner holding all commits local. Next session: Step 7.
+**Net:** key rotation is 100% gone from code AND docs. Protect + change-passphrase survive (same key, unlimited times) via ProtectModal/ChangePassphraseModal (encrypt-in-place). Per-IP free-boot cap bounds the fresh-identity-per-tab server-wallet drain. Paid boots are now attribution-authenticated.
+
+**Remaining in Phase 1 (server item, NOT started):** Step 8 — free-boot idempotency (consume the grant before paying + idempotency key so a crash between broadcast and DB write can't make the server pay twice). Step 1 (on-chain `v:1`) + Step 2 (encrypt-in-place) done earlier. **Known follow-up (not scheduled):** the FREE-boot path (`bootPost`) still trusts a client address for attribution — symmetric to the Step 7 paid-path fix; low value (free boots cost nothing, IP-capped) but flagged for parity. Then Phase-1 deep-audit/re-audit, then Phase 2+. NOT pushed yet — owner holding all commits local. Next session: Step 8.
 
 ## 2026-06-14 — Phase 0 + Phase 1 Steps 1–2 implemented (encrypt-in-place COMPLETE)
 

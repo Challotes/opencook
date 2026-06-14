@@ -30,7 +30,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 
 - `src/app/api/posts/route.ts` — Feed polling (GET, ?since_id for incremental updates)
 - `src/app/api/boot-shares/route.ts` — Contributor shares + boot price for client-side tx building
-- `src/app/api/boot-confirm/route.ts` — Records boot after client broadcasts (rawTx + local P2PKH parsing, self-authenticating hash(rawTx)===txid check, ARC re-broadcast safety net, replay protection, rate limiting)
+- `src/app/api/boot-confirm/route.ts` — Records boot after client broadcasts (rawTx + local P2PKH parsing, self-authenticating hash(rawTx)===txid check, ARC re-broadcast safety net, replay protection, rate limiting). **Booter auth (Step 7):** requires an ECDSA signature over `boot:<postId>:<txid>` (`boot-message.ts`); the credited address (`bootboard.boosted_by` + `boot_grants`) is DERIVED from the verified pubkey, never client-supplied — closes boot-attribution forgery. Payouts come from the server-recomputed split, not client input.
 - `src/app/api/boot-status/route.ts` — Free boots remaining + boot price for a user
 - `src/app/api/earnings/route.ts` — Total earned, activity feed, earnings history for chart
 - `src/app/api/agent/route.ts` — Streaming agent chat (SSE, rate-limited)
@@ -42,6 +42,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 - `src/app/actions.ts` — Server actions. Reads (no signature): getPosts, getNewPosts, getUpdatedPosts, getOlderPosts, getBootboard. Mutations (signature-verified): createPost, bootPost.
 - `src/lib/db.ts` — SQLite setup (WAL, foreign keys, auto-migration, indexes, boot_grants + payouts tables)
 - `src/lib/rate-limit.ts` — In-memory sliding window rate limiter
+- `src/lib/boot-message.ts` — `bootConfirmMessage(postId, txid)` → `boot:<postId>:<txid>`, the canonical string the booter signs for `/api/boot-confirm`. Single source of truth shared by the client (`useBoot`) and server (boot-confirm) so the signed message is byte-identical. Unit-tested (incl. sign↔verify round-trip) in `boot-message.test.ts`.
 - `src/lib/free-boot-cap.ts` — Per-IP cap on SERVER-FUNDED free boots (`tryConsumeFreeBootForIp`, 40/IP/24h, reuses rate-limit.ts). Additive defense behind the per-identity `boot_grants` cap, bounding the "fresh identity per incognito tab" server-wallet drain. Fails toward PAID, never fail-open. Consulted by `bootPost` only when the per-identity grant would make the boot free. Unit-tested in `free-boot-cap.test.ts`.
 - `src/lib/utils.ts` — Shared utilities (generateAnonName, cn helper)
 - `src/data/agent-prompt.ts` — Dynamic agent prompt builder (loads MDs at request time)
@@ -140,7 +141,7 @@ All on-chain payloads are JSON inside OP_FALSE OP_RETURN outputs:
 PostForm → signPost (ECDSA) → createPost server action → verify signature → insert DB → logPostOnChain (fire-and-forget OP_RETURN) → return post ID → optimistic UI update → Feed polls for confirmation
 
 **Boot payment (paid):**
-BootButton/useBoot → bootPost server action (checks free quota) → requiresPayment response → fetch /api/boot-shares (split calculation) → clientSideBoot (browser builds multi-output BSV tx) → broadcast via ARC → POST /api/boot-confirm with rawTx (server verifies hash(rawTx)===txid, parses P2PKH outputs locally to check split, re-broadcasts via ARC as safety net, records payouts, emits TX_CONFLICT vs ARC_UNAVAILABLE codes) → Feed polls for bootboard update
+BootButton/useBoot → bootPost server action (checks free quota) → requiresPayment response → fetch /api/boot-shares (split calculation) → clientSideBoot (browser builds multi-output BSV tx) → broadcast via ARC → POST /api/boot-confirm with rawTx + booterPubkey + signature (server verifies the booter's ECDSA signature over `boot:<postId>:<txid>` and derives the credited address from the verified pubkey, verifies hash(rawTx)===txid, parses P2PKH outputs locally to check split, re-broadcasts via ARC as safety net, records payouts, emits TX_CONFLICT vs ARC_UNAVAILABLE codes) → Feed polls for bootboard update
 
 **Boot payment (free):**
 BootButton/useBoot → bootPost server action → server wallet builds split tx via boot-orchestrator → broadcast → consume free boot grant → return success
@@ -190,7 +191,7 @@ BootButton/useBoot → bootPost server action → server wallet builds split tx 
 
 ## Deployment Notes
 
-- **Rate limiting uses `x-forwarded-for` header** for IP identification. This header is client-supplied — behind a reverse proxy (Railway, Vercel, Cloudflare), the proxy sets it from the real client IP and it's trustworthy. If self-hosting without a proxy, attackers can spoof this header to bypass rate limits. Check your platform's docs for the correct trusted IP header (e.g. Vercel uses `x-real-ip`). All rate limit IP extraction is in the individual API route files (`src/app/api/*/route.ts`).
+- **Rate limiting uses `x-forwarded-for` header** for IP identification. This header is client-supplied — behind a reverse proxy (Railway, Vercel, Cloudflare), the proxy sets it from the real client IP and it's trustworthy. If self-hosting without a proxy, attackers can spoof this header to bypass rate limits. Check your platform's docs for the correct trusted IP header (e.g. Vercel uses `x-real-ip`). All rate limit IP extraction is in the individual API route files (`src/app/api/*/route.ts`) and in `bootPost` (server action, reads `x-forwarded-for` → `x-real-ip` via `next/headers`). **Free-boot diagnostic:** the per-IP free-boot cap (`free-boot-cap.ts`) fails toward PAID on a missing/`unknown` IP — so if a deploy strips BOTH `x-forwarded-for` and `x-real-ip`, ALL free boots silently become paid (safe direction, but if "free boots stopped working / everything is paid," check the proxy is forwarding an IP header).
 
 - **Environment variables.** See `.env.example` for the full list with inline comments. Highlights:
   - `ANTHROPIC_API_KEY` — required for AI agent chat (`/api/agent`)

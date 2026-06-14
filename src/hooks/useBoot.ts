@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { bootPost } from "@/app/actions";
 import { useBootContext } from "@/contexts/BootContext";
+import { bootConfirmMessage } from "@/lib/boot-message";
 import { clientSideBoot, consolidateUtxos } from "@/services/bsv/client-boot";
 
 export type { BootStatus } from "@/contexts/BootContext";
@@ -149,6 +150,18 @@ export function useBoot(opts: UseBootOptions = {}) {
           }
 
           if (bootResult.status === "success" && bootResult.txid) {
+            // Authenticate the boot: sign `boot:<postId>:<txid>` with the booter's
+            // key so the server can derive the credited address from the verified
+            // pubkey (not a client-supplied address). Prevents boot-attribution
+            // forgery / mempool-race credit theft. See SECURITY_AUDIT.md Step 7.
+            const { PrivateKey } = await import("@bsv/sdk");
+            const bootKey = PrivateKey.fromWif(identity.wif);
+            const message = bootConfirmMessage(postId, bootResult.txid);
+            const signature = bootKey
+              .sign(Array.from(new TextEncoder().encode(message)))
+              .toDER("hex") as string;
+            const booterPubkey = bootKey.toPublicKey().toString();
+
             const confirmRes = await fetch("/api/boot-confirm", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -156,7 +169,8 @@ export function useBoot(opts: UseBootOptions = {}) {
                 postId,
                 txid: bootResult.txid,
                 rawTx: bootResult.rawTx,
-                booterAddress: identity.address,
+                booterPubkey,
+                signature,
                 booterName: identity.name,
               }),
             });

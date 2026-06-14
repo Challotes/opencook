@@ -168,6 +168,7 @@
 
 - [x] 5-agent parallel audit (architecture, security, performance, tidiness, correctness)
 - [x] boot-confirm: replay protection, rate limiting, on-chain output verification
+- [x] boot-confirm booter authentication (Phase 1 Step 7, 2026-06-14) — booter signs `boot:<postId>:<txid>`; credited address derived from the verified pubkey, not client-supplied (closes boot-attribution forgery). Residual mempool-race self-credit tracked in SECURITY_AUDIT.md C3-residual.
 - [x] NaN weight cascade fix (SQLite datetime parsing)
 - [x] Server wallet retry limit (was unbounded recursion)
 - [x] SQL parameterization in pricing query
