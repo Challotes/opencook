@@ -21,30 +21,33 @@
 **Risk:** Attacker can fake boot confirmations, inflate contribution weight, game fairness system at zero cost.
 **Fix:** (2026-04-03) Full fix: replay protection (txid dedup check + application-level SELECT before insert), rate limiting (10/min/IP), and on-chain output verification (parses WoC tx vout, compares addresses/amounts against recalculated split with 2 sat tolerance). DB-level uniqueness is composite `UNIQUE(txid, recipient_address)` at db.ts:117 — replay protection relies on the app-level check, not the index alone. **Upgrade (2026-04-14):** output verification no longer fetches from WoC. Client sends `rawTx`; server validates `hash(rawTx)===txid` (self-authenticating — can't be spoofed), parses P2PKH outputs locally from the raw bytes, and re-broadcasts via ARC as safety net. Eliminates 5–30s WoC indexing lag and removes a rate-limit chokepoint. Explicit `TX_CONFLICT` vs `ARC_UNAVAILABLE` error codes distinguish fatal from retriable. Trust boundary: the server accepts client bytes but the hash binding makes forgery computationally infeasible, so security posture is unchanged.
 
-### C4: Auto-download backup only has NEW key when fund transfer fails — FIXED
-**File:** src/components/MoveAddressModal.tsx (rotation flow), src/services/bsv/backup-template.ts
-**Risk:** User told "old key is in backup file" but backup contains new key. Stranded funds unrecoverable.
-**Fix:** (2026-04-30, Stage 7) Combined recovery file pattern. The stage-3 download from MoveAddressModal now contains BOTH keys: `wif_encrypted` (new key) and `oldWif_encrypted` (old key, also encrypted under the new passphrase). One file, one passphrase, recovers both addresses. Earlier Stage 6 work removed plaintext rotation from the primary UI (`resetIdentity` no longer reachable from the dropdown — every rotation runs through MoveAddressModal and produces an encrypted key). Sweep-failure paths in MoveAddressModal also block rotation with retry/proceed UI rather than silently committing the new key, so "transfer failed but backup only has new key" is no longer reachable on the primary path. Done-state copy ("Recovery file downloaded — it has both keys. Keep it safe... Without both, you can't get back in.") makes the dual-key contract explicit to the user.
+### C4: Auto-download backup only has NEW key when fund transfer fails — SUPERSEDED (2026-06-14)
+**Original file:** src/components/MoveAddressModal.tsx (rotation flow), src/services/bsv/backup-template.ts
+**Original risk:** User told "old key is in backup file" but backup contains new key. Stranded funds unrecoverable.
+**Prior fix:** (2026-04-30, Stage 7) Combined recovery file with both `wif_encrypted` + `oldWif_encrypted`.
+**Superseded 2026-06-14:** Key rotation, sweep, and `MoveAddressModal` have been removed. The key/address never changes — there is no "new key" scenario. `backup-template.ts` no longer produces `oldWif_encrypted`; `pathType` is `"save"` or `"restore-pre"` only. The original attack surface (stranded funds on a new address) cannot occur. Recovery files are single-key only.
 
 ### C5: Free boot consumes grant even when broadcast fails — FIXED
 **File:** src/services/fairness/boot-orchestrator.ts lines 92-150
 **Risk:** User loses free boot but nobody gets paid. Boot appears successful but no on-chain payment.
 **Fix:** (2026-03-28) Grant consumed only after successful broadcast.
 
-### C6: Interrupted upgrade locks user out — FIXED
+### C6: Interrupted upgrade locks user out — FIXED then SUPERSEDED (2026-06-14)
 **File:** src/services/bsv/identity.ts
-**Risk:** Power failure between setItem(encrypted) and removeItem(plaintext) = both keys exist. System only checks encrypted, user locked out despite plaintext key being present.
-**Fix:** (2026-04-12) Deferred localStorage commit pattern — `upgradeIdentity()` accepts an identity object and defers the session cache + storage commit until `commitUpgrade()` is called atomically only after the server-side `migrateIdentity()` succeeds. Matches the `resetIdentity({ deferCommit: true })` pattern. No intermediate state where both keys exist.
+**Original risk:** Power failure between setItem(encrypted) and removeItem(plaintext) = both keys exist; user locked out.
+**Prior fix:** (2026-04-12) Deferred localStorage commit pattern via `upgradeIdentity()` + `commitUpgrade()`.
+**Superseded 2026-06-14:** `upgradeIdentity`, `commitUpgrade`, and key rotation removed. `encryptInPlace` is a single atomic localStorage write — no multi-step intermediate state possible.
 
-### C7: Double-upgrade from same key orphans intermediate posts — FIXED
-**File:** src/app/actions.ts + src/services/fairness/weights.ts
-**Risk:** INSERT OR REPLACE deletes A→B migration when A→C is inserted. Posts made with key B have no migration chain, are permanently orphaned.
-**Fix:** (2026-03-28) Before replacing migration, check if old to_pubkey has posts. If so, insert B→C bridging migration.
+### C7: Double-upgrade from same key orphans intermediate posts — SUPERSEDED (2026-06-14)
+**Original file:** src/app/actions.ts + src/services/fairness/weights.ts
+**Original risk:** INSERT OR REPLACE deletes A→B migration when A→C is inserted. Posts made with key B have no migration chain, are permanently orphaned.
+**Prior fix:** (2026-03-28) Bridging migration inserted to preserve both branches.
+**Superseded 2026-06-14:** Key rotation and the `migrations` table have been removed. Keys never change; there are no migration chains to orphan. The attack surface no longer exists.
 
-### C8: cleanupMigrations has no authentication — FIXED
-**File:** src/app/actions.ts lines 229-243
-**Risk:** Anyone who knows a pubkey can delete that user's migration records via the server action. Targeted payout redirection attack.
-**Fix:** (2026-03-28) Requires signed challenge with 5-minute timestamp replay protection.
+### C8: cleanupMigrations has no authentication — SUPERSEDED (2026-06-14)
+**Original file:** src/app/actions.ts
+**Original risk:** Anyone who knows a pubkey can delete that user's migration records. Targeted payout redirection.
+**Prior fix:** (2026-03-28) Signed challenge with 5-minute timestamp replay protection. **`cleanupMigrations` subsequently deleted** — first without auth (E31, 2026-06-01) and then with the full rotation removal (2026-06-14). The `migrations` table and all migration server actions no longer exist. Attack surface is gone.
 
 ### C9: Backup warning dot clears on dropdown OPEN, not on actual backup — FIXED
 **File:** src/app/IdentityBar.tsx lines 110-115
@@ -77,9 +80,10 @@
 **File:** src/app/api/tx-hex/route.ts
 **Fix:** (2026-03-31) Added 500/min/IP rate limit. **Extended 2026-04-14:** `/api/balance` (10s cache, 120/min/IP) and `/api/unspent` (3s cache, 180/min/IP) joined the proxy fleet with equivalent rate limiting, address format validation, retries on 429/5xx, and stale-cache fallback. All direct browser→WoC reads have been eliminated.
 
-### H7: Migration registration after local key storage — FIXED
+### H7: Migration registration after local key storage — FIXED then SUPERSEDED (2026-06-14)
 **File:** src/services/bsv/identity.ts + src/app/IdentityBar.tsx
-**Fix:** upgradeIdentity() no longer stores key. Returns encStore. IdentityBar calls migrateIdentity() first, then commitUpgrade() only on success. Atomic ordering.
+**Prior fix:** `upgradeIdentity()` returned encStore without storing; `migrateIdentity()` called first, then `commitUpgrade()` only on success. Atomic ordering.
+**Superseded 2026-06-14:** `upgradeIdentity`, `migrateIdentity`, `commitUpgrade`, and key rotation removed. Protection is now `encryptInPlace` — a single atomic write with no multi-step ordering risk.
 
 ### Additional findings from tester audit (2026-03-28):
 
@@ -87,7 +91,7 @@
 
 **BUG-2 (High) — FIXED:** Same as H7 above. Migration now registered before key storage.
 
-**BUG-10 (Critical) — FIXED:** `migrateIdentity()` return value was never checked. If server-side signature verification failed, migration silently didn't register but upgrade continued — orphaning all posts under the old key. Fixed: upgrade now aborts if `migrateIdentity` returns `{ success: false }`. Two manual chain repairs applied to reconnect 280 orphaned posts.
+**BUG-10 (Critical) — FIXED then SUPERSEDED (2026-06-14):** `migrateIdentity()` return value was never checked. Fixed 2026-03-28: upgrade aborts on failure; two manual chain repairs reconnected 280 orphaned posts. **Superseded 2026-06-14:** `migrateIdentity` and key rotation removed entirely; no migration step exists to fail.
 
 **BUG-6 (Medium) — RESOLVED (Phase 1 Step 3, 2026-06-14):** The documented mismatch never actually materialized in shipped code — the client (`useBoot.ts`) always sent `identity.address` in the (misleadingly-named) `booterPubkey` field, so `bootboard.boosted_by` and `boot_grants` were already address-keyed on BOTH the free (`boot-orchestrator`) and paid (`boot-confirm`) paths, and the earnings outgoing-boots query (`boosted_by IN (...addresses)`) already worked for paid boots. The only real defect was the lying field name, which would have trapped the Step 7 boot-confirm auth work (a future `PublicKey.fromString(booterPubkey)` would throw on the address). Step 3 renamed `booterPubkey` → `booterAddress` across `boot-confirm/route.ts`, `useBoot.ts`, and `boot-orchestrator.ts` (a wire-field rename — client + server shipped together) so the contract is honest. **Deferred to Step 5:** the `boot_grants.pubkey` *column* (and the `pricing.getBootPriceForUser` param) still carry the `pubkey` name while holding addresses — a schema-level cosmetic rename bundled with the keying simplification when the migration-chain resolvers are deleted.
 
@@ -96,8 +100,8 @@
 ## MEDIUM (8 findings — before public launch)
 
 - M1: PBKDF2 at 100k iterations (increase to 600k)
-- M2: Backup file contains plaintext WIF — PARTIAL (encrypted with passphrase for protected users; unprotected users still get plaintext WIF via doDownloadPlaintext path at IdentityBar.tsx:282-297). **Update (2026-04-30, Stage 7):** the combined recovery file produced by MoveAddressModal now also encrypts the *prior* key (`oldWif_encrypted`) under the new passphrase, so even during rotation no plaintext old WIF is written to disk for protected users. The remaining plaintext exposure is limited to the unprotected-user "Show recovery key" / "Save recovery file" paths.
-- M3: Migration signature has no timestamp validation
+- M2: Backup file contains plaintext WIF — PARTIAL. Protected users: WIF is AES-256-GCM encrypted in the recovery file (passphrase required to decrypt). Unprotected users: the "Show recovery key" / "Save recovery file" paths still expose plaintext WIF. **Note (2026-06-14):** the combined-file rotation path that encrypted the prior key under the new passphrase has been removed (rotation no longer exists). The plaintext exposure surface is unchanged from before Stage 7.
+- M3: Migration signature has no timestamp validation — SUPERSEDED (2026-06-14). `migrateIdentity` and the `migrations` table removed with key rotation.
 - M4: Rate limiter is in-memory, resets on restart
 - M5: /api/earnings exposes full financial history unauthenticated — **PARTIAL.** Silently rate-limited 20/min/IP (`earnings/route.ts:87`). Still unauthenticated — the financial data exposure is unchanged, but enumeration is now bounded by IP. Promote to authenticated read once user accounts exist.
 - M6: WIF reveal has no auto-hide timeout. **Partial mitigation (2026-05-01, Stage 8 C6):** the Show-recovery-key panel now requires an explicit `[Reveal key]` click to expose the WIF (no longer revealed by default), and shows a red warning above the masked key (*"Anyone with this key owns your account and any funds in it. Never share it."*). Replaces the previous always-visible-until-Hide pattern. Auto-hide timer still TODO.
@@ -113,41 +117,16 @@
 - L5: Direct WoC calls leak user addresses with IP
 - L6: Clipboard not cleared after WIF copy
 
-### BUG-11: Rotate-from-stale key takeover (E31 — FIXED 2026-06-01)
+### BUG-11: Rotate-from-stale key takeover (E31 — FIXED 2026-06-01, SUPERSEDED 2026-06-14)
 **Severity:** HIGH (pre-fix) — full account takeover by anyone holding any past WIF
-**Files:** `src/app/actions.ts` `migrateIdentity`, `src/components/MoveAddressModal.tsx`, `src/components/ChangePassphraseModal.tsx`, `src/app/IdentityBar.tsx`
-**Risk (pre-fix):** A user holding a key A that had already been rotated forward (migration row `from=A, to=B` exists) could still call `migrateIdentity` to rotate A→C. The signature was cryptographically valid (A's WIF can still sign anything), so the server accepted the migration. `INSERT OR REPLACE` on the migrations table silently overwrote the legitimate `A→B` row with `A→C`. Chain head moved from B to C — legitimate B holder was locked out of their own account.
+**Original files:** `src/app/actions.ts` `migrateIdentity`, `src/components/MoveAddressModal.tsx`, `src/components/ChangePassphraseModal.tsx`, `src/app/IdentityBar.tsx`
+**Risk (pre-fix):** A user holding a revoked key A could call `migrateIdentity` to rotate A→C, silently overwriting the legitimate `A→B` row and locking out the legitimate holder.
+**Fix (2026-06-01):** Server rejected `migrateIdentity` for any pubkey with a forward migration; client preflight via `/api/restore-eligibility`; UI guard routing to `StaleKeyModal`.
+**Superseded 2026-06-14:** Key rotation, `migrateIdentity`, `MoveAddressModal`, `StaleKeyModal`, `/api/restore-eligibility`, and the `migrations` table have all been removed. The attack surface (a `from_pubkey` with an existing forward migration) cannot be constructed when keys never rotate.
 
-**Discovery:** Found during E30 manual testing 2026-06-01. Same attack class as E29's restore-from-stale vector (which was closed). The parallel attack via rotate-from-stale was missed during E29's design.
-
-**Fix:**
-- Server: `migrateIdentity` calls `getForwardMigration(oldPubkey)` after signature verification. Rejects with `reason: "stale_key"` if a forward migration exists. Fails CLOSED on DB errors (rotate-from-stale must never succeed; partial DB outage rejects rather than allowing through).
-- Client preflight: `MoveAddressModal.runCreating()` and `ChangePassphraseModal.handleChange()` call `/api/restore-eligibility` BEFORE invoking `upgradeIdentity` (which runs the sweep). Prevents the funds-in-flight edge case where the sweep moves UTXOs to a new address before the server rejects the migrate.
-- Return-value check: `MoveAddressModal` now checks `migrateIdentity`'s result (it was previously fire-and-forget — same class as historical BUG-10 which was fixed in ChangePassphraseModal but never patched here).
-- UI trigger guard: `IdentityBar.openMoveModal` checks `staleKey` and routes to `openStaleKeyModal()` instead of mounting the rotation wizard.
-- `cleanupMigrations` server action deleted (separate but coupled — see DECISIONS.md "E31 block rotate-from-stale").
-
-**Cross-reference:** DECISIONS.md "E31 block rotate-from-stale" · DECISIONS.md "Restore of rotated keys (Design C-strict)" (E29, the symmetric protection) · L7 below (residual risk for `createPost` which is intentionally NOT gated)
-**Status:** FIXED.
-
-### L7: Stale-key attribution griefing (E30 deferred risk)
-**Severity:** LOW — bounded per-victim, requires WIF compromise as prerequisite
-**Files:** `src/app/actions.ts` (createPost), `src/services/fairness/weights.ts`
-**Risk:** After rotation, the old key remains cryptographically valid. A party who obtained the old plaintext WIF (before passphrase protection) can broadcast signed posts under the old pubkey via direct BSV broadcast, bypassing the BSVibes UI. The fairness chain resolver (`weights.ts: resolveChain()`) follows migration records forward and attributes engagement weight to the CURRENT key-holder — attacker gains no earnings — but the attacker CAN produce posts that appear attributable to the current user's author name in the feed.
-
-**Prerequisites for exploit:** (1) attacker obtained the old plaintext WIF (physical device access, unencrypted cloud sync leak, prior localStorage exposure); (2) user has rotated to a newer key; (3) attacker motivated to spam under target name.
-
-**Mitigations in place:**
-- Chain resolver redirects all attribution to current key — attacker gains no earnings
-- **E30 (2026-05-28)**: session-lockout prevents the legitimate client on a stale-key device from accidentally contributing posts attributed to the wrong key. Detection is via `/api/posts` returning `key_status: { stale: true }` when the `x-bsvibes-pubkey` header matches a forward-migrated pubkey; client surfaces `<StaleKeyModal>` and replaces the textarea with an amber banner blocking the compose flow. UI-layer lock only — `createPost` server action still accepts cryptographically-valid signatures from the old key (which is the deliberate trade-off; see DECISIONS.md "E30 stale-key session-lockout").
-- `createPost` rate limiting (pubkey-keyed) caps post rate per key regardless of origin
-
-**Residual risk:** controlled spam — an attacker bypassing the UI entirely (direct BSV broadcast with the leaked WIF) can post as the old identity. Not mitigated by E30 alone. The on-chain audit trail (OP_RETURN post payloads) records these ghost posts permanently — attribution UI redirects forward via chain resolver, but the on-chain signature stays.
-
-**Trigger to promote to per-mutation server gating:** if attribution griefing is observed in production (spam posts appearing under real users' names from revoked keys), add a server-side migration-chain check inside `createPost` that rejects posts from any pubkey with a forward migration record. One-session change: add a `getForwardMigration()` lookup to the createPost path, reject if non-null. Analogous to E29's `/api/restore-eligibility` check, just applied at mutation time instead of restore time.
-
-**Cross-reference:** DECISIONS.md "E30 stale-key session-lockout (Design: UI-layer only)" · CLAUDE.md Hard Rule #7 (`requireIdentity()` universal pattern)
-**Status:** DEFERRED — acceptable risk at current scale. Promote if griefing observed.
+### L7: Stale-key attribution griefing — SUPERSEDED (2026-06-14)
+**Original severity:** LOW — bounded per-victim, required key rotation as prerequisite.
+**Superseded 2026-06-14:** Key rotation has been removed. There are no "old keys" or "new keys" — a user's address is permanent. The chain resolver (`resolveChain()` in `weights.ts`) and the `migrations` table have been deleted. Posts attribute directly to the signing pubkey forever. The prerequisite for this attack (a user having rotated their key, leaving the old WIF valid but revoked) cannot occur.
 
 ## OBSERVATIONS — silent improvements + new findings (logged 2026-06-04 audit)
 
@@ -157,18 +136,16 @@ These were surfaced by the full-repo MD vs code audit on 2026-06-03. None are re
 Read-only feed polling was historically unrate-limited by design (every client hits it every 5s). The Phase 6.2 audit (2026-04-09) added a 120/min/IP limit as defense-in-depth. CLAUDE.md previously stated the route was "unrate-limited by design" — the rate limit is generous enough that the original intent (no real client should hit it) holds, but the floor is now bounded.
 **Status:** mitigation in place; doc reconciliation noted in 2026-06-04 audit follow-up.
 
-### OBS-S2: `/api/restore-eligibility` (E29) — public read-only endpoint disclosing migration graph
-**Severity:** LOW — discloses nothing not already on-chain.
-Endpoint returns `{allowed: boolean}` for a given pubkey, where `false` means the pubkey has a forward migration record. The information disclosed (which keys have been rotated) is already public on-chain in OP_RETURN migration records — `RestoreModal` and `MoveAddressModal` use this endpoint as a preflight to spare the user a failed sweep when their key is stale. Rate-limited 30/min/IP. The endpoint is intentionally public because the alternative (require signed challenge) trades a key-derivation step for zero privacy gain.
-**Status:** acceptable risk; tracked for visibility.
+### OBS-S2: `/api/restore-eligibility` (E29) — SUPERSEDED (2026-06-14)
+**Original severity:** LOW — endpoint disclosing migration graph.
+**Superseded 2026-06-14:** `src/app/api/restore-eligibility/route.ts` deleted. Key rotation and the `migrations` table no longer exist, so there is no migration graph to query. `RestoreModal` no longer calls this endpoint.
 
 ### OBS-S3: `dedupeUtxos()` in sweep flow — funds-safety hardening
 `autoTransferFunds` and `sweepFunds` in `identity.ts` now route the raw `/api/unspent` response through `dedupeUtxos()` keyed on `(tx_hash, tx_pos)` before tx construction. Defeats the `bad-txns-inputs-duplicate` peer rejection that occurs when WhatsOnChain's indexer transiently returns the same outpoint twice (confirmed in Android device testing 2026-06-03 — two consecutive failures with identical txid `8fc71ef6…`, third attempt succeeded). Not a vulnerability fix — a structural safety net analogous to `client-boot.ts`'s existing `utxoKey` dedup. See DECISIONS.md "UTXO outpoint dedup on sweep paths".
 **Status:** shipped 2026-06-03 commit `7891355`.
 
-### OBS-S4: E30 stale-key detection in `/api/posts`
-Already documented in L7; noted here for cross-reference. Polling sends `x-bsvibes-pubkey` header; server returns `key_status: { stale: true }` gated by `E30_STALE_KEY_ENABLED` env flag (strict `=== "true"` check, fail-open if absent). Closes the "device unaware its key was revoked elsewhere" risk class at the UI layer.
-**Status:** shipped 2026-05-29.
+### OBS-S4: E30 stale-key detection in `/api/posts` — SUPERSEDED (2026-06-14)
+Already documented in L7; noted here for cross-reference. Polling sent `x-bsvibes-pubkey`; server returned `key_status: { stale: true }` gated by `E30_STALE_KEY_ENABLED`. **Superseded 2026-06-14:** key rotation removed; stale keys cannot exist when the address never changes. The header, the `key_status` response field, and the `E30_STALE_KEY_ENABLED` env flag have all been removed. `StaleKeyModal` deleted.
 
 ### OBS-N1: `/api/agent` rate-limit header parsing inconsistency — FIXED 2026-06-05
 **Severity:** LOW — minor rate-limit bypass vector.

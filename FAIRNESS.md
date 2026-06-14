@@ -173,7 +173,7 @@ No `contributor_balances` table — true no-custody means no stored balances.
 ### Key Files
 
 - `src/services/fairness/config.ts` — Tunable parameters (governance surface)
-- `src/services/fairness/weights.ts` — Weight calculation with migration chain resolution
+- `src/services/fairness/weights.ts` — Weight calculation (sqrt × decay × engagement)
 - `src/services/fairness/split.ts` — Payout split (no custody, all sats out in same tx)
 - `src/services/fairness/pricing.ts` — Dynamic boot price with floor/ceiling
 - `src/services/fairness/boot-orchestrator.ts` — Full boot workflow coordinator
@@ -186,18 +186,11 @@ No `contributor_balances` table — true no-custody means no stored balances.
 - Uses `@bsv/sdk` Transaction with N P2PKH outputs.
 - OP_FALSE OP_RETURN for audit trail (BSV standard, provably unspendable).
 
-### Migration Chain Resolution
+### Key Attribution
 
-Posts are signed by the pubkey active *at the time of posting*. When a user rotates their key (security upgrade, recovery on a new device, or "Move to a new key"), an OP_RETURN migration record links `from_pubkey → to_pubkey` and is mirrored into the `migrations` table.
+Key rotation was removed from BSVibes at launch (2026-06-14) in favour of encrypt-in-place: adding or changing a passphrase wraps the existing WIF without changing the key or address. The `migrations` DB table and the `buildMigrationMap` / chain-resolver code in `weights.ts` have been deleted.
 
-`weights.ts` walks the chain forward when calculating contribution weights — every post under a historical pubkey contributes to the *current* terminal pubkey's weight. The terminal pubkey is also the address that receives the payout split. Result: rotating keys does not lose contribution history, and a single user with five historical addresses still receives one combined share.
-
-Resolution rules:
-- A pubkey with no outgoing migration is its own terminal (active key).
-- Forks (`A → B` and `A → C` recorded for the same `from_pubkey`) are bridged via `C7`'s repair logic — the older `from_pubkey → to_pubkey` is preserved and a `B → C` bridging migration is inserted so neither branch's posts orphan. See SECURITY_AUDIT.md C7.
-- `verifyMigrationChain` (server action, called pre-rotation by MoveAddressModal) walks the chain to confirm all of the user's posting pubkeys still resolve to the current key — warns the user if the chain is broken before any new rotation cements the state.
-
-The migration table is small (one row per rotation, signed by the old key with replay protection) so the walk is cheap. Resolution is computed on demand and cached for 30s alongside the rest of the weight calculation.
+Posts attribute directly to the signing pubkey and its derived address. A user's weight is the sum of all posts signed by that single, permanent pubkey. No chain-walk is needed.
 
 ## What This Model Does NOT Measure (Yet)
 
@@ -221,7 +214,7 @@ By publishing on-chain, we didn't just open source the code — we created prior
 Independent prior art research (2026-04-02) confirmed:
 - **The Agentic Fairness Protocol (AFP) is genuinely novel.** No prior art exists for on-chain project lineage + cascading royalties to weighted contributor pools + fork-triggered obligation.
 - **The Agentic Fairness system is partially novel.** Nobody combines AI-governed parameter tuning + sqrt×decay scoring + automatic real-money atomic multi-output splits from live revenue.
-- **The zero-friction identity with on-chain key migration** is partially novel. Contribution history following key rotations via OP_RETURN chain resolution is new.
+- **Zero-friction identity with on-chain key migration and contribution-history chain resolution** is partially novel — contribution history following key rotations via OP_RETURN chain resolution was built, shipped, and operated on BSV mainnet. *This mechanism was subsequently removed at launch (2026-06-14) in favour of encrypt-in-place (simpler UX, no key rotation, no on-chain migration records needed).* The on-chain migration records and the chain-resolver code remain recoverable in git history. This entry is retained as a timestamped prior-art record: the design was publicly implemented and verifiable on-chain before removal, which is sufficient for defensive publication purposes regardless of the current code state.
 
 When we build this out together — faster, forked, iterated — the community stays in control. Ideas that are built upon openly stay so far in front that patents become irrelevant. We are the innovation. It is YOUR data, and you can prove it.
 

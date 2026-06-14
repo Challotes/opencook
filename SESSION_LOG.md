@@ -2,6 +2,21 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-14 (cont.) — Phase 1 Steps 3–5: rotation removal COMPLETE in code
+
+Category: implementation (launch-critical-path execution). Continued Phase 1. Each group: agent design pass → plain-English to owner → edit → tsc + Biome + vitest → code-auditor on the diff → commit. All commits UNPUSHED (owner holding local). Findings validated against DECISIONS.md before acting; one agent claim about the post-Group-B state was wrong and caught by direct verification (RestoreModal no longer calls restore-eligibility).
+
+- **Step 3** (`2220fda`): honest `booterPubkey`→`booterAddress` rename on the boot-confirm path. SECURITY_AUDIT's documented "BUG-6 derive address from pubkey" fix would have THROWN — `useBoot` already sent `identity.address`; keying was already consistent, only the name lied. Renamed instead of "fixing." BUG-6 marked RESOLVED.
+- **Step 4 (delete rotation) — DONE, 3 commits:**
+  - Group A (`7fc68ff`): removed the E30 stale-key client machine (useIdentity union variant, IdentityContext API, useFeedPolling `x-bsvibes-pubkey` header, PostForm banner, IdentityBar guards) + deleted `StaleKeyModal.tsx`.
+  - Group B (`10633fa`): **version-gated restore policy** — `RECOVERY_FILE_VERSION=1` stamped centrally in `generateBackupHtml`; `restore-from-file` rejects plaintext OR non-`fileVersion:1` files as `unsupported_version` (ALL legacy files rejected, owner "start clean"). Deleted `importIdentity` (restore is encrypted-only), the RestoreModal inline parser (routed to shared parser), the E29 preflight in RestoreModal + welcome gate, the server-side E30 emitter (`key-status-validation.ts` + posts/route key_status), `E30_STALE_KEY_ENABLED`.
+  - Groups C+D (`5719988`): deleted `MoveAddressModal.tsx`, `restore-eligibility/route.ts`, `migration.ts`; removed `migrateIdentity`/`verifyMigrationChain` from actions.ts; stripped the rotation backend from identity.ts (upgrade/commit/reset/sweep/autoTransfer/_rotationInProgress); pruned `BackupData` (oldWif_encrypted/oldAddress, rotation/pre-rotation pathTypes) + every previous-key path in the recovery-file template. Added `backup-template.test.ts` (generate↔parse round-trip — the smoke test for the stringified-HTML surgery).
+- **Step 5 (migrations table + chain resolution)** (`062dcd0`): owner confirmed migration/payout history is throwaway test data → removed the `migrations` table from db.ts, `buildMigrationMap` from weights.ts (scoring now attributes posts directly to `post.pubkey` — identical over an empty table), `resolveAllAddresses` from earnings (now `[address]`; pubkey→address is 1:1 so no earned address is dropped), and the 2 chain tests. Auditor rigorously confirmed the money-attribution equivalence.
+
+**Net:** key rotation is 100% gone from the code. Protect + change-passphrase survive (same key, unlimited times) via the already-built ProtectModal/ChangePassphraseModal (encrypt-in-place). DECISIONS.md updated with the implementation note (`062dcd0` tail).
+
+**Remaining in Phase 1:** (a) finish doc-sync — CLAUDE.md, ROADMAP.md, FAIRNESS.md (keep AFP novelty as a historical prior-art note per owner 2026-06-14), SECURITY_AUDIT.md E29/E30/E31 → "superseded by encrypt-in-place" still describe deleted code as live; (b) the server items — on-chain `v:1` field (Step 1 done), per-IP free-boot cap, boot-confirm auth, free-boot idempotency. NOT pushed yet — owner holding all commits local.
+
 ## 2026-06-14 — Phase 0 + Phase 1 Steps 1–2 implemented (encrypt-in-place COMPLETE)
 
 Category: implementation (launch-critical-path execution). First code-cutting session after the planning/audit work. Each commit got Biome + tsc + 90 tests + a code-auditor pass on the diff. All pushed to origin/master (`a857f20..31d0ecd`, 13 commits incl. the pre-existing `c9ffa84`).

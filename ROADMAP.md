@@ -2,7 +2,7 @@
 
 > What's done, what's next, what's planned. AI agents: update this file when you complete or start a task.
 >
-> Last updated: 2026-06-03
+> Last updated: 2026-06-14
 
 ## Phase 1: Foundation — COMPLETE
 
@@ -84,12 +84,14 @@
 ## Phase 4: Security Upgrades — COMPLETE
 
 - [x] AES-256-GCM passphrase encryption (Web Crypto API, PBKDF2 100k iterations)
-- [x] "Upgrade Security" button in identity dropdown (optional, user-initiated)
-- [x] Key rotation on upgrade (new keypair, old key signs migration)
-- [x] On-chain migration record (OP_RETURN linking old pubkey → new pubkey)
-- [x] Server-side migration verification + DB storage (migrations table)
-- [x] Protected/Unprotected shield indicator in identity dropdown
+- [x] "Protect" flow in identity dropdown (optional, user-initiated) — `encryptInPlace`, address unchanged
+- [x] Change passphrase flow — `changePassphrase`, re-encrypts same key, address unchanged
+- [x] ~~Key rotation on upgrade (new keypair, old key signs migration)~~ — **REMOVED 2026-06-14.** Replaced by encrypt-in-place. The key/address never changes; adding or changing a passphrase wraps the existing WIF.
+- [x] ~~On-chain migration record (OP_RETURN linking old pubkey → new pubkey)~~ — **REMOVED 2026-06-14.** `migration.ts` deleted; `migrations` DB table dropped.
+- [x] ~~Server-side migration verification + DB storage~~ — **REMOVED 2026-06-14.** `migrateIdentity`, `verifyMigrationChain`, `cleanupMigrations` server actions deleted.
+- [x] Protected/Unprotected indicator in identity dropdown
 - [x] Session-cached decrypted identity (plaintext never written back to localStorage)
+- [x] Version-gated restore: recovery files require `fileVersion: 1`; legacy plaintext + pre-stamp encrypted files rejected as `unsupported_version` (intentional "start clean" policy, 2026-06-14)
 - [ ] Passkey wrapping (WebAuthn PRF, biometric unlock) — future
 - [ ] Firefox passphrase fallback — future
 - [ ] Deferred activation prompt (nudge at earnings threshold) — future
@@ -109,7 +111,7 @@
 
 - [x] Fairness config (tunable parameters, governance surface)
 - [x] Dynamic boot pricing (contributors × 156, floor 1000, ceiling 250000, cached 1h)
-- [x] Contribution weight calculation (sqrt × decay × engagement, migration chain resolution)
+- [x] Contribution weight calculation (sqrt × decay × engagement; posts attribute directly to signing pubkey)
 - [x] No-custody payout split (every sat out in same tx, no DB balances)
 - [x] UTXO manager (reservation, 0-conf chaining, multi-input aggregation)
 - [x] Multi-output split transaction builder (P2PKH outputs + OP_RETURN audit)
@@ -139,7 +141,7 @@
 - [x] Forced backup download on security upgrade, interrupted upgrade recovery
 - [x] Passphrase unlock UI (users no longer locked out after refresh with encrypted identity)
 - [x] Atomic migration ordering (server confirms before key stored locally)
-- [x] ~~Identity import with automatic migration cleanup~~ — **REMOVED 2026-06-01 in E31** (commit `d7730cc`). The `cleanupMigrations` action was deleted because E29 + E31 closed the underlying scenario at the source (re-import of a rotated key + rotation from a stale key are now both blocked). Recoverable from git history if a future signature-gated admin reclaim design materialises.
+- [x] ~~Identity import with automatic migration cleanup~~ — **REMOVED** (commit `d7730cc`). `cleanupMigrations` deleted; the entire rotation model was subsequently removed (2026-06-14, see Phase 4).
 - [x] Full tester audit: all identity/upgrade paths verified
 - [x] Migration return value checked — upgrade aborts if migration fails (prevents orphaned posts)
 - [x] Full identity dropdown redesign: radical simplification (43→24 state vars, extracted UpgradeModal, shared PassphrasePrompt). *UpgradeModal subsequently deleted in Stage 8 batch 1 (2026-05-01) — orphaned after Stage 6 modal restructure consolidated everything into MoveAddressModal.*
@@ -192,8 +194,7 @@
 - [x] Rate limit added to /api/posts (120/min/IP — was the only unprotected route)
 - [x] ROADMAP.md, FAIRNESS.md, DECISIONS.md dates updated
 - [x] Boot button 3-second throttle (BootContext) — prevents rapid-click cascade
-- [x] "Move to a new address" wizard (MoveAddressModal) — 4-stage auto-advancing modal replacing inline dropdown flow. Downloads old key backup, sweeps ALL UTXOs (confirmed + unconfirmed) via ARC at 100 sat/kb, records on-chain migration, deferred localStorage commit.
-- [x] Deferred commit in resetIdentity AND upgradeIdentity — prevents stranding funds if sweep/migration fails partway
+- [x] ~~"Move to a new address" wizard (MoveAddressModal)~~ — **REMOVED 2026-06-14.** Key rotation, sweep, and on-chain migration replaced by encrypt-in-place (`ProtectModal` + `ChangePassphraseModal`). Address is permanent.
 - [x] Broadcaster unified to ARC (2026-04-13): all tx paths (clientSideBoot, consolidateUtxos, sweepFunds, autoTransferFunds, server wallet) use ARC via @bsv/sdk default. Previous WoC broadcaster switch was based on a misdiagnosed ARC outage (local DNS issue).
 - [x] Server-side source tx cache in /api/tx-hex (~2000-entry in-memory LRU). Eliminates WoC rate-limit failures on boots with many inputs.
 - [x] Batched source tx fetches in clientSideBoot (BATCH_SIZE=5, 1s delay).
@@ -229,15 +230,17 @@
   - **Failure handling**: broadcast fail → no optimistic update (we already branch on success); tx replaced/orphaned → WoC poll corrects the optimistic balance; SSE drop → poll fills the gap; boot-confirm fail after broadcast → same issue as today, unchanged.
   - ~3–4h work (endpoint, event bus, client wire-up, fireworks animation). Do after `/api/broadcast` so the broadcast proxy's error codes are stable before SSE consumes them.
 - [ ] **Manage Identity card redesign (4-stage roll-out)** — parallel audit from designer + researcher + architect agents (2026-04-15) surfaced 13 interactive controls at primary tier (target 5), semantic duplicates, and real flow bugs. User decisions locked in: adopt Coinbase/Phantom "orange row until backup saved, then gone forever" pattern; skip the in-card AI button (researcher + architect both red-teamed it — every major product keeps AI outside the account menu; key-exfiltration and bad-advice-on-irreversible-actions risks outweigh benefit); rename header to "You". Stages:
-  - **Stage 1 — Bug fixes (DONE 2026-04-15):** `MoveAddressModal` retry-from-creating now reuses `resetResultRef` instead of regenerating the key (previously stranded funds across retries); 8s of cosmetic `delay()` padding removed; backup-warning color unified to amber across chip + modal (was amber/red split).
-  - **Stage 1b — Remaining bug fixes (DONE 2026-04-16):** `/api/tx-hex` now retries 404s with 2s backoff up to 3 times (~6s budget) to ride out WoC's 2–10s mempool indexing lag on 0-conf chain ancestors. Backup download now requires an explicit "Got it" acknowledgement before `backedUp` flips — both in the You modal flow (green confirmation banner replaces the orange save-CTA in the dropdown) and in `MoveAddressModal` stage 1 (new `saved-confirm` stage gates the auto-advance to the irreversible sweep). Silent download failures (popup blocker, disk full, CSP deny) no longer masquerade as success.
+  - **Stage 1 — Bug fixes (DONE 2026-04-15):** 8s of cosmetic `delay()` padding removed; backup-warning color unified to amber across chip + modal (was amber/red split). (*MoveAddressModal retry fix noted here was removed in the 2026-06-14 rotation removal.*)
+
+  - **Stage 1b — Remaining bug fixes (DONE 2026-04-16):** `/api/tx-hex` now retries 404s with 2s backoff up to 3 times (~6s budget) to ride out WoC's 2–10s mempool indexing lag on 0-conf chain ancestors. Backup download now requires an explicit "Got it" acknowledgement before `backedUp` flips (green confirmation banner replaces the orange save-CTA in the dropdown). Silent download failures (popup blocker, disk full, CSP deny) no longer masquerade as success.
   - **Stage 2 — Dead-code cuts (DONE 2026-04-15):** removed Paste-recovery-key textarea (redundant with file import), removed Hide toggle inside Show-recovery-key (dead micro-state once revealed in a session). Sparkline kept in dropdown per user preference.
-  - **Stage 3 — Merge + reframe (DONE 2026-04-15):** passphrase row unified to single "Passphrase" label with dynamic secondary text; Deposit moved into balance zone as `+ Add funds` button (one click from the chip); modal header renamed "Manage identity" → "You"; Coinbase/Phantom one-time backup banner added to the dropdown — amber "Save your recovery file" pulse until saved + acknowledged, then gone forever.
+  - **Stage 3 — Merge + reframe (DONE 2026-04-15):** Deposit moved into balance zone as `+ Add funds` button (one click from the chip); modal header renamed "Manage identity" → "You"; Coinbase/Phantom one-time backup banner added to the dropdown — amber "Save your recovery file" pulse until saved + acknowledged, then gone forever.
   - **Stage 4 — ATTEMPTED + REVERTED (2026-04-16):** built the 3-question intent-led layout ("Is my account backed up?", "I'm on a new device", "I think my keys were exposed") replacing the flat You-modal section list. User rejected the approach during live review — the flat list reads faster and feels less like a support FAQ. Reverted via `git restore` before commit; no artifacts in git history. Flat section list is the settled state. **Do not re-queue.**
   - **Pending-payment badge (still wanted, split out from Stage 4):** on-chip/in-balance "$0.12 · 1 pending" badge with honest tooltip about sub-minute confirmation. Track broadcasts from `useBoot` and client-side transfer paths; clear on next balance-poll delta or 90s timeout. ~30–60min. Natural fit once SSE/optimistic work lands — defer until after `/api/events`.
   - **Stage 5 — Earnings-first hierarchy + polish (DONE 2026-04-17):** Full dropdown restructure informed by parallel designer + researcher agent audits studying Apple, Google, Coinbase, Cash App, Phantom, Stripe, and Revolut patterns. Earnings-first hierarchy: all-time earnings (hero number `text-lg font-semibold`, collapsible chart default-open) → activity (2 visible, "View all N" toggle right-aligned in header, Stripe pattern) → balance (demoted to single row with inline "Add funds" link). Protected security status replaced with inline checkmark next to name (X-verified pattern); unprotected keeps full red banner. Font hierarchy two-tier system: static data zinc-500, interactive elements zinc-100 + underline. Section labels standardized to zinc-400 font-medium. Close buttons unified to SVG icons. "Your identity" → "Manage" button. Activity API limit bumped from 10 to 50. EarningsSparkline header removed (parent handles via toggle).
-  - **Stage 6 — Amber brand + modal restructure + sweep hardening (DONE 2026-04-17):** Full amber rebrand (#f59e0b) across identity card, You modal, UpgradeModal, ChangePassphraseModal, MoveAddressModal — single accent color, gold top stripe, `#0f0f0f` backgrounds. You modal restructured as a clean launcher: Restore extracted to standalone RestoreModal; Move goes straight to MoveAddressModal (no inline expansion); only recovery key stays inline (read-only). **Sweep hardening:** both `sweepFunds` and `autoTransferFunds` switched from direct WoC to `/api/unspent` proxy (retry + cache + stale fallback); "no UTXOs" now returns `noFunds: true` flag instead of silent empty return; sweep failure blocks rotation with retry/proceed UI in MoveAddressModal; `sweepFunds` exported for independent retry. **Rotation lock:** `_rotationInProgress` flag in `identity.ts` prevents concurrent Move + Upgrade race condition. **Pre-rotation chain verification:** new `verifyMigrationChain` server action walks migration table before any rotation, warns if posts would be orphaned. **Merged Move + Passphrase:** MoveAddressModal now collects passphrase first, calls `upgradeIdentity` instead of `resetIdentity` — every rotation produces an encrypted key. "Not protected" banner opens MoveAddressModal directly. Plaintext key rotation (`resetIdentity`) removed from primary UI. **Mandatory memory clue** on all passphrase flows. **Activity key fix:** added index to React key to prevent duplicate-key errors when multiple payouts share the same timestamp.
-  - **Stage 7 — Manage gate + combined backup + done-state polish (DONE 2026-04-30):** Single-passphrase gate on the You modal: verify once on entry, all eligible actions (Passphrase, Move) unlocked while modal is open; session destroyed on close OR tab blur (password-manager pattern). You modal collapsed Change Passphrase + Move rows into a single "Passphrase" row that opens MoveAddressModal — eliminates the two-flow ambiguity (both called the same primitives anyway). Restore row gets a parallel "Move to a saved key" subtitle. **Combined recovery file:** stage-3 download now contains BOTH `wif_encrypted` (new key) and `oldWif_encrypted` (old key under new passphrase) — one file, one passphrase, supersedes the temporary stage-1 file. **Auto-close timing fix:** wizard `onComplete` now updates identity state only (parent doesn't unmount the wizard); `onClose` (Continue button / X / backdrop on done) is the single dismissal path — user sees all status updates, sats-moved confirmation, and the safeguard reminder before exiting. **Memory clue input** gets `autoComplete="off"` + `autoCorrect/Capitalize="off"` + `spellCheck={false}` on all three modals (Move/Change/Upgrade) — browsers no longer surface previously-entered clues. **Done-state safeguard copy** (extended amber block with the critical sentence bolded in `text-amber-300`): file-and-passphrase mutual dependency made explicit — *"Without both, you cannot recover your account."* **Address → key** copy refinements throughout the wizard. **Em-dash entity fix:** three JSX text nodes still using `—` literal escape replaced with `&mdash;` (matches the `&apos;` precedent already in those lines).
+  - **Stage 6 — Amber brand + modal restructure (DONE 2026-04-17):** Full amber rebrand (#f59e0b) across identity card, You modal, UpgradeModal, ChangePassphraseModal, MoveAddressModal — single accent color, gold top stripe, `#0f0f0f` backgrounds. You modal restructured as a clean launcher: Restore extracted to standalone RestoreModal; only recovery key stays inline (read-only). **Mandatory memory clue** on all passphrase flows. **Activity key fix:** added index to React key to prevent duplicate-key errors when multiple payouts share the same timestamp. (*MoveAddressModal, sweep hardening, `verifyMigrationChain`, and rotation-related primitives built in this stage were subsequently removed in the 2026-06-14 rotation removal.*)
+  - **Stage 7 — Manage gate + done-state polish (DONE 2026-04-30):** Single-passphrase gate on the You modal: verify once on entry, eligible actions unlocked while modal is open; session destroyed on close OR tab blur (password-manager pattern). Restore row subtitle. **Memory clue input** gets `autoComplete="off"` + `autoCorrect/Capitalize="off"` + `spellCheck={false}`. **Em-dash entity fix.** (*Combined recovery file, MoveAddressModal Stage 3 flow, and rotation-related done-state copy built in this stage were removed in the 2026-06-14 rotation removal. Recovery files are now single-key only.*)
+
   - **Stage 8 — Identity card deep polish (DONE 2026-05-01):** Full multi-agent review (designer + marketer + architect + code-auditor) of every word, button, click path, and stage. Shipped in eight commits across seven batches, each gated by code-auditor pre-commit verification.
 
     **Shipped:**
@@ -253,13 +256,13 @@
     **Explicitly rejected (do not relitigate):**
     - **C2** — Three "Move it somewhere safe (phone, cloud, USB)..." instances stay identical. Designer-validated: temporally distant, consistency = recognisable safety mantra.
     - **C5** — Currency toggle keeps "🐐 Goat / 💵 Noob" labels. Designer-validated: emotional framing is load-bearing.
-    - **R1** — Passphrase row subtitle stays "Move to a fresh key — earnings and posts stay synced" — teaches the rotation consequence pre-emptively.
+    - **R1** — Passphrase row subtitle (historical note: was "Move to a fresh key — earnings and posts stay synced"; now reflects encrypt-in-place — no key move).
     - **R3** — ALL-CAPS section labels stay (Stripe/Linear/Vercel pattern; doesn't shout at 10–11px label size).
     - **Passphrase row label** — stays "Passphrase" (not "Upgrade", "Secure", "Protect").
 
     **Considered, deferred:**
     - **Path B identity-modal consistency refactor (deferred 2026-05-01, commit bd5e5bc):** convert MoveAddressModal + RestoreModal + Show recovery key into inline body-swaps inside the You modal (matching the locked-state pattern). Designer recommended; architect produced a 7-step plan; code-auditor adversarial review found 4 real bugs + 1 missed concern, including a tab-blur fund-loss scenario where interrupting the wizard mid-broadcast would leave localStorage with the OLD key while funds are already on the new address. Deferred because settings is low-traffic, the inconsistency only manifests on rapid cycling, and the risk-of-breaking-blockchain-state-mutating-code-paths outweighs the polish benefit. **Revisit when:** user feedback flags the inconsistency, OR there's bandwidth for a careful Path B implementation with all 5 mitigations + manual end-to-end testing of every wizard stage.
-  - **What to preserve (architect red-team):** C9 backup-warning dot semantics, deferred-commit pattern in `commitUpgrade`, `getIdentity()` plaintext-preferred fallback ordering (subtle H5 regression surface), migration signature chain.
+  - **What to preserve (architect red-team, historical note):** C9 backup-warning dot semantics, `getIdentity()` plaintext-preferred fallback ordering (subtle H5 regression surface). (`commitUpgrade` and the migration signature chain were removed in 2026-06-14 rotation removal.)
 - [ ] Notification system (bell icon — "anon_x7f2 featured your post", daily earnings summary)
 - [ ] Content moderation (report mechanism, basic filtering)
 - [ ] Deploy to Railway + custom domain
@@ -276,7 +279,7 @@
 
 ## Phase 6.6: Mobile/PWA hardening (E1–E32) — COMPLETE
 
-The E-series (E1–E32, 2026-05-08 → 2026-06-03) hardened the recovery, key-rotation, and install flows for production. See SESSION_LOG.md for per-session detail and DECISIONS.md for the locked-in patterns.
+The E-series (E1–E32, 2026-05-08 → 2026-06-03) hardened the recovery, protect, and install flows for production. E29–E31 (rotation-defence) were subsequently superseded by the full rotation removal (2026-06-14). See SESSION_LOG.md for per-session detail and DECISIONS.md for the locked-in patterns.
 
 - [x] Mobile modal restructure — 6 modals adopt the AgentChat bottom-sheet pattern (LAUNCH_PLAN Bucket 1)
 - [x] Welcome gate + install pitch (LAUNCH_PLAN Bucket 3a) — `useStandaloneMode`, `useInstallPlatform`, `InstallContext`, `InstallPitch`, `InstallBookmark`, `HomeScreenWelcomeGate`, `IosStorageToast`, `FirstEarningToast`
@@ -284,10 +287,10 @@ The E-series (E1–E32, 2026-05-08 → 2026-06-03) hardened the recovery, key-ro
 - [x] E26 — explicit save acknowledgement instead of auto-download
 - [x] E27 — restore-from-encrypted-file adopts the file's passphrase
 - [x] E28a/b/c — PWA share fixes for iOS standalone
-- [x] E29 — block restore of any key with forward migrations (closes "new device adopts stale key" vector)
+- [x] E29 — block restore of any key with forward migrations (closed "new device adopts stale key" vector) — **SUPERSEDED 2026-06-14** by removal of rotation; the attack surface no longer exists
 - [x] E29a — desktop skips Web Share API
-- [x] E30 — stale-key session-lockout (`StaleKeyModal`, polling sends `x-bsvibes-pubkey`, server returns `key_status` gated by `E30_STALE_KEY_ENABLED` env flag). Closes "existing device unaware its key was revoked elsewhere"
-- [x] E31 — block rotate-from-stale + `cleanupMigrations` deleted (closes the symmetric server-side vector E30 left open)
+- [x] E30 — stale-key session-lockout (`StaleKeyModal`, `E30_STALE_KEY_ENABLED` flag) — **SUPERSEDED 2026-06-14** by removal of rotation; stale keys cannot exist when the address never changes
+- [x] E31 — block rotate-from-stale + `cleanupMigrations` deleted — **SUPERSEDED 2026-06-14** by removal of rotation
 - [x] E32 — install pitch UX overhaul: slide-up sheet → bookmark chip pattern, no timer-based dismissal, Android Chrome one-tap restored, centered bookmark, modal-overlap ref-counter, geometry parity with Ask AI pill
 - [x] Android device-testing fixes (2026-06-03): UTXO outpoint dedup in `sweepFunds` / `autoTransferFunds` (catches WhatsOnChain duplicate-outpoint responses that produced `bad-txns-inputs-duplicate`); site-wide `vh` → `svh` modal sweep across 7 centered modals (fixes Android Chrome address-bar clip)
 
