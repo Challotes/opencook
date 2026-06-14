@@ -32,10 +32,10 @@
 **Prior fix:** (2026-04-30, Stage 7) Combined recovery file with both `wif_encrypted` + `oldWif_encrypted`.
 **Superseded 2026-06-14:** Key rotation, sweep, and `MoveAddressModal` have been removed. The key/address never changes — there is no "new key" scenario. `backup-template.ts` no longer produces `oldWif_encrypted`; `pathType` is `"save"` or `"restore-pre"` only. The original attack surface (stranded funds on a new address) cannot occur. Recovery files are single-key only.
 
-### C5: Free boot consumes grant even when broadcast fails — FIXED
-**File:** src/services/fairness/boot-orchestrator.ts lines 92-150
-**Risk:** User loses free boot but nobody gets paid. Boot appears successful but no on-chain payment.
-**Fix:** (2026-03-28) Grant consumed only after successful broadcast.
+### C5: Free boot consumes grant even when broadcast fails — REVERSED (Phase 1 Step 8, 2026-06-14)
+**File:** src/services/fairness/boot-orchestrator.ts
+**Original (2026-03-28) bias:** grant consumed only AFTER successful broadcast — protected the USER's free boot when a broadcast failed.
+**Reversed by Step 8** (DECISIONS.md "Free-boot path consumes the grant BEFORE paying", settled 2026-06-13): the server-funded free path spends the SERVER wallet's money, so the bias is deliberately inverted — `free_boots_used` is now consumed in an atomic check-and-increment transaction BEFORE the broadcast. A crash between a successful broadcast and the DB record can no longer let a retry make the server pay twice (the monotonic counter is the idempotency key — server-built free boots have no client txid). No refund on broadcast failure (ambiguous-failure safety: the tx may already be in the mempool). **Worst case is now "user loses one free boot, server pays once"** instead of "server pays repeatedly." **Hard Rule #3 acknowledged** — owner-sanctioned reversal of a control previously marked FIXED. The original USER-protection logic is unchanged on the paid/client-funded path (which consumes no server grant). **Follow-up (deferred):** refund on a *provably-pre-broadcast* failure status would restore the user's boot on e.g. server-wallet-empty — but needs a trustworthy "definitely did not submit" signal from the wallet/broadcast layer; doing it on the coarse `broadcast_failed` status would be unsafe (re-opens double-pay). Tracked.
 
 ### C6: Interrupted upgrade locks user out — FIXED then SUPERSEDED (2026-06-14)
 **File:** src/services/bsv/identity.ts

@@ -253,6 +253,13 @@ export async function bootPost(
   const processingMs = Math.round((performance.now() - start) * 100) / 100;
 
   if (!result.success) {
+    // Step 8: the free grant was exhausted concurrently (another in-flight boot
+    // consumed the last slot between the check above and executeBoot's atomic
+    // consume) — executeBoot signals this with isFree:false. Route to the paid
+    // path so the client transparently builds a paid boot instead of erroring.
+    if (!result.isFree) {
+      return { processingMs, requiresPayment: true, bootPrice: result.price, isFree: false };
+    }
     return { processingMs, error: result.error ?? "Boot failed", isFree: true };
   }
 

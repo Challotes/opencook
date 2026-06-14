@@ -118,7 +118,7 @@ All on-chain payloads are JSON inside OP_FALSE OP_RETURN outputs:
 - `src/services/fairness/weights.ts` — Contribution scoring (sqrt × decay × engagement). Posts attribute directly to their signing pubkey/address — no migration chain resolution.
 - `src/services/fairness/split.ts` — No-custody payout split (every sat out in same tx)
 - `src/services/fairness/boot-payment.ts` — Multi-output BSV split transaction builder
-- `src/services/fairness/boot-orchestrator.ts` — Full boot workflow (validate → price → score → split → broadcast → record)
+- `src/services/fairness/boot-orchestrator.ts` — Full boot workflow (validate → price → score → **consume free grant (atomic, pre-broadcast)** → split → broadcast → record). Step 8: `free_boots_used` is consumed in an atomic check-and-increment BEFORE the server wallet broadcasts, so a crash between broadcast and the DB record can't double-pay; no refund on broadcast failure (DECISIONS.md "consume the grant BEFORE paying"). A concurrently-exhausted grant returns `FREE_GRANT_EXHAUSTED` → `bootPost` routes to paid.
 
 ### Hooks & Context
 

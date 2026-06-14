@@ -8,7 +8,7 @@ import type BetterSqlite3 from "better-sqlite3";
 import { getServerAddress } from "@/services/bsv/wallet";
 import { buildSplitTransaction } from "./boot-payment";
 import { FAIRNESS_CONFIG } from "./config";
-import { getBootPriceForUser } from "./pricing";
+import { getBootPrice, getBootPriceForUser } from "./pricing";
 import { calculateSplit } from "./split";
 import { calculateWeights } from "./weights";
 
@@ -77,7 +77,52 @@ export async function executeBoot(
     };
   }
 
-  // 6. Calculate the split
+  // 7. Step 8 — free-boot idempotency. Consume the grant ATOMICALLY, BEFORE the
+  //    broadcast, so a crash between a successful broadcast (server wallet has
+  //    paid) and the DB record can't let a retry make the server pay twice. The
+  //    monotonic `free_boots_used` counter IS the idempotency key — server-built
+  //    free boots have no client txid to key on. The SELECT + UPDATE run inside
+  //    one synchronous better-sqlite3 transaction, so a concurrent free boot
+  //    (double-click / two tabs) can't both pass the check (closes the TOCTOU
+  //    between bootPost's price read and this consume).
+  //    Accepted tradeoff (DECISIONS.md "Free-boot path consumes the grant BEFORE
+  //    paying"): a broadcast failure AFTER consume loses the user one free boot —
+  //    NOT refunded, because a broadcast failure is ambiguous (the tx may already
+  //    be in the mempool, so a refund could re-open the double-pay). Server-wallet
+  //    protection > one free boot. Deliberately reverses the old C5 bias for this
+  //    server-funded path (SECURITY_AUDIT.md C5).
+  if (isFree) {
+    const consumed = db.transaction(() => {
+      const row = db
+        .prepare("SELECT free_boots_used FROM boot_grants WHERE pubkey = ?")
+        .get(booterAddress) as { free_boots_used: number } | undefined;
+      const used = row?.free_boots_used ?? 0;
+      if (used >= FAIRNESS_CONFIG.freeBootsPerUser) return false;
+      if (row) {
+        db.prepare(
+          "UPDATE boot_grants SET free_boots_used = free_boots_used + 1 WHERE pubkey = ?"
+        ).run(booterAddress);
+      } else {
+        db.prepare(
+          "INSERT INTO boot_grants (pubkey, free_boots_used, total_boots) VALUES (?, 1, 0)"
+        ).run(booterAddress);
+      }
+      return true;
+    })();
+    if (!consumed) {
+      // The grant was exhausted concurrently between bootPost's check and here.
+      // Route to PAID rather than spend the server wallet (fail toward paid).
+      return {
+        success: false,
+        price: getBootPrice(db),
+        recipients: 0,
+        error: "FREE_GRANT_EXHAUSTED",
+        isFree: false,
+      };
+    }
+  }
+
+  // 8. Calculate the split
   let txid: string | undefined;
   let recipientCount = 0;
   let split: ReturnType<typeof calculateSplit> | null = null;
@@ -92,10 +137,13 @@ export async function executeBoot(
     if (result.status === "success") {
       txid = result.txid;
     } else {
-      // Log the failure — broadcast did not succeed, do not consume the grant.
       const errorDetail = result.status === "broadcast_failed" ? result.error : result.status;
       console.error(`BSVibes: boot split broadcast FAILED for post ${postId}: ${errorDetail}`);
-      // C5 fix: grant must NOT be consumed when broadcast fails.
+      // Step 8: the free grant was ALREADY consumed before this broadcast and is
+      // deliberately NOT refunded here — a broadcast failure is ambiguous (the tx
+      // may have reached the mempool), so refunding could re-open the double-pay.
+      // The user loses one free boot; the server pays at most once (the accepted
+      // tradeoff in DECISIONS.md "consume the grant BEFORE paying").
       return {
         success: false,
         price: actualPrice,
@@ -130,30 +178,21 @@ export async function executeBoot(
     // same post each get their own payout set — prevents double-counting in earnings.
     const bootEventId = bootboardInsert.lastInsertRowid as number;
 
-    // Update free boot grants
+    // total_boots counts every delivered boot. `free_boots_used` for free boots
+    // was already consumed BEFORE the broadcast (Step 8), so it is NOT touched
+    // here — this block only records the delivered boot. The grant row already
+    // exists for free boots (the pre-broadcast consume created/updated it).
     const existing = db
       .prepare("SELECT pubkey FROM boot_grants WHERE pubkey = ?")
       .get(booterAddress);
-    if (isFree) {
-      if (existing) {
-        db.prepare(
-          "UPDATE boot_grants SET free_boots_used = free_boots_used + 1, total_boots = total_boots + 1 WHERE pubkey = ?"
-        ).run(booterAddress);
-      } else {
-        db.prepare(
-          "INSERT INTO boot_grants (pubkey, free_boots_used, total_boots) VALUES (?, 1, 1)"
-        ).run(booterAddress);
-      }
+    if (existing) {
+      db.prepare("UPDATE boot_grants SET total_boots = total_boots + 1 WHERE pubkey = ?").run(
+        booterAddress
+      );
     } else {
-      if (existing) {
-        db.prepare("UPDATE boot_grants SET total_boots = total_boots + 1 WHERE pubkey = ?").run(
-          booterAddress
-        );
-      } else {
-        db.prepare(
-          "INSERT INTO boot_grants (pubkey, free_boots_used, total_boots) VALUES (?, 0, 1)"
-        ).run(booterAddress);
-      }
+      db.prepare(
+        "INSERT INTO boot_grants (pubkey, free_boots_used, total_boots) VALUES (?, 0, 1)"
+      ).run(booterAddress);
     }
 
     // Record payouts for audit trail (when split transaction was broadcast)
