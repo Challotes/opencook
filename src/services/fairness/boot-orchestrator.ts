@@ -49,7 +49,7 @@ export async function executeBoot(
       isFree: false,
     };
 
-  // 2. Check server wallet — if not configured, do SQLite-only boot (no on-chain split)
+  // 2. Server wallet must be configured — it is the payout source.
   const platformAddress = getServerAddress();
 
   // 3. Get dynamic price and check free boot eligibility
@@ -58,6 +58,22 @@ export async function executeBoot(
   // Bounds per-user server subsidy at ~15,690 sats regardless of platform scale.
   // See DECISIONS.md "Free boots pay floor only (settled 2026-04-09)".
   const actualPrice = isFree ? FAIRNESS_CONFIG.bootPriceFloor : price;
+
+  // Finding 4 (deep audit 2026-06-15): refuse when the server wallet is
+  // unconfigured. Mirrors the 503 in boot-shares/boot-confirm — with no
+  // platformAddress there is no payout destination, so a "boot" here would burn
+  // a free-boot grant and record a phantom bootboard row while paying NO ONE
+  // (the Step-8 consume below is NOT gated on platformAddress). Refuse BEFORE the
+  // consume so nothing is spent and no phantom boot is recorded.
+  if (!platformAddress) {
+    return {
+      success: false,
+      price: actualPrice,
+      recipients: 0,
+      error: "SERVER_WALLET_UNCONFIGURED",
+      isFree,
+    };
+  }
 
   // 4. Calculate contribution weights
   const weights = calculateWeights(db);

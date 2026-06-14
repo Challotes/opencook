@@ -96,16 +96,19 @@ describe("executeBoot — free-boot idempotency (Step 8)", () => {
     expect(buildSplitTransaction).toHaveBeenCalledWith(expect.anything(), 1, booter);
   });
 
-  it("records a dev boot (no server wallet) without broadcasting or double-counting", async () => {
+  it("refuses a free boot when the server wallet is unconfigured — no grant burned, no phantom boot (Finding 4)", async () => {
     vi.mocked(getServerAddress).mockReturnValue(null);
 
     const result = await executeBoot(db, 1, booter, "anon_booter");
 
-    expect(result.success).toBe(true);
-    expect(result.isFree).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("SERVER_WALLET_UNCONFIGURED");
     expect(buildSplitTransaction).not.toHaveBeenCalled();
-    // Consume (free_boots_used) + record (total_boots) both ran, exactly once each.
-    expect(grant(db, booter)).toEqual({ free_boots_used: 1, total_boots: 1 });
+    // No grant consumed, no bootboard row recorded (the old behavior burned a
+    // grant + recorded a payout-less boot here — that was the bug).
+    expect(grant(db, booter)).toEqual({ free_boots_used: 0, total_boots: 0 });
+    const bootRows = db.prepare("SELECT COUNT(*) as c FROM bootboard").get() as { c: number };
+    expect(bootRows.c).toBe(0);
   });
 
   it("does NOT refund the free grant when the broadcast fails", async () => {
