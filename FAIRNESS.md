@@ -91,19 +91,31 @@ Because the pool is 800 sats instead of ~8,000+, pool shares on free boots are p
 
 ### OP_RETURN Audit Trail
 
-Every split transaction includes an OP_RETURN with metadata:
+Every split transaction includes an OP_RETURN with metadata. Both boot paths
+(server-funded and client-funded) emit the SAME shape via the shared builder
+`src/lib/boot-audit.ts` (`bootAuditPayload`):
 
 ```json
 {
+  "v": 1,
   "app": "bsvibes",
-  "action": "boot_split",
+  "type": "boot_split",
   "post_id": 42,
+  "booter": "1BooterAddress…",
+  "funded": "booter",
   "total": 10000,
   "recipients": 28,
   "formula_version": "0.1.0",
   "ts": 1711461600000
 }
 ```
+
+`booter` is the address that performed the boot (audit provenance — the
+server-funded path pays from the server wallet, so without this the booter would
+not appear on-chain). `funded` is `"server"` (free boot, server-subsidised) or
+`"booter"` (paid boot). `recipients` / `formula_version` are present only on the
+server-funded path (the client doesn't compute them). `v` is the record-envelope
+version (see DECISIONS.md "On-chain records carry a top-level version field").
 
 This makes every split publicly verifiable on-chain. Anyone can look up the transaction and confirm the percentages match the stated contribution table.
 

@@ -189,6 +189,7 @@
 - [x] Free boots pay floor price only (1,000 sats) — bounds per-user subsidy at ~15,690 sats regardless of scale
 - [x] Per-IP free-boot cap (40/IP/24h, in-memory) — backstops the per-identity grant against fresh-identity-per-incognito-tab server-wallet drain; fails toward paid (Phase 1 Step 6, 2026-06-14)
 - [x] Free-boot idempotency (Phase 1 Step 8, 2026-06-14) — `executeBoot` consumes the grant atomically BEFORE broadcasting (counter = idempotency key), so a crash between broadcast and DB write can't double-pay the server wallet; no refund on broadcast failure (reverses C5 bias for the server-funded path, per DECISIONS.md)
+- [x] On-chain boot record harmonized (Phase 1 Step 9, 2026-06-14) — both boot paths emit one JSON OP_RETURN shape via shared `boot-audit.ts` (closed the paid-boot `v:1` gap from Step 1); added `booter` + `funded` audit metadata so who-booted-which-post is durable on-chain from launch
 - [x] Fee rate documentation corrected (100 sat/kb, not 500 — code was always 100, docs were wrong)
 - [x] FAIRNESS.md corrected: Gaming Analysis (no 5-post daily cap — was aspirational), OP_RETURN spec (removed phantom fields), scaling table (actual fee math), minimum payout (1 sat not 100)
 - [x] 4-agent forensic audit: cross-referenced CLAUDE.md, DECISIONS.md, FAIRNESS.md, SECURITY_AUDIT.md against code

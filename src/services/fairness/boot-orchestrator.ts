@@ -132,7 +132,7 @@ export async function executeBoot(
     recipientCount = split.recipientCount;
 
     // 7. Build and broadcast the BSV split transaction
-    const result = await buildSplitTransaction(split, postId);
+    const result = await buildSplitTransaction(split, postId, booterAddress);
 
     if (result.status === "success") {
       txid = result.txid;

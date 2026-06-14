@@ -5,6 +5,7 @@
 
 import type { LockingScript } from "@bsv/sdk";
 import { OP, P2PKH, Script } from "@bsv/sdk";
+import { bootAuditPayload } from "@/lib/boot-audit";
 import { type BroadcastResult, buildAndBroadcast } from "@/services/bsv/wallet";
 import { FAIRNESS_CONFIG } from "./config";
 import type { SplitResult } from "./split";
@@ -12,10 +13,15 @@ import type { SplitResult } from "./split";
 /**
  * Build and broadcast the split transaction for a boot.
  * Retries once after 1 second on failure (handles stale UTXO contention).
+ *
+ * @param booterAddress  Address that performed the boot — recorded in the
+ *   on-chain audit record (this is a server-funded boot, so the tx inputs are
+ *   the server wallet's; without this the booter would not appear on-chain).
  */
 export async function buildSplitTransaction(
   split: SplitResult,
-  postId: number
+  postId: number,
+  booterAddress: string
 ): Promise<BroadcastResult> {
   const p2pkh = new P2PKH();
 
@@ -60,16 +66,14 @@ export async function buildSplitTransaction(
     }
   }
 
-  // OP_RETURN audit trail
-  const auditPayload = JSON.stringify({
-    v: 1,
-    app: "bsvibes",
-    type: "boot_split",
-    post_id: postId,
+  // OP_RETURN audit trail (shared shape — see src/lib/boot-audit.ts)
+  const auditPayload = bootAuditPayload({
+    postId,
+    booter: booterAddress,
+    funded: "server",
     total: split.totalDistributed,
     recipients: outputsByAddress.size,
-    formula_version: FAIRNESS_CONFIG.formulaVersion,
-    ts: Date.now(),
+    formulaVersion: FAIRNESS_CONFIG.formulaVersion,
   });
 
   const opReturnScript = new Script();

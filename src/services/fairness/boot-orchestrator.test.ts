@@ -92,6 +92,8 @@ describe("executeBoot — free-boot idempotency (Step 8)", () => {
     // total_boots === 1 confirms the consume-INSERT → record-UPDATE compose did
     // not collide on the boot_grants PK or double-count.
     expect(grant(db, booter)).toEqual({ free_boots_used: 1, total_boots: 1 });
+    // Step 9: the booter is threaded into the on-chain audit record (3rd arg).
+    expect(buildSplitTransaction).toHaveBeenCalledWith(expect.anything(), 1, booter);
   });
 
   it("records a dev boot (no server wallet) without broadcasting or double-counting", async () => {

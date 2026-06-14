@@ -21,6 +21,8 @@
  *   as an input for the next, skipping the WoC fetch entirely when sufficient
  */
 
+import { bootAuditPayload } from "@/lib/boot-audit";
+
 // ── Types ───────────────────────────────────────────────────
 
 export interface BootShare {
@@ -216,11 +218,14 @@ const MAX_CONSOLIDATION_INPUTS = 20;
 
 /**
  * Estimate the fee for a transaction with N inputs and M outputs (P2PKH).
- * Byte formula: 10 (overhead) + 148 * inputs + 34 * outputs + 80 (OP_RETURN est.)
+ * Byte formula: 10 (overhead) + 148 * inputs + 34 * outputs + 200 (OP_RETURN est.)
+ * The OP_RETURN carries a JSON boot-audit record (~150-160 bytes); 200 leaves
+ * margin. NOTE: this estimate only sizes UTXO selection — the actual fee is the
+ * SDK's exact `tx.fee()` on the built tx, so the payload size can't underpay.
  * Rate: 0.1 sat/byte (100 sat/kb) to match ARC's minimum policy.
  */
 function estimateFee(inputCount: number, outputCount: number): number {
-  const bytes = 10 + 148 * inputCount + 34 * outputCount + 80;
+  const bytes = 10 + 148 * inputCount + 34 * outputCount + 200;
   return Math.max(100, Math.ceil(bytes * 0.1));
 }
 
@@ -434,16 +439,15 @@ async function _clientSideBootInner(
     opReturnScript.writeOpCode(OP.OP_FALSE);
     opReturnScript.writeOpCode(OP.OP_RETURN);
 
-    const opReturnFields = [
-      "bsvibes", // app prefix
-      "boot", // action type
-      String(postId), // post being booted
-      String(bootPriceSats), // total boot amount
-      String(Date.now()), // timestamp
-    ];
-    for (const field of opReturnFields) {
-      opReturnScript.writeBin(Array.from(new TextEncoder().encode(field)));
-    }
+    // Shared on-chain boot audit record — same shape as the server-funded path
+    // (see src/lib/boot-audit.ts). funded:"booter" = this is a client-paid boot.
+    const auditPayload = bootAuditPayload({
+      postId,
+      booter: userAddress,
+      funded: "booter",
+      total: bootPriceSats,
+    });
+    opReturnScript.writeBin(Array.from(new TextEncoder().encode(auditPayload)));
 
     tx.addOutput({
       lockingScript: opReturnScript as import("@bsv/sdk").LockingScript,
