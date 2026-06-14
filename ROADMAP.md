@@ -186,6 +186,7 @@
 ## Phase 6.2: Cost Model & Documentation Audit (2026-04-09/10) — COMPLETE
 
 - [x] Free boots pay floor price only (1,000 sats) — bounds per-user subsidy at ~15,690 sats regardless of scale
+- [x] Per-IP free-boot cap (40/IP/24h, in-memory) — backstops the per-identity grant against fresh-identity-per-incognito-tab server-wallet drain; fails toward paid (Phase 1 Step 6, 2026-06-14)
 - [x] Fee rate documentation corrected (100 sat/kb, not 500 — code was always 100, docs were wrong)
 - [x] FAIRNESS.md corrected: Gaming Analysis (no 5-post daily cap — was aspirational), OP_RETURN spec (removed phantom fields), scaling table (actual fee math), minimum payout (1 sat not 100)
 - [x] 4-agent forensic audit: cross-referenced CLAUDE.md, DECISIONS.md, FAIRNESS.md, SECURITY_AUDIT.md against code

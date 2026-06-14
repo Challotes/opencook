@@ -1,6 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
 import { db } from "@/lib/db";
+import { tryConsumeFreeBootForIp } from "@/lib/free-boot-cap";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateAnonName } from "@/lib/utils";
 
@@ -11,7 +13,7 @@ async function getBsvSdk() {
 
 import { logPostOnChain } from "@/services/bsv/onchain";
 import { executeBoot } from "@/services/fairness/boot-orchestrator";
-import { getBootPriceForUser } from "@/services/fairness/pricing";
+import { getBootPrice, getBootPriceForUser } from "@/services/fairness/pricing";
 import type { BootboardData, BootboardHistoryRow, BootboardRow, Post } from "@/types";
 
 export interface CreatePostResult {
@@ -213,14 +215,36 @@ export async function bootPost(
   const rl = rateLimit(`bootPost:${boostedBy}`, { limit: 30, windowMs: 60_000 });
   if (!rl.success) return { processingMs: 0, error: "Rate limit exceeded" };
 
-  // Check whether this boot is free (server pays) or paid (client must build tx)
-  const { isFree, price: bootPrice } = getBootPriceForUser(db, boostedBy);
+  // Check whether the per-identity grant would make this boot free (server pays)
+  // or paid (client must build tx).
+  const { isFree: grantAllowsFree, price: bootPrice } = getBootPriceForUser(db, boostedBy);
+
+  // Per-IP cap on SERVER-FUNDED free boots — additive defense that STACKS WITH
+  // the per-identity grant (whichever binds first wins). Only consult/consume
+  // the IP bucket when the grant would otherwise make this free: paid boots cost
+  // the server nothing, so they must NEVER be gated by the IP cap (a paying user
+  // can't be blocked). Fails toward PAID. See DECISIONS.md "Per-IP free-boot cap".
+  let isFree = grantAllowsFree;
+  let effectiveBootPrice = bootPrice;
+  if (grantAllowsFree) {
+    const hdrs = await headers();
+    const ip =
+      hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      hdrs.get("x-real-ip")?.trim() ||
+      "unknown";
+    if (!tryConsumeFreeBootForIp(ip)) {
+      // IP cap binds → route to paid, exactly like grant exhaustion. The grant
+      // path returns price 0, so recompute the real dynamic price for the client.
+      isFree = false;
+      effectiveBootPrice = getBootPrice(db);
+    }
+  }
 
   if (!isFree) {
     // Paid boot: client must build and broadcast the split transaction itself,
     // then call /api/boot-confirm. Return the price so the client can proceed.
     const processingMs = Math.round((performance.now() - start) * 100) / 100;
-    return { processingMs, requiresPayment: true, bootPrice, isFree: false };
+    return { processingMs, requiresPayment: true, bootPrice: effectiveBootPrice, isFree: false };
   }
 
   // Free boot: server wallet pays, orchestrator handles the full workflow.

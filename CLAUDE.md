@@ -42,6 +42,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 - `src/app/actions.ts` — Server actions. Reads (no signature): getPosts, getNewPosts, getUpdatedPosts, getOlderPosts, getBootboard. Mutations (signature-verified): createPost, bootPost.
 - `src/lib/db.ts` — SQLite setup (WAL, foreign keys, auto-migration, indexes, boot_grants + payouts tables)
 - `src/lib/rate-limit.ts` — In-memory sliding window rate limiter
+- `src/lib/free-boot-cap.ts` — Per-IP cap on SERVER-FUNDED free boots (`tryConsumeFreeBootForIp`, 40/IP/24h, reuses rate-limit.ts). Additive defense behind the per-identity `boot_grants` cap, bounding the "fresh identity per incognito tab" server-wallet drain. Fails toward PAID, never fail-open. Consulted by `bootPost` only when the per-identity grant would make the boot free. Unit-tested in `free-boot-cap.test.ts`.
 - `src/lib/utils.ts` — Shared utilities (generateAnonName, cn helper)
 - `src/data/agent-prompt.ts` — Dynamic agent prompt builder (loads MDs at request time)
 - `src/data/genesis.ts` — Genesis conversation data

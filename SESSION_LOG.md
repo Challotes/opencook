@@ -2,7 +2,7 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
-## 2026-06-14 (cont.) — Phase 1 Steps 3–5: rotation removal COMPLETE in code
+## 2026-06-14 (cont.) — Phase 1 Steps 3–6 + doc-sync
 
 Category: implementation (launch-critical-path execution). Continued Phase 1. Each group: agent design pass → plain-English to owner → edit → tsc + Biome + vitest → code-auditor on the diff → commit. All commits UNPUSHED (owner holding local). Findings validated against DECISIONS.md before acting; one agent claim about the post-Group-B state was wrong and caught by direct verification (RestoreModal no longer calls restore-eligibility).
 
@@ -12,10 +12,12 @@ Category: implementation (launch-critical-path execution). Continued Phase 1. Ea
   - Group B (`10633fa`): **version-gated restore policy** — `RECOVERY_FILE_VERSION=1` stamped centrally in `generateBackupHtml`; `restore-from-file` rejects plaintext OR non-`fileVersion:1` files as `unsupported_version` (ALL legacy files rejected, owner "start clean"). Deleted `importIdentity` (restore is encrypted-only), the RestoreModal inline parser (routed to shared parser), the E29 preflight in RestoreModal + welcome gate, the server-side E30 emitter (`key-status-validation.ts` + posts/route key_status), `E30_STALE_KEY_ENABLED`.
   - Groups C+D (`5719988`): deleted `MoveAddressModal.tsx`, `restore-eligibility/route.ts`, `migration.ts`; removed `migrateIdentity`/`verifyMigrationChain` from actions.ts; stripped the rotation backend from identity.ts (upgrade/commit/reset/sweep/autoTransfer/_rotationInProgress); pruned `BackupData` (oldWif_encrypted/oldAddress, rotation/pre-rotation pathTypes) + every previous-key path in the recovery-file template. Added `backup-template.test.ts` (generate↔parse round-trip — the smoke test for the stringified-HTML surgery).
 - **Step 5 (migrations table + chain resolution)** (`062dcd0`): owner confirmed migration/payout history is throwaway test data → removed the `migrations` table from db.ts, `buildMigrationMap` from weights.ts (scoring now attributes posts directly to `post.pubkey` — identical over an empty table), `resolveAllAddresses` from earnings (now `[address]`; pubkey→address is 1:1 so no earned address is dropped), and the 2 chain tests. Auditor rigorously confirmed the money-attribution equivalence.
+- **Doc-sync** (`3e1f8cf`): scrubbed CLAUDE.md/ROADMAP.md/FAIRNESS.md/SECURITY_AUDIT.md of deleted-as-live rotation/migration/E29-E30-E31 references (security findings annotated SUPERSEDED, history preserved); DECISIONS.md + SESSION_LOG.md updated; FAIRNESS.md AFP-novelty claim KEPT as a historical prior-art note (owner chose "keep" 2026-06-14). Reviewed each file's diff before commit.
+- **Step 6 — per-IP free-boot cap** (`<this commit>`): new `src/lib/free-boot-cap.ts` `tryConsumeFreeBootForIp` (in-memory, 40/IP/24h, reuses rate-limit.ts). `bootPost` reads IP via `await headers()` and consults the cap ONLY when the per-identity grant would make the boot free; on bind it demotes `isFree→false` (silent free→paid flip via existing `useBoot` handling) and recomputes the real `getBootPrice(db)` (grant path returns 0 — agent caught this). Fails toward PAID, never fail-open. 4 unit tests incl. the throwing-limiter catch branch. Auditor CLEAN (verified never-fail-open + paid boots can't be blocked).
 
-**Net:** key rotation is 100% gone from the code. Protect + change-passphrase survive (same key, unlimited times) via the already-built ProtectModal/ChangePassphraseModal (encrypt-in-place). DECISIONS.md updated with the implementation note (`062dcd0` tail).
+**Net:** key rotation is 100% gone from code AND docs. Protect + change-passphrase survive (same key, unlimited times) via ProtectModal/ChangePassphraseModal (encrypt-in-place). Per-IP free-boot cap bounds the fresh-identity-per-tab server-wallet drain.
 
-**Remaining in Phase 1:** (a) finish doc-sync — CLAUDE.md, ROADMAP.md, FAIRNESS.md (keep AFP novelty as a historical prior-art note per owner 2026-06-14), SECURITY_AUDIT.md E29/E30/E31 → "superseded by encrypt-in-place" still describe deleted code as live; (b) the server items — on-chain `v:1` field (Step 1 done), per-IP free-boot cap, boot-confirm auth, free-boot idempotency. NOT pushed yet — owner holding all commits local.
+**Remaining in Phase 1 (server items, NOT started):** Step 7 — boot-confirm auth + record-from-on-chain-outputs; Step 8 — free-boot idempotency. Step 1 (on-chain `v:1`) + Step 2 (encrypt-in-place) done earlier. Then Phase-1 deep-audit/re-audit, then Phase 2+. NOT pushed yet — owner holding all commits local. Next session: Step 7.
 
 ## 2026-06-14 — Phase 0 + Phase 1 Steps 1–2 implemented (encrypt-in-place COMPLETE)
 
