@@ -24,13 +24,13 @@ export interface BootResult {
 /**
  * Execute a full boot: validate, price, score, split, broadcast, record.
  *
- * @param booterPubkey  Stable identifier for the booter (BSV address) — used for boot_grants tracking
+ * @param booterAddress  Stable identifier for the booter (BSV address) — used for boot_grants tracking
  * @param booterName    Human-readable name (e.g. anon_x4f2) — stored in bootboard for display
  */
 export async function executeBoot(
   db: BetterSqlite3.Database,
   postId: number,
-  booterPubkey: string,
+  booterAddress: string,
   booterName: string
 ): Promise<BootResult> {
   // 1. Validate the post exists and is boostable (has pubkey)
@@ -53,7 +53,7 @@ export async function executeBoot(
   const platformAddress = getServerAddress();
 
   // 3. Get dynamic price and check free boot eligibility
-  const { price, isFree } = getBootPriceForUser(db, booterPubkey);
+  const { price, isFree } = getBootPriceForUser(db, booterAddress);
   // Free boots pay the floor (1,000 sats), not the dynamic price.
   // Bounds per-user server subsidy at ~15,690 sats regardless of platform scale.
   // See DECISIONS.md "Free boots pay floor only (settled 2026-04-09)".
@@ -124,7 +124,7 @@ export async function executeBoot(
       .prepare(`
       INSERT INTO bootboard (post_id, boosted_by, boosted_by_name, is_free) VALUES (?, ?, ?, ?)
     `)
-      .run(postId, booterPubkey, booterName, isFree ? 1 : 0);
+      .run(postId, booterAddress, booterName, isFree ? 1 : 0);
 
     // Use the unique bootboard row ID as bootEventId so multiple boots on the
     // same post each get their own payout set — prevents double-counting in earnings.
@@ -133,26 +133,26 @@ export async function executeBoot(
     // Update free boot grants
     const existing = db
       .prepare("SELECT pubkey FROM boot_grants WHERE pubkey = ?")
-      .get(booterPubkey);
+      .get(booterAddress);
     if (isFree) {
       if (existing) {
         db.prepare(
           "UPDATE boot_grants SET free_boots_used = free_boots_used + 1, total_boots = total_boots + 1 WHERE pubkey = ?"
-        ).run(booterPubkey);
+        ).run(booterAddress);
       } else {
         db.prepare(
           "INSERT INTO boot_grants (pubkey, free_boots_used, total_boots) VALUES (?, 1, 1)"
-        ).run(booterPubkey);
+        ).run(booterAddress);
       }
     } else {
       if (existing) {
         db.prepare("UPDATE boot_grants SET total_boots = total_boots + 1 WHERE pubkey = ?").run(
-          booterPubkey
+          booterAddress
         );
       } else {
         db.prepare(
           "INSERT INTO boot_grants (pubkey, free_boots_used, total_boots) VALUES (?, 0, 1)"
-        ).run(booterPubkey);
+        ).run(booterAddress);
       }
     }
 

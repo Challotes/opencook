@@ -10,7 +10,7 @@ interface BootConfirmBody {
   postId: number;
   txid: string;
   rawTx?: string;
-  booterPubkey: string;
+  booterAddress: string;
   booterName: string;
 }
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { postId, txid, rawTx, booterPubkey, booterName } = body;
+  const { postId, txid, rawTx, booterAddress, booterName } = body;
 
   if (!Number.isInteger(postId) || postId <= 0) {
     return NextResponse.json({ error: "Invalid postId" }, { status: 400 });
@@ -157,14 +157,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Could not parse rawTx" }, { status: 400 });
   }
 
-  if (typeof booterPubkey !== "string" || booterPubkey.trim().length === 0) {
-    return NextResponse.json({ error: "Missing booterPubkey" }, { status: 400 });
+  if (typeof booterAddress !== "string" || booterAddress.trim().length === 0) {
+    return NextResponse.json({ error: "Missing booterAddress" }, { status: 400 });
   }
-  // booterName defaults to booterPubkey if not provided (backward compat)
+  // booterName defaults to booterAddress if not provided (backward compat)
   const displayName =
     typeof booterName === "string" && booterName.trim().length > 0
       ? booterName.trim()
-      : booterPubkey;
+      : booterAddress;
 
   // Validate the post exists and has a pubkey (so we can pay the creator)
   const post = db.prepare("SELECT id, pubkey FROM posts WHERE id = ?").get(postId) as
@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
       .prepare(`
       INSERT INTO bootboard (post_id, boosted_by, boosted_by_name) VALUES (?, ?, ?)
     `)
-      .run(postId, booterPubkey, displayName);
+      .run(postId, booterAddress, displayName);
 
     // Use the unique bootboard row ID as bootEventId so multiple boots on the
     // same post each get their own payout set — prevents double-counting in earnings.
@@ -267,16 +267,16 @@ export async function POST(req: NextRequest) {
     // Update or create boot_grants (paid boot — increment total_boots only)
     const existing = db
       .prepare("SELECT pubkey FROM boot_grants WHERE pubkey = ?")
-      .get(booterPubkey);
+      .get(booterAddress);
 
     if (existing) {
       db.prepare("UPDATE boot_grants SET total_boots = total_boots + 1 WHERE pubkey = ?").run(
-        booterPubkey
+        booterAddress
       );
     } else {
       db.prepare(
         "INSERT INTO boot_grants (pubkey, free_boots_used, total_boots) VALUES (?, 0, 1)"
-      ).run(booterPubkey);
+      ).run(booterAddress);
     }
 
     // Record payouts for the audit trail

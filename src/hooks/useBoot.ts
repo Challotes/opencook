@@ -156,7 +156,7 @@ export function useBoot(opts: UseBootOptions = {}) {
                 postId,
                 txid: bootResult.txid,
                 rawTx: bootResult.rawTx,
-                booterPubkey: identity.address,
+                booterAddress: identity.address,
                 booterName: identity.name,
               }),
             });
