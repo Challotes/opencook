@@ -2,6 +2,44 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-15 — Phase 1 deep-audit + must-fix close-out
+
+Category: audit + fixes. Ran an exhaustive multi-agent deep-audit workflow (map →
+hunt → adversarial-verify-every-finding → completeness critic → synthesize; 93
+agents, 42 raw findings → 17 confirmed). It found real cross-commit bugs the
+per-step audits couldn't see (they only surface when the 12 rotation-removal
+commits are viewed together). Verdict: money-conservation core sound, zero
+dangling refs from the removal, but 5 user-facing money/data-loss paths to fix.
+
+**All 5 must-fix FIXED (each: design agent → validate → implement → test → commit;
+the money one re-audited):**
+- **F4** (`206e2b1`): free boot with no server wallet burned a grant + recorded a
+  phantom boot reporting success — early refusal before the consume. Flipped my
+  own Step-8 test that had encoded the buggy behavior.
+- **F1+F2+F3** (`1baba56`): identity recovery cluster. F1 — interrupted restore
+  silently reverted to the OLD key (getIdentity's both-present reconciliation was
+  right for encrypt-in-place but wrong for restore = different key); now
+  address-compares the two stores. F2 — corrupted store trapped a funded user;
+  added a "Restore from a saved file" link to SignInModal. F3 — corrupt store
+  auto-genned a new empty identity; added hasEncryptedStorePresent() guard +
+  useIdentity routing. 6 new tests (getidentity-recovery.test.ts).
+- **F6** (`9fdb99a`): paid-boot DOUBLE-PAY on weight/price drift — confirm
+  rejected an already-broadcast tx → client retried → new txid → paid twice. Now
+  records from the on-chain outputs (platform-cut floor, never recompute-reject);
+  client never rebuilds after broadcast. **The auditor caught a critical I'd
+  missed:** a THROWN fetch (dropped connection at confirm — the likeliest
+  transient failure) fell through to the rebuild path → double-pay; now wrapped.
+  Recorded the trust-model change in DECISIONS.md.
+
+**Nice-to-haves OPEN (tracked in SECURITY_AUDIT "Phase 1 Deep-Audit", not
+launch-blocking):** cross-tab stale-ready wedge; corruption error messaging;
+shareOrDownloadBackup success signal; client OP_RETURN field validation; doc/comment
+drift; free-path attribution + boot_grants column naming. Deferred items (a)–(d)
+re-assessed with fresh eyes — all confirmed keep-deferred, none elevated.
+
+**16 commits this session, ALL UNPUSHED — owner holding local.** Phase 1 is now
+launch-ready pending the owner's review of the local branch.
+
 ## 2026-06-14 (cont.) — Phase 1 Steps 3–9b: server + on-chain hardening COMPLETE
 
 Category: implementation (launch-critical-path execution). Continued Phase 1. Each group: agent design pass → plain-English to owner → edit → tsc + Biome + vitest → code-auditor on the diff → commit. All commits UNPUSHED (owner holding local). Findings validated against DECISIONS.md before acting; one agent claim about the post-Group-B state was wrong and caught by direct verification (RestoreModal no longer calls restore-eligibility).

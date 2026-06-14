@@ -176,3 +176,46 @@ The "global single-flight" boot lock was enforced via `setBootingPostId` (React 
 
 Auditor verified diff: no fourth writer to ref or state; consumers correctly continue reading React state (intentional one-tick lag is harmless — any race-window click re-enters `claimBoot` which the ref blocks).
 **Status:** FIXED.
+
+## Phase 1 Deep-Audit (2026-06-15)
+
+Exhaustive close-out audit over the whole Phase-1 surface (multi-agent workflow:
+map → hunt → adversarial-verify-every-finding → completeness critic → synthesize).
+42 raw findings → 17 confirmed after adversarial review. Money-conservation core
+verified sound; rotation/migration removal left ZERO dangling code references.
+
+**Must-fix — ALL FIXED:**
+- **F1 (HIGH) — interrupted restore reverted to the OLD key.** getIdentity's
+  both-present reconciliation preferred plaintext unconditionally (true for
+  encrypt-in-place, false for restore = different key). Now address-compares the
+  stores; different → drop stale plaintext, route to unlock. FIXED `1baba56`.
+- **F2 (HIGH) — corrupted encrypted store trapped a funded user** (no restore
+  escape in SignInModal). Added an always-available "Restore from a saved file"
+  link. FIXED `1baba56`.
+- **F3 (HIGH) — corrupt store silently auto-genned a new identity** (browser tab),
+  orphaning funds. Added hasEncryptedStorePresent(); never auto-gen over a
+  non-empty enc store; useIdentity routes it to unlock. FIXED `1baba56`.
+- **F4 (Critical-integrity) — free boot with no server wallet burned a grant +
+  recorded a phantom boot.** Early refusal before the consume. FIXED `206e2b1`.
+- **F6 (Critical-money) — paid boot double-paid on weight/price drift** (confirm
+  rejected an already-broadcast tx → retry rebuilt a new txid). Now records from
+  on-chain outputs with a platform-cut floor; client never rebuilds after
+  broadcast (incl. the thrown-fetch path the auditor caught). FIXED `9fdb99a`.
+  See DECISIONS.md "Paid-boot confirm records from on-chain outputs".
+
+**Nice-to-have — OPEN (tracked, not launch-blocking):**
+- Cross-tab protect/change-passphrase wedges the OTHER tab in a stale "ready"
+  state until reload (medium; recoverable, no fund loss; fix: flip Tab B to
+  needsUnlock when id===null && isIdentityEncrypted() in the storage handler).
+- Corruption messaging: decryptWif/changePassphrase say "wrong passphrase" on a
+  corrupt-ciphertext store (F2's restore link mitigates the trap; a discriminated
+  "corrupt" vs "wrong-pass" result is the fuller fix).
+- shareOrDownloadBackup reports shared:true for the `<a download>` path with no
+  success signal (3 callers flip the backed-up flag on an unverified download).
+- Client OP_RETURN audit fields unvalidated (forgeable; DB attribution is
+  signature-safe; advisory per the reader contract).
+- Doc/comment drift: stale "across the full address chain" comments in
+  earnings/route.ts; orphan migrations table (CREATE removed, no DROP — moot for
+  fresh-start launch).
+- Free-boot path attribution still client-trusted (symmetric to Step 7; low —
+  free boots are IP-capped + cost nothing); boot_grants.pubkey column naming.
