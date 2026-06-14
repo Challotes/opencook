@@ -11,12 +11,7 @@ import {
 } from "react";
 import { useIdentity } from "@/hooks/useIdentity";
 import { detectStandalone } from "@/hooks/useStandaloneMode";
-import {
-  clearSessionCaches,
-  getIdentity,
-  importEncryptedIdentity,
-  importIdentity,
-} from "@/services/bsv/identity";
+import { clearSessionCaches, getIdentity, importEncryptedIdentity } from "@/services/bsv/identity";
 import type { Identity } from "@/types";
 
 interface IdentityContextValue {
@@ -34,16 +29,15 @@ interface IdentityContextValue {
   updateIdentity: (newIdentity: Identity) => void;
   /**
    * SINGLE entry point for the welcome gate to commit a restored identity.
-   * Branches internally on whether a passphrase was used to decrypt the
-   * source file:
-   * - With `passphrase` → calls `importEncryptedIdentity` so the new identity
-   *   is protected by the same passphrase the user just typed, with the
-   *   file's hint preserved (E28c — matches RestoreModal's behavior).
-   * - Without `passphrase` → calls `importIdentity` (plaintext path).
+   * Every supported recovery file is encrypted, so a `passphrase` is always
+   * present: it calls `importEncryptedIdentity` so the new identity is protected
+   * by the same passphrase the user just typed to decrypt the file, with the
+   * file's hint preserved (E28c). Restoring without a passphrase is no longer
+   * supported (the parser rejects legacy plaintext files) — it throws.
    *
-   * Both internally write localStorage, clear/set the encrypted store, and
-   * prime session caches. Then commits the result to React state. Callers
-   * MUST use this instead of calling the underlying functions directly.
+   * `importEncryptedIdentity` writes localStorage, sets the encrypted store, and
+   * primes session caches. Then commits the result to React state. Callers MUST
+   * use this instead of calling the underlying functions directly.
    *
    * Async to allow the gate to await the result before unmounting itself.
    */
@@ -120,20 +114,18 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   const acceptRestoredIdentity = useCallback(
     async (wif: string, name?: string, passphrase?: string, hint?: string): Promise<Identity> => {
-      // Branch on whether the file the user just restored was encrypted (and
-      // they typed a passphrase to decrypt it). Mirrors RestoreModal's pattern:
-      // - With passphrase → re-encrypt the new identity with the same passphrase
-      //   (importEncryptedIdentity primes _sessionIdentity AND writes the
-      //   encrypted store with the file's hint preserved).
-      // - Without passphrase → plaintext path (importIdentity).
-      //
-      // Both functions are the SINGLE entry points for their respective shapes —
-      // they handle WIF validation, address derivation, localStorage write,
-      // encrypted-store toggling, and session cache priming. Duplicating that
-      // logic here would risk drift.
-      const identity = passphrase
-        ? await importEncryptedIdentity(wif, passphrase, name, hint)
-        : await importIdentity(wif, name);
+      // Every supported recovery file is encrypted, so the user always typed a
+      // passphrase to decrypt it. Re-encrypt the new identity under that same
+      // passphrase (importEncryptedIdentity primes _sessionIdentity AND writes
+      // the encrypted store with the file's hint preserved). It is the SINGLE
+      // entry point for this shape — it handles WIF validation, address
+      // derivation, localStorage write, encrypted-store set, and cache priming.
+      // Plaintext restore is no longer supported (the parser rejects legacy
+      // plaintext files upstream); guard defensively.
+      if (!passphrase) {
+        throw new Error("This recovery file is no longer supported.");
+      }
+      const identity = await importEncryptedIdentity(wif, passphrase, name, hint);
       // updateIdentity transitions the state machine to `kind: "ready"`,
       // simultaneously clearing whatever state was previously active
       // (awaitingWelcomeGate, needsUnlock, or loading).

@@ -259,10 +259,8 @@ async function materializeFromStored(stored: StoredIdentity): Promise<Identity> 
 }
 
 /**
- * Derive the public key (compressed, hex) from a WIF private key.
- * Used by restore-eligibility checks in RestoreModal + HomeScreenWelcomeGate
- * (E29) before touching any identity state — the pubkey is what the server
- * uses to look up forward migration records.
+ * Derive the public key (compressed, hex) from a WIF private key. The pubkey
+ * is the server-side lookup key for records associated with an identity.
  *
  * Throws if the WIF is malformed. Caller is responsible for surfacing the
  * error to the user as "invalid recovery file" or similar.
@@ -891,65 +889,18 @@ export function getStoredAnonName(): string | null {
 }
 
 /**
- * Import an identity from a raw WIF string (or a backup JSON file's WIF field).
- * Validates the WIF, derives the address, stores in localStorage (plaintext).
- * Replaces any existing identity — caller is responsible for confirming with the user.
- * @param wif    - A Base58-encoded WIF private key string.
- * @param name   - Optional display name. Falls back to generating a new anon name.
- */
-export async function importIdentity(wif: string, name?: string): Promise<Identity> {
-  if (typeof window === "undefined") {
-    throw new Error("importIdentity can only run in the browser");
-  }
-
-  const trimmed = wif.trim();
-  if (!trimmed) throw new Error("WIF is required");
-
-  const { PrivateKey } = await getBsvSdk();
-
-  let key: import("@bsv/sdk").PrivateKey;
-  try {
-    key = PrivateKey.fromWif(trimmed);
-  } catch {
-    throw new Error("Invalid key — please check and try again");
-  }
-
-  const pubkey = key.toPublicKey().toString();
-  const address = key.toPublicKey().toAddress().toString();
-  const identityName = (name ?? "").trim() || generateAnonName();
-
-  const store: StoredIdentity = { wif: trimmed, name: identityName, address, pubkey };
-
-  // Clear any existing encrypted identity so the app uses the new plaintext one.
-  // This is critical: a previous failed upgrade may have written bfn_keypair_enc
-  // while leaving the user on a new key. Clearing it here ensures isIdentityEncrypted()
-  // returns false after import, so the UI shows "Not protected" rather than "Identity protected".
-  localStorage.removeItem(ENCRYPTED_KEY);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-
-  // Reset ALL session caches — the identity has fully changed
-  _sessionIdentity = null;
-  _cachedWif = trimmed;
-  _cachedPrivateKey = key;
-
-  return { name: identityName, address, wif: trimmed, pubkey };
-}
-
-/**
  * Import a WIF and write it to the ENCRYPTED store using a caller-supplied
  * passphrase + optional hint. Used by Restore-from-file when the file was
  * passphrase-protected: the passphrase the user typed to decrypt the file
  * becomes the passphrase guarding the new identity going forward. The hint
  * from the file (if any) is preserved.
  *
- * Why this exists alongside importIdentity:
- * - `importIdentity` writes plaintext — fine for restoring an unprotected file.
- * - `importEncryptedIdentity` writes ciphertext with a specific passphrase — fine
- *   for restoring an encrypted file without forcing the user to rotate again.
- * - `upgradeIdentity` is the wrong tool: it generates a NEW key and a migration.
- *   We're not generating — we're adopting the file's key.
+ * This is the single entry point for restoring an encrypted recovery file: it
+ * adopts the file's existing key (it does NOT generate a new key) and writes it
+ * to the encrypted store under the supplied passphrase, so the user lands
+ * protected without an extra step.
  *
- * Post-conditions (mirror importIdentity for cache coherence):
+ * Post-conditions (for cache coherence):
  * - STORAGE_KEY removed (so isEffectivelyProtected() returns true)
  * - ENCRYPTED_KEY populated with { encrypted, name, address, hint? }
  * - _sessionIdentity primed so signPost can fire immediately for follow-up signing

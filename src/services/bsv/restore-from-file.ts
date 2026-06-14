@@ -1,18 +1,26 @@
 /**
  * Pure file-format parser for BSVibes recovery files. No side effects (no DOM,
  * no storage, no network). Returns a typed payload that callers (`RestoreModal`,
- * `HomeScreenWelcomeGate`) hand off to `decryptWif` and/or `importIdentity`.
+ * `HomeScreenWelcomeGate`) hand off to `decryptWif` and `importEncryptedIdentity`.
  *
- * Supports three formats:
+ * Restore policy: only files produced by the current system are accepted. Every
+ * file we generate carries `fileVersion === RECOVERY_FILE_VERSION` (stamped in
+ * backup-template.ts). Legacy files — plaintext WIF, or older encrypted files
+ * without the version stamp — are rejected with `unsupported_version`. Old files
+ * provably cannot fake the stamp (the field did not exist when they were made).
+ *
+ * Supports the same file containers as before (only the acceptance rule changed):
  * - HTML files with the marker block (`@BACKUP_DATA_START ... @BACKUP_DATA_END`)
- *   — the current canonical format produced by `services/bsv/backup-template.ts`
- * - HTML files with legacy `const BACKUP_DATA = {...}` syntax (pre-marker files)
- * - Pure JSON files (`{ "wif": "..." }` or `{ "wif_encrypted": "..." }`)
+ * - HTML files with legacy `const BACKUP_DATA = {...}` syntax
+ * - Pure JSON files (`{ "wif_encrypted": "..." }`)
  *
- * The parsing regex is identical to `RestoreModal`'s inline parser — extracted
- * so the welcome-gate restore path can use it without depending on RestoreModal,
- * which requires a `currentIdentity` that doesn't exist at welcome-gate time.
+ * The parsing regex is identical to `RestoreModal`'s former inline parser —
+ * extracted so the welcome-gate restore path can use it without depending on
+ * RestoreModal, which requires a `currentIdentity` that doesn't exist at
+ * welcome-gate time.
  */
+
+import { RECOVERY_FILE_VERSION } from "./backup-template";
 
 export type RecoveryFilePayload =
   | { kind: "plain"; wif: string; name?: string }
@@ -20,12 +28,18 @@ export type RecoveryFilePayload =
 
 export type ParseRecoveryFileResult =
   | { ok: true; payload: RecoveryFilePayload }
-  | { ok: false; error: "parse_failed" | "no_key" };
+  | { ok: false; error: "parse_failed" | "no_key" | "unsupported_version" };
 
 /** Internal — synchronous parse of the file's text content. Exported for tests. */
 export function parseRecoveryText(text: string): ParseRecoveryFileResult {
   const trimmed = text.trimStart();
-  let parsed: { wif?: string; wif_encrypted?: string; name?: string; hint?: string } | null = null;
+  let parsed: {
+    wif?: string;
+    wif_encrypted?: string;
+    name?: string;
+    hint?: string;
+    fileVersion?: number;
+  } | null = null;
 
   if (
     trimmed.startsWith("<!DOCTYPE") ||
@@ -63,6 +77,17 @@ export function parseRecoveryText(text: string): ParseRecoveryFileResult {
     return { ok: false, error: "parse_failed" };
   }
 
+  // Restore policy gate. Reject legacy files BEFORE branching on key shape:
+  // - plaintext (a bare `wif` with no `wif_encrypted`) is no longer supported;
+  // - any file missing the current `fileVersion` stamp (all pre-version files)
+  //   is rejected. New files always carry the stamp (backup-template.ts).
+  if (parsed?.wif && !parsed?.wif_encrypted) {
+    return { ok: false, error: "unsupported_version" };
+  }
+  if (parsed?.fileVersion !== RECOVERY_FILE_VERSION) {
+    return { ok: false, error: "unsupported_version" };
+  }
+
   if (parsed?.wif_encrypted) {
     return {
       ok: true,
@@ -72,12 +97,6 @@ export function parseRecoveryText(text: string): ParseRecoveryFileResult {
         name: parsed.name,
         hint: parsed.hint,
       },
-    };
-  }
-  if (parsed?.wif) {
-    return {
-      ok: true,
-      payload: { kind: "plain", wif: parsed.wif, name: parsed.name },
     };
   }
   return { ok: false, error: "no_key" };

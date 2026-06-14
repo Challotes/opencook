@@ -12,11 +12,8 @@ import {
   shareOrDownloadBackup,
 } from "@/services/bsv/backup-template";
 import { decryptWif, encryptWif } from "@/services/bsv/crypto";
-import {
-  derivePubkeyFromWif,
-  importEncryptedIdentity,
-  importIdentity,
-} from "@/services/bsv/identity";
+import { importEncryptedIdentity } from "@/services/bsv/identity";
+import { parseRecoveryFile } from "@/services/bsv/restore-from-file";
 import type { Identity } from "@/types";
 
 interface RestoreModalProps {
@@ -24,11 +21,9 @@ interface RestoreModalProps {
   onClose: () => void;
   onSuccess: (identity: Identity) => void;
   /**
-   * Identity currently held in localStorage on this device. Nullable for the
-   * E30 stale-key flow where the device may still hold an identity that's
-   * been rotated forward elsewhere — and (in future flows) for cases where
-   * the modal is opened from a no-identity context. When null, the
-   * "save outgoing key" prompt is skipped (there's no outgoing key worth
+   * Identity currently held in localStorage on this device. Nullable for
+   * contexts where the modal is opened with no outgoing identity. When null,
+   * the "save outgoing key" prompt is skipped (there's no outgoing key worth
    * saving), the encrypted-key save path is unavailable, and the modal goes
    * straight from passphrase decrypt → restore.
    */
@@ -57,9 +52,9 @@ export function RestoreModal({
   const [decryptingImport, setDecryptingImport] = useState(false);
   const [pendingRestoreWif, setPendingRestoreWif] = useState<string | null>(null);
   const [pendingRestoreName, setPendingRestoreName] = useState<string | undefined>(undefined);
-  // If the source file was encrypted, capture the passphrase the user just typed
-  // and the hint from the file so we can re-encrypt the new identity. Plaintext
-  // restores leave these undefined and fall back to the legacy importIdentity path.
+  // Capture the passphrase the user typed to decrypt the source file (and the
+  // file's hint) so we can re-encrypt the new identity under the same passphrase.
+  // Every supported file is encrypted, so these are always set on a real restore.
   const [pendingRestorePassphrase, setPendingRestorePassphrase] = useState<string | undefined>(
     undefined
   );
@@ -71,18 +66,6 @@ export function RestoreModal({
   const [outgoingEarnings, setOutgoingEarnings] = useState<number | null>(null);
   const [skipConfirmed, setSkipConfirmed] = useState(false);
   const [sharingOldKey, setSharingOldKey] = useState(false);
-  // E29: blocked-restore state. Populated when the eligibility check returns
-  // `allowed: false` (the supplied key has a forward migration on-chain).
-  // When set, the modal renders the explanation card instead of proceeding
-  // into the save-or-skip prompt or any localStorage write.
-  const [blockedRestoreInfo, setBlockedRestoreInfo] = useState<{
-    rotatedAt: string;
-    newAddrPrefix?: string;
-  } | null>(null);
-  // AbortController for in-flight eligibility checks. If the user closes the
-  // modal mid-fetch, abort it so the response can't set state on an unmounted
-  // component (React would warn). Created per check, replaced on each new one.
-  const eligibilityAbortRef = useRef<AbortController | null>(null);
   const bsvPrice = useBsvPrice();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,10 +109,6 @@ export function RestoreModal({
 
   function handleClose() {
     unblock();
-    // E29: abort any in-flight eligibility check so its response can't set
-    // state on an unmounted component.
-    eligibilityAbortRef.current?.abort();
-    eligibilityAbortRef.current = null;
     setImportError("");
     setImporting(false);
     setImportSuccess(false);
@@ -143,7 +122,6 @@ export function RestoreModal({
     setOutgoingEarnings(null);
     setSkipConfirmed(false);
     setSharingOldKey(false);
-    setBlockedRestoreInfo(null);
     onClose();
   }
 
@@ -159,44 +137,7 @@ export function RestoreModal({
     // Idempotent — performImport calls block() too, just a no-op once set.
     block();
 
-    // E29: gate the restore on whether the supplied key has been rotated away.
-    // If it has, the migration record is treated as permanent revocation
-    // (DECISIONS.md "Restore of rotated keys (Design C-strict)"). Show the
-    // explanation card instead of proceeding. Fail-safe: any network/parse
-    // failure during the check also blocks — without verification we can't
-    // safely allow the restore.
-    try {
-      eligibilityAbortRef.current?.abort();
-      const ctrl = new AbortController();
-      eligibilityAbortRef.current = ctrl;
-      const pubkey = await derivePubkeyFromWif(wif);
-      const res = await fetch(`/api/restore-eligibility?pubkey=${encodeURIComponent(pubkey)}`, {
-        signal: ctrl.signal,
-      });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = (await res.json()) as {
-        allowed: boolean;
-        rotatedAt?: string;
-        newAddrPrefix?: string;
-      };
-      if (!data.allowed) {
-        setBlockedRestoreInfo({
-          rotatedAt: data.rotatedAt ?? "",
-          newAddrPrefix: data.newAddrPrefix,
-        });
-        setImporting(false);
-        return;
-      }
-    } catch (err) {
-      // Don't surface an error if the user closed the modal mid-fetch.
-      if (err instanceof Error && err.name === "AbortError") return;
-      setImportError("Couldn't verify this key — check your connection and try again.");
-      setImporting(false);
-      return;
-    }
-
-    // E30: when there's no outgoing identity (stale-key flow opens this modal
-    // with currentIdentity === null), there's nothing to "save before
+    // When there's no outgoing identity, there's nothing to "save before
     // switching" — bypass the save-or-skip prompt entirely and proceed with
     // the import. The pending state + prompt only makes sense when we're
     // replacing a key the user might want to back up first.
@@ -309,19 +250,18 @@ export function RestoreModal({
     // import and done-state mount and close the modal.
     block();
     try {
-      // When the source file was encrypted, the passphrase the user just typed
-      // becomes the passphrase guarding the new identity. We re-encrypt with
-      // that passphrase + preserve the file's hint, so the user doesn't have
-      // to rotate again to be protected. When the source file was plaintext,
-      // fall back to the legacy plaintext import path.
-      const imported = passphrase
-        ? await importEncryptedIdentity(wif, passphrase, name, hint)
-        : await importIdentity(wif, name);
+      // Every supported recovery file is encrypted (the parser rejects legacy
+      // plaintext files as unsupported_version), so a passphrase is always
+      // present here. The passphrase the user just typed to decrypt the file
+      // becomes the passphrase guarding the new identity — we re-encrypt with
+      // it + preserve the file's hint, so the user lands protected with no
+      // extra step. Guard defensively in case a future caller omits it.
+      if (!passphrase) throw new Error("This recovery file is no longer supported.");
+      const imported = await importEncryptedIdentity(wif, passphrase, name, hint);
 
       // E32: refresh InstallContext's protected state after the import. The
-      // encrypted-file path flips protection true; the plaintext-file path
-      // flips it false. Either way the install pitch's 5-condition gate needs
-      // to re-evaluate.
+      // restored identity is always protected, so the install pitch's
+      // 5-condition gate needs to re-evaluate.
       refreshProtected();
 
       // The restored file IS the recovery file for this address — mark it
@@ -359,91 +299,37 @@ export function RestoreModal({
     await performImport(wif, name, passphrase, hint);
   }
 
-  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const text = (ev.target?.result as string) ?? "";
-      let parsed: { wif?: string; wif_encrypted?: string; name?: string; hint?: string } | null =
-        null;
-
-      const trimmed = text.trimStart();
-      if (
-        trimmed.startsWith("<!DOCTYPE") ||
-        trimmed.startsWith("<html") ||
-        text.includes("BACKUP_DATA")
-      ) {
-        const markerMatch = text.match(
-          /@BACKUP_DATA_START[\s\S]*?const BACKUP_DATA\s*=\s*(\{[\s\S]*?\});\s*\/\/\s*@BACKUP_DATA_END/
-        );
-        if (markerMatch) {
-          try {
-            parsed = JSON.parse(markerMatch[1]);
-          } catch {
-            const legacyMatch = text.match(/const BACKUP_DATA\s*=\s*(\{[\s\S]*?\});/);
-            if (legacyMatch) {
-              try {
-                parsed = JSON.parse(legacyMatch[1]);
-              } catch {
-                /* fall through */
-              }
-            }
-          }
-        } else {
-          const legacyMatch = text.match(/const BACKUP_DATA\s*=\s*(\{[\s\S]*?\});/);
-          if (legacyMatch) {
-            try {
-              parsed = JSON.parse(legacyMatch[1]);
-            } catch {
-              /* fall through */
-            }
-          }
-        }
-        if (!parsed) {
-          setImportError("Could not read this recovery file — it may be corrupted");
-          return;
-        }
-      } else if (trimmed.startsWith("{")) {
-        try {
-          parsed = JSON.parse(trimmed);
-        } catch {
-          setImportError(
-            "Could not read file — make sure it is a BSVibes recovery file (.html or .json)"
-          );
-          return;
-        }
-      } else {
-        setImportError(
-          "Could not read file — make sure it is a BSVibes recovery file (.html or .json)"
-        );
-        return;
-      }
-
-      if (!parsed) {
-        setImportError("File does not contain a valid recovery key");
-        return;
-      }
-
-      if (parsed.wif_encrypted) {
-        setEncryptedImportData({
-          wif_encrypted: parsed.wif_encrypted,
-          name: parsed.name,
-          hint: parsed.hint,
-        });
-        setEncryptedImportError("");
-        return;
-      }
-
-      if (parsed.wif) {
-        await doImport(parsed.wif, parsed.name);
-        return;
-      }
-
-      setImportError("File does not contain a valid recovery key");
-    };
-    reader.readAsText(file);
     e.target.value = "";
+    if (!file) return;
+    setImportError("");
+
+    const result = await parseRecoveryFile(file);
+    if (!result.ok) {
+      setImportError(
+        result.error === "unsupported_version"
+          ? "This recovery file is from an older version and can't be restored. Use a file you saved recently."
+          : result.error === "no_key"
+            ? "File does not contain a valid recovery key"
+            : "Could not read file — make sure it is a BSVibes recovery file (.html or .json)"
+      );
+      return;
+    }
+
+    if (result.payload.kind === "encrypted") {
+      setEncryptedImportData({
+        wif_encrypted: result.payload.wif_encrypted,
+        name: result.payload.name,
+        hint: result.payload.hint,
+      });
+      setEncryptedImportError("");
+      return;
+    }
+
+    // kind === "plain" is unreachable — the parser rejects plaintext files as
+    // unsupported_version — but TS still narrows it, so handle defensively.
+    setImportError("This recovery file is from an older version and can't be restored.");
   }
 
   async function handleDecryptAndImport(passphrase: string): Promise<void> {
@@ -484,8 +370,8 @@ export function RestoreModal({
       />
 
       {/* Modal — pinned to top of viewport (iOS-native pattern). */}
-      {/* z-[100]: above SignInModal (z-[80]) AND E30's StaleKeyModal (z-[90]) */}
-      {/* so the restore flow always sits on top when chained from either modal. */}
+      {/* z-[100]: above SignInModal (z-[80]) so the restore flow always sits */}
+      {/* on top when chained from the sign-in modal. */}
       <div className="fixed inset-0 z-[100] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
         <div
           className="w-full max-w-md rounded-2xl border border-amber-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] max-h-[80svh] overflow-y-auto"
@@ -525,60 +411,7 @@ export function RestoreModal({
 
           {/* Body */}
           <div className="px-5 py-5 space-y-3">
-            {blockedRestoreInfo !== null ? (
-              // E29: blocked-restore explanation card. Fires when the
-              // eligibility check returns `allowed: false` — the key the
-              // user picked has been rotated to a newer key on-chain.
-              <>
-                <div className="border-l-2 border-red-500/60 pl-2.5 py-0.5">
-                  <p className="text-[11px] text-red-400 leading-relaxed font-medium">
-                    This is an older key.
-                  </p>
-                </div>
-                <p className="text-[11px] text-zinc-300 leading-relaxed">
-                  You moved to a newer key{" "}
-                  {blockedRestoreInfo.rotatedAt
-                    ? `on ${new Date(blockedRestoreInfo.rotatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}`
-                    : "previously"}
-                  {blockedRestoreInfo.newAddrPrefix ? (
-                    <>
-                      {" "}
-                      (address{" "}
-                      <span className="font-mono text-amber-300">
-                        1{blockedRestoreInfo.newAddrPrefix}…
-                      </span>
-                      )
-                    </>
-                  ) : null}
-                  . Find your most recent recovery file (the one saved after that date) and try
-                  again.
-                </p>
-                <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  Your posts and earnings are safe at the newer key. Any BSV at this old address can
-                  still be spent by importing the secret key into another BSV wallet.
-                </p>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="flex-1 bg-zinc-900 text-zinc-400 border border-amber-400/15 rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Reset to file-picker state so user can try a different file.
-                      setBlockedRestoreInfo(null);
-                      setImportError("");
-                    }}
-                    className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-amber-300 transition-colors"
-                  >
-                    Try a different file
-                  </button>
-                </div>
-              </>
-            ) : importSuccess ? (
+            {importSuccess ? (
               <>
                 <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
                   <p className="text-[11px] text-amber-400/90 leading-relaxed">

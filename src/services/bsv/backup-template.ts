@@ -24,6 +24,16 @@ function svgToBase64(svg: string): string {
   return btoa(svg);
 }
 
+/**
+ * Stamped into every generated recovery file's BACKUP_DATA blob (centrally, in
+ * generateBackupHtml — never per caller). Bumped only on a breaking change to
+ * the file format. Restore is gated to fileVersion === 1 in restore-from-file.ts:
+ * pre-version files (legacy plaintext or old encrypted, neither carrying this
+ * field) are rejected. Old files provably cannot carry it — the field did not
+ * exist when they were produced.
+ */
+export const RECOVERY_FILE_VERSION = 1;
+
 export interface BackupData {
   name: string;
   address: string;
@@ -34,6 +44,7 @@ export interface BackupData {
   hint?: string; // memory clue (plaintext, stored verbatim)
   createdAt: string;
   note?: string;
+  fileVersion?: number; // stamped centrally in generateBackupHtml — do not set per-caller
 }
 
 /** Escape a value for use in HTML body or attribute. */
@@ -111,8 +122,10 @@ export function generateBackupHtml(data: BackupData): string {
   const iconB64 = svgToBase64(ICON_SVG);
   const faviconUri = `data:image/svg+xml;base64,${iconB64}`;
 
-  // Safe JSON embed — JSON.stringify handles all escaping
-  const dataJson = JSON.stringify(data);
+  // Safe JSON embed — JSON.stringify handles all escaping. Stamp the format
+  // version centrally so EVERY emitted file carries it, regardless of which
+  // caller built the BackupData (spread-then-override guarantees the stamp wins).
+  const dataJson = JSON.stringify({ ...data, fileVersion: RECOVERY_FILE_VERSION });
 
   const title = `BSVibes Recovery — ${data.name}`;
 

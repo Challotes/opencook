@@ -88,8 +88,8 @@ interface InstallContextValue {
   /**
    * Force a re-read of `isEffectivelyProtected()` and update context state.
    * Called by MoveAddressModal / ChangePassphraseModal / RestoreModal after
-   * their commitUpgrade / importIdentity completes — those operations write
-   * localStorage but don't fire a `storage` event in the same tab.
+   * their key write (rotation / encrypted restore) completes — those operations
+   * write localStorage but don't fire a `storage` event in the same tab.
    */
   refreshProtected: () => void;
   /** Current install pitch surface — see `InstallSheetMode`. */

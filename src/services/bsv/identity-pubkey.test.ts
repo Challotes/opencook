@@ -2,15 +2,13 @@ import { describe, expect, it } from "vitest";
 import { derivePubkeyFromWif } from "./identity";
 
 /**
- * E30: pubkey derivation is the foundation of the staleness signal — the
- * client sends `pubkey` in the `x-bsvibes-pubkey` header on every poll, and
- * the server looks up forward migrations keyed on it. If derivation drifts
- * from what `/api/restore-eligibility` returns, the entire stale-key flow
- * mis-identifies keys and either over- or under-locks accounts.
+ * `derivePubkeyFromWif` converts a WIF private key to its canonical compressed
+ * pubkey. Correctness matters anywhere a pubkey is derived for signing or
+ * identity bookkeeping — a drift (e.g. compressed ↔ uncompressed default after
+ * a @bsv/sdk upgrade) would silently corrupt downstream lookups.
  *
- * These tests pin the derive path to a known WIF↔pubkey pair so a future
- * @bsv/sdk upgrade or refactor in identity.ts surfaces the regression here
- * rather than in production telemetry.
+ * These tests pin the derive path to a known WIF↔pubkey pair so such a
+ * regression surfaces here rather than in production.
  */
 describe("derivePubkeyFromWif", () => {
   // Test vector: a fixed WIF compressed private key + its pubkey.
