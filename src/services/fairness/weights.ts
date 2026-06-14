@@ -1,7 +1,7 @@
 /**
  * Contribution weight calculation.
  * sqrt(engagement) × time_decay per post, summed per contributor.
- * Resolves migration chains so upgraded users keep their history.
+ * Posts are attributed directly to their signing pubkey.
  */
 
 import { PublicKey } from "@bsv/sdk";
@@ -35,63 +35,6 @@ interface PostRow {
   created_at: string;
 }
 
-interface MigrationRow {
-  from_pubkey: string;
-  to_pubkey: string;
-}
-
-/**
- * Build a map from any old pubkey to its final (current) pubkey
- * by following the migration chain.
- *
- * Handles duplicate migrations from the same key (e.g. two upgrade attempts
- * from the same old key). In that case:
- *  - We collect ALL forward links as a multi-map (from → [to, to, ...])
- *  - For keys with multiple destinations, we pick the LATEST migration
- *    (highest DB id) as the canonical forward link
- *  - We also cover intermediate keys: if A→B and A→C both exist (A→C won),
- *    we add B→C so contributions from the intermediate key B are attributed to C
- *
- * Also detects and breaks cycles (defensive — should never occur in practice).
- */
-function buildMigrationMap(db: import("better-sqlite3").Database): Map<string, string> {
-  const migrations = db
-    .prepare("SELECT from_pubkey, to_pubkey FROM migrations ORDER BY id ASC")
-    .all() as MigrationRow[];
-
-  // Build forward links — later rows overwrite earlier rows for the same from_pubkey,
-  // so the latest migration from any given key always wins.
-  const forward = new Map<string, string>();
-  for (const m of migrations) {
-    const existing = forward.get(m.from_pubkey);
-    if (existing && existing !== m.to_pubkey) {
-      // This is a re-upgrade: old key migrated again to a different destination.
-      // The new destination takes over. We also need to route the previous
-      // intermediate key (existing) to the new destination so contributions
-      // made on the intermediate key are not orphaned.
-      if (!forward.has(existing)) {
-        forward.set(existing, m.to_pubkey);
-      }
-    }
-    forward.set(m.from_pubkey, m.to_pubkey);
-  }
-
-  // Resolve chains: follow from_pubkey → to_pubkey → ... until no more hops.
-  // visited set prevents infinite loops from any unexpected cycle.
-  const resolved = new Map<string, string>();
-  for (const key of forward.keys()) {
-    let current = key;
-    const visited = new Set<string>();
-    while (forward.has(current) && !visited.has(current)) {
-      visited.add(current);
-      current = forward.get(current) ?? current;
-    }
-    resolved.set(key, current);
-  }
-
-  return resolved;
-}
-
 /**
  * Derive BSV address from a pubkey string.
  */
@@ -113,8 +56,6 @@ export function calculateWeights(db: import("better-sqlite3").Database): Contrib
     return _cachedWeights;
   }
 
-  const migrationMap = buildMigrationMap(db);
-
   // Get all signed posts with boot counts
   const posts = db
     .prepare(`
@@ -126,12 +67,11 @@ export function calculateWeights(db: import("better-sqlite3").Database): Contrib
   `)
     .all() as PostRow[];
 
-  // Aggregate weights by resolved pubkey
+  // Aggregate weights by pubkey
   const byPubkey = new Map<string, { weight: number; posts: number; boots: number }>();
 
   for (const post of posts) {
-    // Resolve migration: use the latest pubkey in the chain
-    const resolvedPubkey = migrationMap.get(post.pubkey) ?? post.pubkey;
+    const resolvedPubkey = post.pubkey;
 
     const ageDays =
       (now - new Date(`${post.created_at.replace(" ", "T")}Z`).getTime()) / 86_400_000;

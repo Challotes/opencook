@@ -68,18 +68,6 @@ try {
     db.exec("ALTER TABLE posts ADD COLUMN pubkey TEXT");
   }
 
-  // Migrations table — tracks key rotations
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS migrations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_pubkey TEXT NOT NULL,
-      to_pubkey TEXT NOT NULL,
-      signature TEXT NOT NULL,
-      tx_id TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
   // Boot grants — free boot tracking per user (no custody)
   db.exec(`
     CREATE TABLE IF NOT EXISTS boot_grants (
@@ -106,14 +94,6 @@ try {
   // Indexes for query performance
   db.exec("CREATE INDEX IF NOT EXISTS idx_bootboard_post_id ON bootboard(post_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_bootboard_held_until ON bootboard(held_until)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_migrations_to ON migrations(to_pubkey)");
-  // Unique index on from_pubkey: only one active migration per source key.
-  // If a user upgrades twice from the same old key (duplicate migration), upsert
-  // the existing row rather than inserting a duplicate. This replaces the old
-  // non-unique idx_migrations_from index.
-  db.exec(
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_migrations_from_unique ON migrations(from_pubkey)"
-  );
   db.exec("CREATE INDEX IF NOT EXISTS idx_posts_pubkey ON posts(pubkey)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_payouts_boot ON payouts(boot_event_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_payouts_recipient ON payouts(recipient_pubkey)");

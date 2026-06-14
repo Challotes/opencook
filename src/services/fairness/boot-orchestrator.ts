@@ -59,7 +59,7 @@ export async function executeBoot(
   // See DECISIONS.md "Free boots pay floor only (settled 2026-04-09)".
   const actualPrice = isFree ? FAIRNESS_CONFIG.bootPriceFloor : price;
 
-  // 4. Calculate contribution weights (with migration chain resolution)
+  // 4. Calculate contribution weights
   const weights = calculateWeights(db);
 
   // 5. Derive boosted post creator's address from their pubkey

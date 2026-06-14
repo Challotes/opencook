@@ -30,18 +30,6 @@ function createTestDb() {
       FOREIGN KEY (post_id) REFERENCES posts(id)
     )
   `);
-  db.exec(`
-    CREATE TABLE migrations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_pubkey TEXT NOT NULL,
-      to_pubkey TEXT NOT NULL,
-      signature TEXT NOT NULL,
-      tx_id TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  db.exec("CREATE UNIQUE INDEX idx_migrations_from_unique ON migrations(from_pubkey)");
-
   return db;
 }
 
@@ -62,12 +50,6 @@ function addPost(db: ReturnType<typeof Database>, pubkey: string, minutesAgo = 0
   db.prepare(
     "INSERT INTO posts (content, author_name, pubkey, created_at) VALUES (?, ?, ?, ?)"
   ).run("test post", "anon_test", pubkey, created);
-}
-
-function addMigration(db: ReturnType<typeof Database>, from: string, to: string) {
-  db.prepare(
-    "INSERT OR REPLACE INTO migrations (from_pubkey, to_pubkey, signature) VALUES (?, ?, ?)"
-  ).run(from, to, "sig");
 }
 
 function addBoot(db: ReturnType<typeof Database>, postId: number) {
@@ -127,36 +109,6 @@ describe("calculateWeights", () => {
     const pubkeys = weights.map((w) => w.pubkey);
     expect(pubkeys).toContain(keyA.pubkey);
     expect(pubkeys).toContain(keyB.pubkey);
-  });
-
-  it("resolves simple migration chain A→B", () => {
-    const oldKey = makeKey();
-    const newKey = makeKey();
-    addPost(db, oldKey.pubkey, 10);
-    addMigration(db, oldKey.pubkey, newKey.pubkey);
-    const weights = calculateWeights(db);
-
-    // Old key's posts should be attributed to new key
-    expect(weights).toHaveLength(1);
-    expect(weights[0].pubkey).toBe(newKey.pubkey);
-    expect(weights[0].address).toBe(newKey.address);
-    expect(weights[0].postCount).toBe(1);
-  });
-
-  it("resolves multi-hop migration chain A→B→C", () => {
-    const keyA = makeKey();
-    const keyB = makeKey();
-    const keyC = makeKey();
-    addPost(db, keyA.pubkey, 20);
-    addPost(db, keyB.pubkey, 10);
-    addMigration(db, keyA.pubkey, keyB.pubkey);
-    addMigration(db, keyB.pubkey, keyC.pubkey);
-    const weights = calculateWeights(db);
-
-    // Both A and B posts should resolve to C
-    expect(weights).toHaveLength(1);
-    expect(weights[0].pubkey).toBe(keyC.pubkey);
-    expect(weights[0].postCount).toBe(2);
   });
 
   it("boots increase weight via engagement multiplier", () => {

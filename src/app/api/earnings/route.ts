@@ -3,84 +3,6 @@ import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Walk the migration chain to collect all addresses ever associated with an identity.
- *
- * The migrations table records key rotations as: from_pubkey → to_pubkey.
- * Payouts record both recipient_pubkey and recipient_address.
- *
- * Strategy:
- * 1. Seed: find all pubkeys recorded in payouts for the given address.
- * 2. Walk backwards through migrations: for each known pubkey, find any
- *    migration where to_pubkey = that pubkey, then add from_pubkey to the set.
- * 3. Also walk forwards: find any migration where from_pubkey = known pubkey,
- *    add to_pubkey (covers restore-from-device using an old key).
- * 4. Collect all addresses from payouts for the full pubkey set.
- *
- * This means earnings history survives security upgrades and cross-device restores.
- */
-function resolveAllAddresses(address: string): string[] {
-  const allAddresses = new Set<string>([address]);
-  const allPubkeys = new Set<string>();
-
-  // Seed: find pubkeys associated with this address from payouts
-  const seedPubkeys = db
-    .prepare("SELECT DISTINCT recipient_pubkey FROM payouts WHERE recipient_address = ?")
-    .all(address) as Array<{ recipient_pubkey: string }>;
-
-  for (const row of seedPubkeys) {
-    allPubkeys.add(row.recipient_pubkey);
-  }
-
-  // BFS over migration chain (both directions)
-  const queue = [...allPubkeys];
-  while (queue.length > 0) {
-    const pubkey = queue.shift();
-    if (!pubkey) break;
-
-    // Walk backwards: who migrated TO this pubkey?
-    const predecessors = db
-      .prepare("SELECT from_pubkey FROM migrations WHERE to_pubkey = ?")
-      .all(pubkey) as Array<{ from_pubkey: string }>;
-
-    for (const row of predecessors) {
-      if (!allPubkeys.has(row.from_pubkey)) {
-        allPubkeys.add(row.from_pubkey);
-        queue.push(row.from_pubkey);
-      }
-    }
-
-    // Walk forwards: what did this pubkey migrate to?
-    const successors = db
-      .prepare("SELECT to_pubkey FROM migrations WHERE from_pubkey = ?")
-      .all(pubkey) as Array<{ to_pubkey: string }>;
-
-    for (const row of successors) {
-      if (!allPubkeys.has(row.to_pubkey)) {
-        allPubkeys.add(row.to_pubkey);
-        queue.push(row.to_pubkey);
-      }
-    }
-  }
-
-  // Collect all addresses for the full pubkey set
-  if (allPubkeys.size > 0) {
-    const pubkeyList = [...allPubkeys];
-    const placeholders = pubkeyList.map(() => "?").join(", ");
-    const addressRows = db
-      .prepare(
-        `SELECT DISTINCT recipient_address FROM payouts WHERE recipient_pubkey IN (${placeholders})`
-      )
-      .all(...pubkeyList) as Array<{ recipient_address: string }>;
-
-    for (const row of addressRows) {
-      allAddresses.add(row.recipient_address);
-    }
-  }
-
-  return [...allAddresses];
-}
-
 export async function GET(request: Request) {
   // Rate limit: 20 requests per minute per IP
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -96,9 +18,10 @@ export async function GET(request: Request) {
     return Response.json({ totalEarned: 0, recentActivity: [] });
   }
 
-  // Resolve all addresses in this identity's migration chain so earnings
-  // history survives security upgrades and cross-device restores.
-  const allAddresses = resolveAllAddresses(address);
+  // Earnings are attributed to the single signing address. (Key rotation was
+  // removed — there is no longer a migration chain to resolve across.) The
+  // array shape is kept so the IN (...) queries below remain unchanged.
+  const allAddresses = [address];
   const placeholders = allAddresses.map(() => "?").join(", ");
 
   // Fast path: ?summary=1 returns only totalEarned (used by background poll)

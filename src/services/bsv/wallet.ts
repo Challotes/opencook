@@ -2,7 +2,7 @@
  * Server-side BSV wallet with UTXO management.
  * Supports reservation, 0-conf chaining, multi-UTXO aggregation.
  * Uses a promise-based mutex to prevent UTXO contention between
- * concurrent operations (post logging, boot splits, migrations).
+ * concurrent operations (post logging, boot splits).
  */
 
 import { type LockingScript, P2PKH, PrivateKey, SatoshisPerKilobyte, Transaction } from "@bsv/sdk";
