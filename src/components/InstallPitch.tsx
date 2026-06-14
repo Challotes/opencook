@@ -93,10 +93,10 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
   });
 
   // Banner only — kick off the mode initialisation (sessionStorage check +
-  // 800ms reveal) once visibility opens up AND no rotation modal is currently
+  // 800ms reveal) once visibility opens up AND no identity modal is currently
   // blocking. `installPitchBlockTick` increments when the block count returns
   // to 0, forcing this effect to re-fire so the pitch lands at a clean moment
-  // (after the user dismisses their MoveAddressModal / ChangePassphraseModal
+  // (after the user dismisses their ProtectModal / ChangePassphraseModal
   // / RestoreModal done state). The block ref itself isn't React state — the
   // tick is the React-observable proxy.
   // installPitchBlockTick is intentionally in the dep array — it's the

@@ -77,19 +77,20 @@ interface InstallContextValue {
   /**
    * True if the user's identity is passphrase-encrypted. Mirrors
    * `isEffectivelyProtected()` from `services/bsv/identity.ts` so the install
-   * pitch gate can re-render when protection state changes (after rotation
-   * via MoveAddressModal / ChangePassphraseModal, after encrypted restore via
-   * RestoreModal). Initial value read synchronously on mount; refreshed when
-   * `refreshProtected()` is called (after any rotation flow completes) and
-   * when a `storage` event fires for the encrypted-key localStorage entry
-   * (cross-tab restore).
+   * pitch gate can re-render when protection state changes (after protecting
+   * via ProtectModal / changing passphrase via ChangePassphraseModal, or after
+   * encrypted restore via RestoreModal). Initial value read synchronously on
+   * mount; refreshed when `refreshProtected()` is called (after any of those
+   * flows complete) and when a `storage` event fires for the encrypted-key
+   * localStorage entry (cross-tab restore).
    */
   protected: boolean;
   /**
    * Force a re-read of `isEffectivelyProtected()` and update context state.
-   * Called by MoveAddressModal / ChangePassphraseModal / RestoreModal after
-   * their key write (rotation / encrypted restore) completes — those operations
-   * write localStorage but don't fire a `storage` event in the same tab.
+   * Called by ProtectModal / ChangePassphraseModal / RestoreModal after their
+   * key write (encrypt-in-place / encrypted restore) completes — those
+   * operations write localStorage but don't fire a `storage` event in the
+   * same tab.
    */
   refreshProtected: () => void;
   /** Current install pitch surface — see `InstallSheetMode`. */
@@ -105,8 +106,8 @@ interface InstallContextValue {
   openSheetFromBookmark: () => void;
   /**
    * Ref-counted block on the install-pitch sheet appearance — mirror of the
-   * `blockSessionClear` pattern in IdentityContext. Used by rotation modals
-   * (MoveAddressModal / ChangePassphraseModal / RestoreModal) to suppress the
+   * `blockSessionClear` pattern in IdentityContext. Used by identity modals
+   * (ProtectModal / ChangePassphraseModal / RestoreModal) to suppress the
    * sheet during their lifecycle. Modals mount → `blockInstallPitch()`,
    * unmount → `unblockInstallPitch()`. Once the count returns to zero, the
    * install pitch's gate re-evaluates and fires the sheet at a clean moment.

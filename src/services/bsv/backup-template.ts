@@ -38,9 +38,7 @@ export interface BackupData {
   name: string;
   address: string;
   wif_encrypted?: string; // AES-256-GCM encrypted — requires passphrase to reveal
-  oldWif_encrypted?: string; // previous key after rotation (encrypted)
-  oldAddress?: string; // present only for combined files (rotation) when old address differs
-  pathType: "save" | "rotation" | "pre-rotation" | "restore-pre";
+  pathType: "save" | "restore-pre";
   hint?: string; // memory clue (plaintext, stored verbatim)
   createdAt: string;
   note?: string;
@@ -79,11 +77,9 @@ function formatSavedDate(createdAt: string): string {
 /**
  * Builds the filename for a backup download.
  *
- * Pattern: bsvibes-<pathType>-<anon_name>-<addr6>[-to-<newAddr6>]-<YYYY-MM-DD-HHmm>.html
+ * Pattern: bsvibes-<pathType>-<anon_name>-<addr6>-<YYYY-MM-DD-HHmm>.html
  *
  * addr6 = address.slice(1, 7)  (skip leading '1' of P2PKH, take next 6 chars)
- * For combined files (oldAddress present): oldAddr6-to-newAddr6
- * For single-key files: just newAddr6
  */
 function buildFilename(data: BackupData): string {
   const now = new Date();
@@ -94,15 +90,7 @@ function buildFilename(data: BackupData): string {
   const min = String(now.getMinutes()).padStart(2, "0");
   const datePart = `${yyyy}-${mm}-${dd}-${hh}${min}`;
 
-  const newAddr6 = data.address.slice(1, 7);
-
-  let addrPart: string;
-  if (data.oldAddress) {
-    const oldAddr6 = data.oldAddress.slice(1, 7);
-    addrPart = `${oldAddr6}-to-${newAddr6}`;
-  } else {
-    addrPart = newAddr6;
-  }
+  const addrPart = data.address.slice(1, 7);
 
   // Sanitise anon name: keep alphanumeric + underscore, replace others with hyphen
   const safeName = data.name.replace(/[^a-zA-Z0-9_]/g, "-");
@@ -141,10 +129,6 @@ export function generateBackupHtml(data: BackupData): string {
   // their posts/earnings live. One or two sentences, no jargon, variant-specific.
   function contextBlockText(): string {
     switch (data.pathType) {
-      case "rotation":
-        return "Your account has moved. Posts and earnings now go to the address above. This file holds both keys — your current key, and your previous key in case any funds were in transit during the move.";
-      case "pre-rotation":
-        return "This is a temporary checkpoint from before your account moved. Once the move completes you'll receive an updated file that supersedes this one. Keep this only until then.";
       case "restore-pre":
         return "This is a snapshot of the account that was on this device before you restored. If you need to go back, this file is your way in.";
       default:
@@ -153,28 +137,14 @@ export function generateBackupHtml(data: BackupData): string {
   }
 
   // ── WIF warning helper ──────────────────────────────────────────────────────
-  // Single paragraph in both cases. Previous-key variant explains what
-  // "previous" means (posts/earnings moved, this is funds-in-flight insurance)
-  // while keeping the same severity language as the current-key warning.
-  function wifWarningHtml(isPrevious: boolean): string {
-    if (isPrevious) {
-      return [
-        '      <div class="wif-warning">',
-        "        <p>&#9888; <strong>Previous secret key.</strong> Your posts and earnings have moved to your current address &mdash; this key is only here in case any funds were in transit during the move. Treat it with the same care as your current key: anyone who has it controls that address. Never share it &mdash; not with support, not with friends, not with anyone.</p>",
-        "      </div>",
-      ].join("\n");
-    }
+  // Single paragraph: anyone who holds this key controls the account.
+  function wifWarningHtml(): string {
     return [
       '      <div class="wif-warning">',
       "        <p>&#9888; Anyone who has this secret key controls your account and any funds in it. Never share it &mdash; not with support, not with friends, not with anyone.</p>",
       "      </div>",
     ].join("\n");
   }
-
-  // Metadata card uses "Current address" for rotation files (where the file
-  // contains both a current and previous key) so the meaning of the address
-  // row is unambiguous. All other variants just say "Address".
-  const addressLabel = data.pathType === "rotation" ? "Current address" : "Address";
 
   // ── Body section ────────────────────────────────────────────────────────────
   // The current-key block does NOT repeat the public address — it's already in
@@ -221,14 +191,7 @@ export function generateBackupHtml(data: BackupData): string {
     '          <div class="wif-label">Your secret key (WIF)</div>',
     '          <textarea class="wif-value" id="wif-primary" readonly rows="2"></textarea>',
     "        </div>",
-    wifWarningHtml(false),
-    "      </div>",
-    '      <div id="wif-old-block" style="display:none">',
-    '        <div class="wif-block">',
-    '          <div class="wif-label">Previous secret key</div>',
-    '          <textarea class="wif-value" id="wif-old" readonly rows="2"></textarea>',
-    "        </div>",
-    wifWarningHtml(true),
+    wifWarningHtml(),
     "      </div>",
     "    </div>",
     "",
@@ -276,10 +239,8 @@ export function generateBackupHtml(data: BackupData): string {
     "      try {",
     "        const primaryWif = await decryptStr(BACKUP_DATA.wif_encrypted, passphrase);",
     "        if (!primaryWif) { setLoading(false); showError(null); return; }",
-    "        let oldWif = null;",
-    "        if (BACKUP_DATA.oldWif_encrypted) oldWif = await decryptStr(BACKUP_DATA.oldWif_encrypted, passphrase);",
     "        setLoading(false);",
-    "        showSuccess(primaryWif, oldWif);",
+    "        showSuccess(primaryWif);",
     "      } catch (err) {",
     "        setLoading(false);",
     "        showError('Unexpected error: ' + err.message);",
@@ -295,19 +256,9 @@ export function generateBackupHtml(data: BackupData): string {
     "      spinner.style.display = on ? 'block' : 'none';",
     "    }",
     "",
-    "    function showSuccess(primary, old) {",
-    "      // Primary key block",
-    "      const pb = document.getElementById('wif-primary-block');",
+    "    function showSuccess(primary) {",
     "      document.getElementById('wif-primary').value = primary;",
-    "      pb.style.display = 'block';",
-    "      // Previous key block",
-    "      const ob = document.getElementById('wif-old-block');",
-    "      if (old) {",
-    "        document.getElementById('wif-old').value = old;",
-    "        ob.style.display = 'block';",
-    "      } else {",
-    "        ob.style.display = 'none';",
-    "      }",
+    "      document.getElementById('wif-primary-block').style.display = 'block';",
     "      document.getElementById('result-section').style.display = 'block';",
     "    }",
     "",
@@ -366,10 +317,6 @@ export function generateBackupHtml(data: BackupData): string {
     "      font-size: 13px; color: #d4d4d8; line-height: 1.55;\n" +
     "    }\n" +
     "    .card { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 24px; margin-bottom: 14px; }\n" +
-    "    .card-current { background: linear-gradient(135deg, #1a1200 0%, #18181b 60%); border: 1px solid #b45309; border-radius: 12px; padding: 24px; margin-bottom: 12px; }\n" +
-    "    .card-previous { background: #18181b; border: 1px solid #3f3f46; border-radius: 12px; padding: 20px; margin-bottom: 14px; opacity: 0.85; }\n" +
-    "    .card-tagline { color: #d4d4d8; font-size: 13px; margin-top: 12px; line-height: 1.5; }\n" +
-    "    .card-tagline-muted { color: #a1a1aa; font-size: 12px; margin-top: 10px; line-height: 1.5; }\n" +
     "    .meta-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; margin-bottom: 6px; gap: 12px; }\n" +
     "    .meta-row.with-copy { align-items: center; }\n" +
     "    .meta-label { color: #71717a; flex-shrink: 0; }\n" +
@@ -460,53 +407,21 @@ export function generateBackupHtml(data: BackupData): string {
     '    <p class="subtitle">Keep this file somewhere only you can find it.</p>\n' +
     '    <div class="badge-wrap"><div class="offline-badge">Works offline — no network calls</div></div>\n' +
     "\n" +
-    // For combined files (rotation with data.oldAddress), use the prominent
-    // "current key" container and add a second muted "previous key" container.
-    // For all other files, use the standard card. Per D3 design from agent.
-    (data.oldAddress
-      ? '    <div class="card-current">\n' +
-        '      <div class="meta-row">\n' +
-        '        <span class="meta-label">Name</span>\n' +
-        `        <span class="meta-value name">${escapeHtml(data.name)}</span>\n` +
-        "      </div>\n" +
-        '      <div class="meta-row with-copy">\n' +
-        '        <span class="meta-label">' +
-        addressLabel +
-        "</span>\n" +
-        `        <input class="meta-value" id="meta-address" type="text" readonly value="${escapeHtml(data.address)}">\n` +
-        '        <button class="meta-copy-btn" onclick="copyText(\'meta-address\', this)">Copy</button>\n' +
-        "      </div>\n" +
-        '      <div class="meta-row">\n' +
-        '        <span class="meta-label">Saved</span>\n' +
-        `        <span class="meta-value">${escapeHtml(savedDate)}</span>\n` +
-        "      </div>\n" +
-        '      <p class="card-tagline">Use this key to access your account.</p>\n' +
-        "    </div>\n" +
-        '    <div class="card-previous">\n' +
-        '      <div class="meta-row with-copy">\n' +
-        '        <span class="meta-label">Previous address</span>\n' +
-        `        <input class="meta-value" id="meta-old-address" type="text" readonly value="${escapeHtml(data.oldAddress)}">\n` +
-        '        <button class="meta-copy-btn" onclick="copyText(\'meta-old-address\', this)">Copy</button>\n' +
-        "      </div>\n" +
-        '      <p class="card-tagline-muted">Your previous key &mdash; here in case any funds were in transit during the move.</p>\n' +
-        "    </div>\n"
-      : '    <div class="card">\n' +
-        '      <div class="meta-row">\n' +
-        '        <span class="meta-label">Name</span>\n' +
-        `        <span class="meta-value name">${escapeHtml(data.name)}</span>\n` +
-        "      </div>\n" +
-        '      <div class="meta-row with-copy">\n' +
-        '        <span class="meta-label">' +
-        addressLabel +
-        "</span>\n" +
-        `        <input class="meta-value" id="meta-address" type="text" readonly value="${escapeHtml(data.address)}">\n` +
-        '        <button class="meta-copy-btn" onclick="copyText(\'meta-address\', this)">Copy</button>\n' +
-        "      </div>\n" +
-        '      <div class="meta-row">\n' +
-        '        <span class="meta-label">Saved</span>\n' +
-        `        <span class="meta-value">${escapeHtml(savedDate)}</span>\n` +
-        "      </div>\n" +
-        "    </div>\n") +
+    '    <div class="card">\n' +
+    '      <div class="meta-row">\n' +
+    '        <span class="meta-label">Name</span>\n' +
+    `        <span class="meta-value name">${escapeHtml(data.name)}</span>\n` +
+    "      </div>\n" +
+    '      <div class="meta-row with-copy">\n' +
+    '        <span class="meta-label">Address</span>\n' +
+    `        <input class="meta-value" id="meta-address" type="text" readonly value="${escapeHtml(data.address)}">\n` +
+    '        <button class="meta-copy-btn" onclick="copyText(\'meta-address\', this)">Copy</button>\n' +
+    "      </div>\n" +
+    '      <div class="meta-row">\n' +
+    '        <span class="meta-label">Saved</span>\n' +
+    `        <span class="meta-value">${escapeHtml(savedDate)}</span>\n` +
+    "      </div>\n" +
+    "    </div>\n" +
     "\n" +
     '    <div class="context-block">' +
     escapeHtml(contextBlockText()) +
@@ -569,7 +484,7 @@ export function generateBackupHtml(data: BackupData): string {
     "      if (el) el.style.display = 'none';\n" +
     "    })();\n" +
     "\n" +
-    // Metadata (name, address, saved date) and footer stamp render statically\n
+    // Metadata (name, address, saved date) and footer stamp render statically
     // at template-build time — no JS required so iOS Files Quick Look /
     // macOS Finder Quick Look / email previews can show them. The script
     // block below is only needed for the encrypted-decrypt flow and the
