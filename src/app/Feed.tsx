@@ -6,7 +6,6 @@ import { HomeScreenWelcomeGate } from "@/components/HomeScreenWelcomeGate";
 import { InstallPitch } from "@/components/InstallPitch";
 import { IosStorageToast } from "@/components/IosStorageToast";
 import { SignInModal } from "@/components/SignInModal";
-import { StaleKeyModal } from "@/components/StaleKeyModal";
 import { BootProvider, useBootContext } from "@/contexts/BootContext";
 import { IdentityProvider, useIdentityContext } from "@/contexts/IdentityContext";
 import { InstallProvider } from "@/contexts/InstallContext";
@@ -390,7 +389,6 @@ export function Feed({
       <IdentityProvider>
         <InstallProvider>
           <SignInModal />
-          <StaleKeyModal />
           <FeedOrWelcomeGate initialPosts={initialPosts} initialBootboard={initialBootboard} />
         </InstallProvider>
       </IdentityProvider>

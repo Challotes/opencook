@@ -30,33 +30,6 @@ interface IdentityContextValue {
    * "Welcome gate fires when standalone-mode + no identity."
    */
   awaitingWelcomeGate: boolean;
-  /**
-   * E30: true when the locally-held key has a forward migration on-chain.
-   * When true, `requireIdentity()` opens the StaleKeyModal (instead of
-   * SignInModal) and returns false — UI mutation handlers refuse to proceed
-   * until the user restores their newer recovery file. The underlying
-   * `identity` accessor still returns the cached key so non-signing reads
-   * (chip name, address) continue to work.
-   */
-  staleKey: boolean;
-  /**
-   * E30: mark the active identity stale (called by the polling layer when the
-   * server reports `key_status.stale === true`). Idempotent — no-op if already
-   * stale, if no identity is loaded, or if `isSessionClearBlocked()` is true
-   * (which means a rotation flow on THIS device is mid-flight; the polling
-   * layer must not flag its own freshly-rotated key as stale before the
-   * commit completes). Safe to call from any context that already holds an
-   * identity reference.
-   */
-  markIdentityStale: () => void;
-  /**
-   * E30: clear `staleKey` (transition back to `ready`). Called when the user
-   * restores their newer key in the same tab via `acceptRestoredIdentity`,
-   * which fires after `updateIdentity` — `clearStaleKey` is exposed for
-   * callers that need to drop stale state without changing the identity
-   * itself (rare; primarily an escape hatch for tests + future flows).
-   */
-  clearStaleKey: () => void;
   sign: (content: string) => Promise<{ signature: string; pubkey: string } | null>;
   updateIdentity: (newIdentity: Identity) => void;
   /**
@@ -114,19 +87,8 @@ interface IdentityContextValue {
    *
    * Do NOT call signPost, clientSideBoot, or any other wif-using service
    * from a UI handler without this gate. See CLAUDE.md "Universal pattern".
-   *
-   * E30: when the local key is stale (`staleKey === true`) this opens
-   * <StaleKeyModal> instead of <SignInModal> — the user must restore their
-   * newer recovery file, not just unlock the current one.
    */
   requireIdentity: () => boolean;
-  // E30 stale-key modal control (consumed by <StaleKeyModal /> + the amber
-  // banner in PostForm). `staleKeyModalOpen` is true when the modal should
-  // mount. Toggled by `requireIdentity()` (auto), the banner's onClick
-  // (manual re-entry), and dismissed by the modal's own close paths.
-  staleKeyModalOpen: boolean;
-  openStaleKeyModal: () => void;
-  closeStaleKeyModal: () => void;
 }
 
 const IdentityContext = createContext<IdentityContextValue | null>(null);
@@ -134,11 +96,9 @@ const IdentityContext = createContext<IdentityContextValue | null>(null);
 export function IdentityProvider({ children }: { children: ReactNode }) {
   const identityValue = useIdentity();
   const [signInOpen, setSignInOpen] = useState(false);
-  const [staleKeyModalOpen, setStaleKeyModalOpen] = useState(false);
 
   const openSignIn = useCallback(() => setSignInOpen(true), []);
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
-  const closeStaleKeyModal = useCallback(() => setStaleKeyModalOpen(false), []);
 
   // Ref-counted suppression of pagehide-driven session clearing. Ref (not
   // state) so the pagehide handler reads the live value without re-binding
@@ -152,54 +112,11 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   }, []);
   const isSessionClearBlocked = useCallback(() => sessionClearBlockedRef.current > 0, []);
 
-  // E30b: real opener. Surfaces the StaleKeyModal mounted in Feed.tsx.
-  // Called from (a) requireIdentity() when a mutation is attempted in stale
-  // state, and (b) the amber banner in PostForm.tsx (manual re-entry after
-  // the user dismissed the modal once).
-  const openStaleKeyModal = useCallback(() => {
-    setStaleKeyModalOpen(true);
-  }, []);
-
   const requireIdentity = useCallback((): boolean => {
-    // E30: stale-key state takes precedence over both "has identity" and
-    // "needs sign-in" — even with a non-null identity reference, the
-    // underlying key has been rotated forward on-chain and signing would
-    // produce posts/boots attributed to a revoked key. Open the StaleKeyModal
-    // instead of allowing the action through.
-    if (identityValue.staleKey) {
-      openStaleKeyModal();
-      return false;
-    }
     if (identityValue.identity) return true;
     setSignInOpen(true);
     return false;
-  }, [identityValue.identity, identityValue.staleKey, openStaleKeyModal]);
-
-  // E30 (F3 mitigation): suppress the stale-key transition while a rotation
-  // flow is mid-flight on THIS device. MoveAddressModal / ChangePassphraseModal
-  // call `blockSessionClear()` while rotating; the poll layer can fire a
-  // stale signal between the migration-record write and the local
-  // `commitUpgrade()` call, which would race-flag our OWN newly-rotated key
-  // as stale on this device. The block window covers exactly that gap.
-  // Wraps the hook's raw transition so the context is the single chokepoint
-  // for the rule.
-  const hookMarkStale = identityValue.markIdentityStale;
-  const markIdentityStale = useCallback(() => {
-    if (sessionClearBlockedRef.current > 0) return;
-    hookMarkStale();
-  }, [hookMarkStale]);
-
-  // E30b: auto-open the modal on the FIRST stale transition. Subsequent
-  // polls that re-fire `markIdentityStale()` are no-ops at the hook level
-  // (already-stale → stale), so this effect won't reopen a user-dismissed
-  // modal — it only fires once when staleKey flips false → true.
-  const wasStaleRef = useRef(false);
-  useEffect(() => {
-    if (identityValue.staleKey && !wasStaleRef.current) {
-      setStaleKeyModalOpen(true);
-    }
-    wasStaleRef.current = identityValue.staleKey;
-  }, [identityValue.staleKey]);
+  }, [identityValue.identity]);
 
   const acceptRestoredIdentity = useCallback(
     async (wif: string, name?: string, passphrase?: string, hint?: string): Promise<Identity> => {
@@ -279,9 +196,6 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   const contextValue: IdentityContextValue = {
     ...identityValue,
-    // Override hook's raw markIdentityStale with the context-level wrapper
-    // that enforces the isSessionClearBlocked() guard.
-    markIdentityStale,
     acceptRestoredIdentity,
     signInOpen,
     openSignIn,
@@ -290,9 +204,6 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     blockSessionClear,
     unblockSessionClear,
     isSessionClearBlocked,
-    staleKeyModalOpen,
-    openStaleKeyModal,
-    closeStaleKeyModal,
   };
 
   return <IdentityContext.Provider value={contextValue}>{children}</IdentityContext.Provider>;

@@ -9,20 +9,12 @@ import { getIdentity, type Identity, isIdentityEncrypted, signPost } from "@/ser
  * `loading + needsUnlock` or `awaitingWelcomeGate + identity != null` from
  * being representable. Boolean accessors are derived for the public return type
  * so existing consumers don't churn.
- *
- * `staleKey` (E30): server polling detected that the locally-held key has been
- * rotated forward on-chain. We keep the underlying `identity` around so the UI
- * can show the cached anon name + offer the restore flow, but mutation handlers
- * are gated via `requireIdentity()` to refuse until the user restores their
- * newer recovery file. Cleared by `clearStaleKey()` once a fresh identity is
- * adopted via `acceptRestoredIdentity()`.
  */
 type IdentityState =
   | { kind: "loading" }
   | { kind: "needsUnlock" }
   | { kind: "awaitingWelcomeGate" }
-  | { kind: "ready"; identity: Identity }
-  | { kind: "staleKey"; identity: Identity };
+  | { kind: "ready"; identity: Identity };
 
 interface UseIdentityReturn {
   identity: Identity | null;
@@ -37,29 +29,8 @@ interface UseIdentityReturn {
    * Always false in browser-tab mode (auto-gen runs there as before).
    */
   awaitingWelcomeGate: boolean;
-  /**
-   * E30: true when polling has detected the local key has a forward migration
-   * record on-chain. The UI should block compose-style interactions and surface
-   * the StaleKeyModal. The `identity` accessor still returns the underlying
-   * key so the chip can show the cached anon name and components can read
-   * non-signing fields (address, etc.).
-   */
-  staleKey: boolean;
   sign: (content: string) => Promise<{ signature: string; pubkey: string } | null>;
   updateIdentity: (newIdentity: Identity) => void;
-  /**
-   * E30: transition the active identity into `staleKey` state. No-op if the
-   * current state is anything other than `ready` (we can't go stale before
-   * a key has loaded; loading/unlock/welcome-gate states resolve first).
-   */
-  markIdentityStale: () => void;
-  /**
-   * E30: transition out of `staleKey` back to `ready` — used when the user
-   * restores their newer key in the same tab via `acceptRestoredIdentity`.
-   * Cross-tab restores are handled by the storage-event listener in
-   * IdentityContext, which calls `updateIdentity` directly.
-   */
-  clearStaleKey: () => void;
 }
 
 export function useIdentity(): UseIdentityReturn {
@@ -141,45 +112,21 @@ export function useIdentity(): UseIdentityReturn {
   }, []);
 
   const updateIdentity = useCallback((newIdentity: Identity) => {
-    // Transitions any of {loading, needsUnlock, awaitingWelcomeGate, staleKey} → ready.
+    // Transitions any of {loading, needsUnlock, awaitingWelcomeGate} → ready.
     // Single entry point for context to commit a restored, unlocked, or
     // freshly-generated identity into the hook's state machine.
     setState({ kind: "ready", identity: newIdentity });
   }, []);
 
-  const markIdentityStale = useCallback(() => {
-    // Only ready → staleKey is a valid transition. From any other state we
-    // either don't have an identity to mark stale (loading / unlock / welcome
-    // gate) or we're already stale. Avoids spurious re-renders + impossible
-    // states.
-    setState((prev) =>
-      prev.kind === "ready" ? { kind: "staleKey", identity: prev.identity } : prev
-    );
-  }, []);
-
-  const clearStaleKey = useCallback(() => {
-    setState((prev) =>
-      prev.kind === "staleKey" ? { kind: "ready", identity: prev.identity } : prev
-    );
-  }, []);
-
   // Boolean accessors derived from the discriminated union state. Existing
   // consumers (Feed.tsx, IdentityBar, etc.) read these flags unchanged.
-  //
-  // CRITICAL: `identity` returns the underlying key in BOTH ready AND staleKey
-  // states. Chip rendering and non-signing reads (address, name, pubkey) stay
-  // working when stale; mutation gating is enforced by `staleKey` + the
-  // context's `requireIdentity()` branch, not by hiding identity.
-  const identity = state.kind === "ready" || state.kind === "staleKey" ? state.identity : null;
+  const identity = state.kind === "ready" ? state.identity : null;
   return {
     identity,
     isLoading: state.kind === "loading",
     needsUnlock: state.kind === "needsUnlock",
     awaitingWelcomeGate: state.kind === "awaitingWelcomeGate",
-    staleKey: state.kind === "staleKey",
     sign,
     updateIdentity,
-    markIdentityStale,
-    clearStaleKey,
   };
 }

@@ -232,7 +232,7 @@ export function InstallPitch({ variant }: InstallPitchProps): React.JSX.Element 
           aria-modal="true"
           aria-label="Install BSVibes"
         >
-          {/* Gold top stripe — same as StaleKeyModal / SignInModal / FundAddress */}
+          {/* Gold top stripe — same as SignInModal / FundAddress */}
           <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
 
           {/* Chevron-down (minimise) at top center. There is no X — the only
