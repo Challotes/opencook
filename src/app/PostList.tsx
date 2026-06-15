@@ -50,7 +50,7 @@ interface BootButtonProps {
   bootPrice: number;
   freeBootsRemaining: number;
   onBooted?: () => void;
-  onFundNeeded?: (address: string, balance?: number) => void;
+  onFundNeeded?: (address: string, balance?: number, fee?: number) => void;
   onFreeBootUsed?: () => void;
 }
 
@@ -108,7 +108,7 @@ function BootButton({
       ? "Sign in to boot"
       : isFree
         ? `Boot to the board (FREE — ${freeBootsRemaining} remaining)`
-        : `Boot to the board (${bootPrice.toLocaleString()} sats)`;
+        : `Boot to the board (~${bootPrice.toLocaleString()} sats + network fee)`;
 
   return (
     <div className="flex flex-col items-center">
@@ -173,7 +173,7 @@ interface PostListProps {
   onLoadEarlier: () => void;
   onBooted?: () => void;
   onAskAgent?: () => void;
-  onFundNeeded?: (address: string, balance?: number) => void;
+  onFundNeeded?: (address: string, balance?: number, fee?: number) => void;
   onFreeBootUsed?: () => void;
   bootPrice: number;
   freeBootsRemaining: number;

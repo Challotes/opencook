@@ -11,13 +11,13 @@ export type { BootStatus } from "@/contexts/BootContext";
 export interface BootResult {
   success: boolean;
   isFree?: boolean;
-  needsFund?: { address: string; balance?: number };
+  needsFund?: { address: string; balance?: number; fee?: number };
 }
 
 interface UseBootOptions {
   onBooted?: () => void;
   onFreeBootUsed?: () => void;
-  onFundNeeded?: (address: string, balance?: number) => void;
+  onFundNeeded?: (address: string, balance?: number, fee?: number) => void;
 }
 
 /**
@@ -135,11 +135,15 @@ export function useBoot(opts: UseBootOptions = {}) {
           clearTimeout(preparingTimer);
 
           if (bootResult.status === "insufficient_funds") {
-            onFundNeeded?.(identity.address, bootResult.balance);
+            onFundNeeded?.(identity.address, bootResult.balance, bootResult.estimatedFee);
             releaseBoot();
             return {
               success: false,
-              needsFund: { address: identity.address, balance: bootResult.balance },
+              needsFund: {
+                address: identity.address,
+                balance: bootResult.balance,
+                fee: bootResult.estimatedFee,
+              },
             };
           }
 

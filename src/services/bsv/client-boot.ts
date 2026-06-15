@@ -37,6 +37,11 @@ export interface ClientBootResult {
   rawTx?: string;
   error?: string;
   balance?: number;
+  /** On `insufficient_funds`: the network fee a boot tx needs ON TOP of the
+   * boot price. The deposit/top-up surface adds this to the price so "you have
+   * enough" can't disagree with the builder. Purely a report of the fee the
+   * selector already computed — does not affect selection, signing, or broadcast. */
+  estimatedFee?: number;
 }
 
 interface WocUtxo {
@@ -366,7 +371,11 @@ async function _clientSideBootInner(
         userAddress,
         "— address may have no confirmed/unconfirmed outputs"
       );
-      return { status: "insufficient_funds", balance: 0 };
+      return {
+        status: "insufficient_funds",
+        balance: 0,
+        estimatedFee: estimateFee(1, outputCount),
+      };
     }
 
     const balance = utxos.reduce((sum, u) => sum + u.value, 0);
@@ -388,7 +397,10 @@ async function _clientSideBootInner(
       console.warn(
         `[clientSideBoot] Insufficient funds: balance=${balance} sats, needed=${bootPriceSats + worstCaseFee} sats, address=${userAddress}`
       );
-      return { status: "insufficient_funds", balance };
+      // minBootFee is the threshold this branch tests against (balance <
+      // bootPriceSats + minBootFee), so reporting it makes the top-up shortfall
+      // exact and always positive here.
+      return { status: "insufficient_funds", balance, estimatedFee: minBootFee };
     }
     // ── Fetch source transactions (batched to avoid WoC rate limits) ──
     // For 0-conf chained UTXOs, sourceTransaction is already attached — skip the fetch.

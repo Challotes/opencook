@@ -70,6 +70,9 @@ function FeedContent({
   const [showFundModal, setShowFundModal] = useState(false);
   const [userAddress, setUserAddress] = useState("");
   const [userBalance, setUserBalance] = useState<number | undefined>(undefined);
+  // Network fee the boot tx needs on top of the price (from the tx builder on an
+  // insufficient-funds result) — so the deposit modal's top-up math is exact.
+  const [fundFee, setFundFee] = useState<number | undefined>(undefined);
 
   // Fetch the real boot status for this identity from the server once on load.
   useEffect(() => {
@@ -199,9 +202,10 @@ function FeedContent({
             data={bootboard}
             onBooted={refresh}
             bootPrice={bootPrice}
-            onFundNeeded={(address, balance) => {
+            onFundNeeded={(address, balance, fee) => {
               setUserAddress(address);
               setUserBalance(balance);
+              setFundFee(fee);
               setShowFundModal(true);
             }}
           />
@@ -225,9 +229,10 @@ function FeedContent({
           onLoadEarlier={handleLoadEarlier}
           onBooted={refresh}
           onAskAgent={handleAskAgent}
-          onFundNeeded={(address, balance) => {
+          onFundNeeded={(address, balance, fee) => {
             setUserAddress(address);
             setUserBalance(balance);
+            setFundFee(fee);
             setShowFundModal(true);
           }}
           onFreeBootUsed={handleFreeBootUsed}
@@ -337,9 +342,11 @@ function FeedContent({
           address={userAddress}
           bootPrice={bootPrice}
           balance={userBalance}
+          fee={fundFee}
           onClose={() => {
             setShowFundModal(false);
             setUserBalance(undefined);
+            setFundFee(undefined);
           }}
         />
       )}

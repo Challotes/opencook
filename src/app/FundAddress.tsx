@@ -7,10 +7,13 @@ interface FundAddressProps {
   address: string;
   bootPrice?: number;
   balance?: number;
+  /** Network fee the boot tx needs ON TOP of bootPrice (from the tx builder).
+   * Optional — the plain deposit view (no boot in flight) omits it. */
+  fee?: number;
   onClose: () => void;
 }
 
-export function FundAddress({ address, bootPrice, balance, onClose }: FundAddressProps) {
+export function FundAddress({ address, bootPrice, balance, fee, onClose }: FundAddressProps) {
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
@@ -19,9 +22,13 @@ export function FundAddress({ address, bootPrice, balance, onClose }: FundAddres
     setTimeout(() => setCopied(false), 2000);
   }
 
-  // How much more the user needs to top up (at minimum enough for one boot + small buffer)
+  // A boot actually needs price + network fee. Top-up shortfall is measured
+  // against that total so "you have enough" can't disagree with the builder.
+  const required = bootPrice !== undefined ? bootPrice + (fee ?? 0) : undefined;
   const shortfall =
-    bootPrice && balance !== undefined && balance < bootPrice ? bootPrice - balance : null;
+    required !== undefined && balance !== undefined && balance < required
+      ? required - balance
+      : null;
 
   return (
     <>
@@ -91,6 +98,12 @@ export function FundAddress({ address, bootPrice, balance, onClose }: FundAddres
                       {bootPrice.toLocaleString()} sats
                     </span>
                   </div>
+                  {fee !== undefined && fee > 0 && (
+                    <div className="flex justify-between text-zinc-400">
+                      <span>Network fee</span>
+                      <span className="font-mono text-zinc-200">{fee.toLocaleString()} sats</span>
+                    </div>
+                  )}
                   {shortfall !== null && (
                     <div className="flex justify-between text-amber-400 pt-1 border-t border-zinc-700/60">
                       <span>Top up needed</span>

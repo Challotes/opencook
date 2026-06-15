@@ -38,7 +38,7 @@ function HistoryRow({
 }: {
   entry: BootboardData["history"][0];
   onBooted?: () => void;
-  onFundNeeded?: (address: string, balance?: number) => void;
+  onFundNeeded?: (address: string, balance?: number, fee?: number) => void;
 }) {
   const { identity, requireIdentity } = useIdentityContext();
   const { bootingPostId, throttled } = useBootContext();
@@ -116,7 +116,7 @@ export function Bootboard({
   data: BootboardData;
   onBooted?: () => void;
   bootPrice?: number;
-  onFundNeeded?: (address: string, balance?: number) => void;
+  onFundNeeded?: (address: string, balance?: number, fee?: number) => void;
 }) {
   const { current, history } = data;
   const [shaking, setShaking] = useState(false);
