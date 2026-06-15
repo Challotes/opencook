@@ -221,7 +221,7 @@ The current model is deliberately simple so we can prove the mechanism works (pa
 
 We could have submitted patents for some or all of these innovations. We didn't. We put them on-chain and gave them to everyone.
 
-By publishing on-chain, we didn't just open source the code — we created prior art that blocks future patents on these ideas. Nobody can lock this up now. Not big tech, not patent trolls, not competitors. The Agentic Fairness Protocol, the contribution scoring, the trustless split payments, the zero-friction identity with on-chain key migration — it's all public, timestamped, and permanently verifiable on BSV.
+By publishing on-chain, we didn't just open source the code — we created prior art that blocks future patents on these ideas. Nobody can lock this up now. Not big tech, not patent trolls, not competitors. The Agentic Fairness Protocol, the contribution scoring, the trustless split payments, the zero-friction identity with on-chain key migration (the migration mechanism was later removed in favour of encrypt-in-place — retained as prior art, see below) — it's all public, timestamped, and permanently verifiable on BSV.
 
 Independent prior art research (2026-04-02) confirmed:
 - **The Agentic Fairness Protocol (AFP) is genuinely novel.** No prior art exists for on-chain project lineage + cascading royalties to weighted contributor pools + fork-triggered obligation.

@@ -82,7 +82,7 @@ The codebase has started doing things we didn't fully plan. Most of these are al
 
 **Scoring without a committee** *(shipped in-app — Phase 6 / `src/services/fairness/weights.ts`; standalone primitive future)*. Contribution weight is calculated from behavior: post frequency, engagement, recency, chain depth. No one votes. No one decides. It just runs. That model applies anywhere you're trying to fairly compensate a group without central control — open source projects, co-ops, DAOs.
 
-**The chain as the audit log** *(data substrate shipped — posts + payouts + migrations all have on-chain fingerprints; verifier future)*. Every post has an on-chain fingerprint. In theory you can cross-reference the database against the chain and find discrepancies. Nobody's built that check yet. It's just waiting there.
+**The chain as the audit log** *(data substrate shipped — posts + payouts all have on-chain fingerprints; verifier future)*. Every post has an on-chain fingerprint. In theory you can cross-reference the database against the chain and find discrepancies. Nobody's built that check yet. It's just waiting there.
 
 The in-app versions are running. The future is the extracted, reusable form of each.
 

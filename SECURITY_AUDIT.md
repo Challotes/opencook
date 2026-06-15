@@ -111,7 +111,7 @@
 - M5: /api/earnings exposes full financial history unauthenticated — **PARTIAL.** Silently rate-limited 20/min/IP (`earnings/route.ts:87`). Still unauthenticated — the financial data exposure is unchanged, but enumeration is now bounded by IP. Promote to authenticated read once user accounts exist.
 - M6: WIF reveal has no auto-hide timeout. **Partial mitigation (2026-05-01, Stage 8 C6):** the Show-recovery-key panel now requires an explicit `[Reveal key]` click to expose the WIF (no longer revealed by default), and shows a red warning above the masked key (*"Anyone with this key owns your account and any funds in it. Never share it."*). Replaces the previous always-visible-until-Hide pattern. Auto-hide timer still TODO.
 - M7: /api/boot-shares triggers full weight calc with no cache — FIXED (30s TTL cache added)
-- M8: Posts during upgrade window may be unsigned
+- M8: Posts during upgrade window may be unsigned — SUPERSEDED (2026-06-14): encrypt-in-place is a single atomic write, so there is no "upgrade window"; `createPost`'s mandatory signature check means posts are always signed.
 
 ## LOW (6 findings — track as debt)
 
@@ -215,8 +215,8 @@ verified sound; rotation/migration removal left ZERO dangling code references.
 - Client OP_RETURN audit fields unvalidated (forgeable; DB attribution is
   signature-safe; advisory per the reader contract).
 - Doc/comment drift: stale "across the full address chain" comments in
-  earnings/route.ts; orphan migrations table (CREATE removed, no DROP — moot for
-  fresh-start launch).
+  earnings/route.ts; orphan migrations table fully removed from db.ts (no DROP for
+  any pre-existing on-disk table — inert, moot for fresh-start launch).
 - Free-boot path attribution still client-trusted (symmetric to Step 7; low —
   free boots are IP-capped + cost nothing); boot_grants.pubkey column naming.
 

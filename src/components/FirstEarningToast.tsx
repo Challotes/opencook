@@ -48,7 +48,7 @@ function writeDismissedUntil(value: number): void {
  * Trigger: `earnedSats > 0 && backedUp === false && dismissed_until < now`.
  *
  * Both buttons set `dismissed_until = now + 48h`. "Save now" also fires
- * `onSaveNow` to open the You modal. If the user completes the save,
+ * `onSaveNow` to open ProtectModal directly (the add-a-passphrase flow). If the user completes the save,
  * `backedUp` flips true and the toast never re-evaluates true again. If they
  * abandon mid-flow, the 48h backoff still applies — toast can return later
  * (high-stakes prompt deserves gentle re-attempt, not a one-shot per

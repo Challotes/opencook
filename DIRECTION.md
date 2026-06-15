@@ -54,7 +54,7 @@ This works across forks. BSVibes is open source. Anyone can fork it, improve it,
 - The value isn't the code (anyone can copy it) — it's the community, the on-chain history, and the rules everyone plays by
 - BSVibes designed the fairness rules. That's the moat. The code is just the implementation.
 
-**What exists today:** On-chain posts, contribution scoring, trustless split payments, identity with migration chains. The foundation.
+**What exists today:** On-chain posts, contribution scoring, trustless split payments, zero-friction identity (key generated silently, encrypted in place when protected — no rotation, no migration chains). The foundation.
 
 **What comes next:** Cross-project contribution tracking, code-commit linking to on-chain identity, a shared protocol for forks to recognise each other's contributors. Phase 7 of the build roadmap (see `ROADMAP.md` — "The Recursive Model") is the first step toward this. (Note: this Phase 7 is from the build roadmap, distinct from the fairness-system phases listed in the next section.)
 
@@ -161,7 +161,7 @@ BSVibes combines elements that exist separately elsewhere, but nobody has put th
 
 1. **Agentic Fairness as a governance framework** — The 4-phase autonomy ramp (human-set → AI suggests → AI adjusts → fully agentic) with constraint-bounded parameter tuning. No other project has productized this.
 2. **Zero-friction crypto identity** — Keypair generates silently on first visit. User never knows they "have crypto." Progressive security upgrade when it matters.
-3. **On-chain key migration** — Old key cryptographically signs handoff to new key, posted on-chain. Contribution history follows across rotations.
+3. **On-chain key migration** *(prior art — shipped on mainnet, then superseded)* — Old key cryptographically signs a handoff to a new key, posted on-chain; contribution history followed across rotations. Built and operated on BSV mainnet, then removed at launch (2026-06-14) in favour of encrypt-in-place (simpler UX, no rotation). Retained as timestamped prior art — see FAIRNESS.md. *(Current identity model: the key/address never changes; a passphrase encrypts the existing key in place.)*
 4. **Real-money contribution splitting** — Single BSV transaction, dozens of outputs, sub-cent fees. Revenue-based, not inflationary. The fairness model cannot be faithfully replicated on other chains.
 
 ### The proof moment

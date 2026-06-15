@@ -2,7 +2,9 @@
 
 > What's done, what's next, what's planned. AI agents: update this file when you complete or start a task.
 >
-> Last updated: 2026-06-14
+> Last updated: 2026-06-15
+>
+> **Current milestone:** Phase 1 of the launch-critical plan (wallet / on-chain money integrity — rotation removal → encrypt-in-place, boot hardening Steps 6–9b, deep-audit fixes F1–F6, device-test fixes) is **COMPLETE and verified on mainnet** (on-chain money-integrity audit PASS, 2026-06-15 — every boot conserves value, splits config-exact, all on-chain records well-formed). **Next: Phase 2 — server-side resilience** (`/api/broadcast` proxy, timeouts on the in-mutex wallet calls, kill-switch, low-balance alert; see the Phase 6.5 items). NOTE: the "Phase N" headings below are the LEGACY build phases; the launch-critical "Phase 1/2/…" sequence lives in DECISIONS.md + memory.
 
 ## Phase 1: Foundation — COMPLETE
 
@@ -167,7 +169,7 @@
 ## Phase 6.1: Second Audit (2026-04-03) — COMPLETE
 
 - [x] 5-agent parallel audit (architecture, security, performance, tidiness, correctness)
-- [x] boot-confirm: replay protection, rate limiting, on-chain output verification
+- [x] boot-confirm: replay protection, rate limiting, on-chain output recording — records payouts FROM the verified on-chain outputs with a platform conservation floor (Finding 6, 2026-06-15), NOT recompute-and-reject (which double-paid on legitimate price/weight drift)
 - [x] boot-confirm booter authentication (Phase 1 Step 7, 2026-06-14) — booter signs `boot:<postId>:<txid>`; credited address derived from the verified pubkey, not client-supplied (closes boot-attribution forgery). Residual mempool-race self-credit tracked in SECURITY_AUDIT.md C3-residual.
 - [x] NaN weight cascade fix (SQLite datetime parsing)
 - [x] Server wallet retry limit (was unbounded recursion)
@@ -297,6 +299,17 @@ The E-series (E1–E32, 2026-05-08 → 2026-06-03) hardened the recovery, protec
 - [x] E31 — block rotate-from-stale + `cleanupMigrations` deleted — **SUPERSEDED 2026-06-14** by removal of rotation
 - [x] E32 — install pitch UX overhaul: slide-up sheet → bookmark chip pattern, no timer-based dismissal, Android Chrome one-tap restored, centered bookmark, modal-overlap ref-counter, geometry parity with Ask AI pill
 - [x] Android device-testing fixes (2026-06-03): UTXO outpoint dedup in `sweepFunds` / `autoTransferFunds` (catches WhatsOnChain duplicate-outpoint responses that produced `bad-txns-inputs-duplicate`); site-wide `vh` → `svh` modal sweep across 7 centered modals (fixes Android Chrome address-bar clip)
+
+## Phase 6.7: Launch-critical deep-audit + device-test fixes (2026-06-15) — COMPLETE
+
+Exhaustive multi-agent deep-audit of the whole rotation-removal + boot-hardening surface, then real on-device QA, then an on-chain money-integrity verification. Closes Phase 1 of the launch-critical plan.
+
+- [x] On-chain extensibility envelope (Phase 1 Step 9b) — shared `onchain-record.ts` `onchainRecord(type, body)` used by both writers (post + boot_split); the `app` literal + `v` version live in one place; reader contract documented
+- [x] Deep-audit — 5 cross-commit must-fix bugs, all FIXED: F4 null-wallet free boot burned a grant + recorded a phantom boot; F1 interrupted restore reverted to the OLD key; F2 corrupted-store trap (added SignInModal restore link); F3 corrupt-store auto-gen guard; F6 paid-boot DOUBLE-PAY on weight/price drift → now records from on-chain outputs, client never rebuilds after broadcast. See SECURITY_AUDIT.md "Phase 1 Deep-Audit".
+- [x] Device-test fixes (real on-device QA) — `/api/balance` splits confirmed (spendable) vs pending; IdentityBar shows a spendable headline + muted "+X pending" line; FundAddress + `clientSideBoot` + `useBoot` fee-aware (deposit shortfall = price + network fee, provably positive in the insufficient branch); FirstEarningToast "Save now" opens ProtectModal directly (no You-modal hop); ProtectModal + ChangePassphraseModal raised to z-[70] (were painting behind the You modal). NOT money-loss — display/affordability honesty. See DECISIONS.md "Balance shows spendable (confirmed)".
+- [x] On-chain money-integrity verification (PASS, mainnet) — audited all 29 `boot_split` txs for the test address vs the fairness config: every boot conserves value (Σinputs = Σoutputs + fee); the paid boot's 5/15/80 split is config-exact (platform = exact 5%); all 29 OP_RETURN records well-formed + consistent; the DB payouts ledger matches the chain to the satoshi. Earnings display showed only a benign +101-sat read-lag (the row exists, id 6347; self-corrects on poll). Core money engine verified correct on real mainnet money.
+
+**Phase 1 (launch-critical) CLOSED. Next: Phase 2 — server resilience.**
 
 ## Phase 7: The Recursive Model — PLANNED
 

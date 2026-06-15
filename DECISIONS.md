@@ -37,6 +37,8 @@
 6. **Stage 5:** Revenue + daily limits — 5 free posts/day, QR to fund, fairness agent routes revenue
 7. **Stage 6:** Server HSM / threshold signing — required before significant funds flow
 
+> **[PARTIALLY SUPERSEDED 2026-06-13 — see "Key rotation REMOVED in favor of encrypt-in-place" later in this file.]** The "5-minute window problem" and "Key rotation on upgrade" subsections below describe the ROTATION-based design (`MoveAddressModal`, a NEW key on upgrade, an on-chain migration chain) — all REMOVED. **Current model:** the key/address NEVER changes; adding a passphrase encrypts the EXISTING key in place (`encryptInPlace`) — no rotation, no migration, no `MoveAddressModal`. The plaintext-window risk is now mitigated by gating recovery-file export behind setting a passphrase (no unencrypted file ever leaves the device), not by rotation. (Passkey-wrapping, further below, REMAINS a valid future enhancement — it wraps the same key.) These subsections are retained as historical record of the original design.
+
 ### The 5-minute window problem (settled + implemented)
 - Any key that existed as plaintext in localStorage must be assumed potentially compromised
 - **Implemented:** Protection happens via `MoveAddressModal` (the "Passphrase" row of the You modal, also the entry point from the "Not protected" red banner). The wizard generates a NEW key, the old key signs a migration, and the new key is stored AES-256-encrypted.
