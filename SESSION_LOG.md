@@ -2,6 +2,13 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-16 — Doc-sync pass (3-agent MD audit)
+
+Category: docs (no money-path code touched).
+
+- **Doc-sync (commit `c688f31`, UNPUSHED at checkpoint):** 3 read-only agents audited all MDs vs current code. Fairness numbers verified exact, no security control regressed. Fixed: CLAUDE.md boot-confirm line (was pre-Finding-6 "server-recomputed split" → records-from-on-chain); reframed stale "rotation as current" text in DIRECTION/FAIRNESS/FUTURE/DECISIONS to encrypt-in-place / historical prior art; ROADMAP got a current-milestone banner + a Phase 6.7 section (deep-audit + device-test + on-chain verification) + the L170 Finding-6 reconcile; 2 SECURITY_AUDIT wording nits; 1 stale FirstEarningToast comment. LAUNCH_PLAN left as-is (stale by design, git-rm at launch-close).
+- **NEXT SESSION → Phase 2 (server resilience):** `/api/broadcast` proxy, timeouts on the 4 in-mutex server-wallet calls, kill-switch, low-balance alert.
+
 ## 2026-06-15 — Device-test bug fixes: balance/affordability + modal stacking
 
 Category: bug fixes from real on-device testing. Owner ran a live pass (free boots,
