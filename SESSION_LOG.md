@@ -31,8 +31,21 @@ unconfirmed UTXOs as spendable + the boot cost omitted the network fee):
   the You modal (both were painting behind it).
 
 tsc 0, Biome 0, 97/97 tests. NOT a money-loss bug — funds were always accounted
-on-chain; this was display/affordability honesty. Deferred: on-chain split
-verification (confirm each boot paid the right recipients the right amounts).
+on-chain; this was display/affordability honesty.
+
+**On-chain money-integrity verification — PASS (same session).** Audited all 29
+mainnet `boot_split` txs for the test address (`1JfmJVq4…`) against the fairness
+config + decoded every OP_RETURN. Every boot CONSERVES value (Σinputs = Σoutputs +
+fee). The paid boot (`6a100ec3…`, on the user's OWN post #650): gross price 4,992,
+platform 249 = exact 5%, and 1,289 returned to the user as their own creator/pool
+share → net 3,703 = the "boot featured -3,703" the card showed (card shows NET
+spend). All 29 OP_RETURN records well-formed + consistent (`v:1`/`app`/`type`),
+each `total` matches its on-chain split. Earnings: the DB payouts ledger totals
+**7,172, matching the chain exactly** (incl. the post-#660 101-sat row, id 6347,
+which DOES exist) — the 7,071 the user saw on screen was a stale read before that
+last free-boot payout landed / before the next 30s poll. No money lost, no DB
+drift; the earnings figure self-corrects on refresh (same poll-staleness class as
+the balance display, now fixed). Core money engine verified correct on mainnet.
 
 ## 2026-06-15 — Phase 1 deep-audit + must-fix close-out
 

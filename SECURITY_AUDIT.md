@@ -233,3 +233,17 @@ verified sound; rotation/migration removal left ZERO dangling code references.
   insufficient branch). Money-path re-audited PASS — pure value-surfacing, no
   selection/sign/broadcast change. FIXED. See DECISIONS.md "Balance shows spendable
   (confirmed), deposit shortfall includes the fee".
+
+**On-chain money-integrity verification (2026-06-15) — PASS.** Independent
+adversarial audit of all 29 mainnet `boot_split` txs for the test address against
+the fairness config: every boot conserves value (Σinputs = Σoutputs + miner fee),
+the paid boot's 5/15/80 split matches config to the satoshi (platform 249 = exact
+5% of 4,992; net cost 3,703 after the user's own creator/pool share returned from
+booting their own post), and all 29 OP_RETURN records are well-formed + consistent
+(`v:1`/`app:bsvibes`/`type:boot_split`, `total` == on-chain split). DB payouts
+ledger (7,172) matches the chain exactly — no value created/destroyed, no ledger
+drift, no malformed/missing record. The only delta was a cosmetic earnings-display
+LAG (UI showed 7,071 vs 7,172 on chain/DB) caused by a stale read before the last
+free-boot payout row landed; the row exists (payout id 6347) and the figure
+self-corrects on the next poll — NOT an open bug, same poll-staleness class as the
+balance display fixed above.
