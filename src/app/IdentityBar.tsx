@@ -88,6 +88,9 @@ export function IdentityChip(): React.JSX.Element | null {
   // Balance / earnings
   const [earnedSats, setEarnedSats] = useState<number | null>(null);
   const [balanceSats, setBalanceSats] = useState<number | null>(null);
+  // Unconfirmed (0-conf) funds still landing — shown as a muted "+X pending"
+  // line so spendable (confirmed) stays the honest headline number.
+  const [pendingSats, setPendingSats] = useState<number | null>(null);
   const [activity, setActivity] = useState<
     Array<{
       amount: number;
@@ -234,6 +237,7 @@ export function IdentityChip(): React.JSX.Element | null {
         .then((data) => {
           if (data && typeof data.balance === "number") {
             setBalanceSats(data.balance);
+            if (typeof data.pending === "number") setPendingSats(data.pending);
           }
           // On failure: preserve last-known balance (don't flash to 0)
         })
@@ -629,10 +633,11 @@ export function IdentityChip(): React.JSX.Element | null {
       <GoatModeToast visible={showGoatToast} onDismiss={() => setShowGoatToast(false)} />
 
       {/* First-earning save prompt — fires once per device when earnedSats > 0
-          and recovery file hasn't been saved. "Save now" opens the You modal
-          (lands the user on the orange Save banner); both buttons set 48h
-          backoff. Once backedUp flips true, this never re-evaluates true. */}
-      <FirstEarningToast earnedSats={earnedSats} backedUp={backedUp} onSaveNow={openManageModal} />
+          and recovery file hasn't been saved. "Save now" opens ProtectModal
+          directly (the add-a-passphrase flow that emits the encrypted recovery
+          file) — no intermediate You-modal hop. Both buttons set 48h backoff.
+          Once backedUp flips true, this never re-evaluates true. */}
+      <FirstEarningToast earnedSats={earnedSats} backedUp={backedUp} onSaveNow={openProtectModal} />
 
       {/* ── Manage Identity modal ── */}
       {showManage && identity && (
@@ -1543,6 +1548,18 @@ export function IdentityChip(): React.JSX.Element | null {
                   </button>
                 </div>
               </div>
+              {pendingSats !== null && pendingSats > 0 && (
+                <div
+                  className="mt-0.5 text-right text-[11px] text-zinc-500 tabular-nums"
+                  title="Confirming on-chain — spendable in a few minutes"
+                >
+                  +
+                  {isGoat
+                    ? `${pendingSats.toLocaleString()} sats`
+                    : satsToDollars(pendingSats, bsvPrice)}{" "}
+                  pending
+                </div>
+              )}
             </div>
 
             {/* ── Transient banners ── */}

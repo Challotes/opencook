@@ -219,3 +219,17 @@ verified sound; rotation/migration removal left ZERO dangling code references.
   fresh-start launch).
 - Free-boot path attribution still client-trusted (symmetric to Step 7; low —
   free boots are IP-capped + cost nothing); boot_grants.pubkey column naming.
+
+**Device-test follow-ups (2026-06-15) — FIXED:** on-device QA surfaced two money-UX
+(not money-loss — funds were always on-chain) defects:
+- **Balance overstated spendable funds** — `/api/balance` summed confirmed + 0-conf
+  UTXOs (showed ~7,687 vs 5,023 confirmed). Now split: `balance` = confirmed
+  (spendable), `pending` = 0-conf; UI shows spendable headline + muted pending line.
+  FIXED.
+- **Deposit/affordability omitted the network fee** — a paid boot at "balance ≥
+  price" still failed. `clientSideBoot` now surfaces the fee on `insufficient_funds`
+  (the exact `estimateFee(1, outputCount)` threshold the branch tests); FundAddress
+  measures shortfall against price + fee (provably always positive in the
+  insufficient branch). Money-path re-audited PASS — pure value-surfacing, no
+  selection/sign/broadcast change. FIXED. See DECISIONS.md "Balance shows spendable
+  (confirmed), deposit shortfall includes the fee".

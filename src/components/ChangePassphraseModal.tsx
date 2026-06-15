@@ -234,14 +234,14 @@ export function ChangePassphraseModal({
       {/* Backdrop — full-screen click target for dismiss */}
       <button
         type="button"
-        className="fixed inset-0 z-[60] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
+        className="fixed inset-0 z-[70] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
         aria-label="Close modal"
         onClick={handleClose}
       />
 
       {/* Modal — pinned to top of viewport (iOS-native pattern). Does
           NOT track the keyboard; sits above where it slides up. */}
-      <div className="fixed inset-0 z-[60] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
+      <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
         <div
           className="w-full max-w-md rounded-2xl border border-amber-400/20 shadow-2xl overflow-hidden pointer-events-auto animate-[slideUp_0.3s_ease-out_backwards] max-h-[80svh] flex flex-col overflow-y-auto"
           style={{ backgroundColor: "#0f0f0f" }}

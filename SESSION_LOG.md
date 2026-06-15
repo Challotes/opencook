@@ -2,6 +2,38 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-15 — Device-test bug fixes: balance/affordability + modal stacking
+
+Category: bug fixes from real on-device testing. Owner ran a live pass (free boots,
+install, paid boots, deposit) and reported: displayed balance didn't match the
+chain, a paid boot failed "not enough funds" while the balance looked sufficient,
+and two modal bugs. Two read-only agents traced each; all validated against code,
+the money-path fix re-audited (PASS).
+
+**Balance/affordability — one root cause, three symptoms** (balance counted
+unconfirmed UTXOs as spendable + the boot cost omitted the network fee):
+- `/api/balance` now splits UTXOs by height — `balance` = CONFIRMED (spendable),
+  `pending` = 0-conf change/earnings. Summing both overstated spendable funds
+  (chain 5,023 confirmed vs 7,687 displayed). IdentityBar shows the spendable
+  headline + a muted "+X pending" line; the headline now drops right after a boot.
+- Deposit/top-up is fee-aware: `clientSideBoot` surfaces its already-computed
+  network fee on `insufficient_funds` (`estimatedFee`), plumbed useBoot → Feed →
+  FundAddress, which measures shortfall against price + fee. Provably always
+  positive in the insufficient branch, so the modal can't say "you have enough"
+  after a real failure. PostList hover now reads "~<price> sats + network fee".
+  Money-path re-audit: PASS — pure value-surfacing, no change to selection/sign/
+  broadcast/spent-set/0-conf.
+
+**Modal bugs (pure layout/wiring):**
+- "Save your recovery file (you have funds)" toast opens ProtectModal directly
+  (`onSaveNow={openProtectModal}`) — no You-modal hop.
+- ProtectModal + ChangePassphraseModal raised z-[60] → z-[70] so they render ABOVE
+  the You modal (both were painting behind it).
+
+tsc 0, Biome 0, 97/97 tests. NOT a money-loss bug — funds were always accounted
+on-chain; this was display/affordability honesty. Deferred: on-chain split
+verification (confirm each boot paid the right recipients the right amounts).
+
 ## 2026-06-15 — Phase 1 deep-audit + must-fix close-out
 
 Category: audit + fixes. Ran an exhaustive multi-agent deep-audit workflow (map →

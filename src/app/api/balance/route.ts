@@ -8,7 +8,7 @@ const CACHE_MAX = 1000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 400;
 
-type CacheEntry = { balance: number; expires: number };
+type CacheEntry = { confirmed: number; pending: number; expires: number };
 const _balanceCache = new Map<string, CacheEntry>();
 
 export async function GET(request: Request) {
@@ -38,7 +38,12 @@ export async function GET(request: Request) {
   const now = Date.now();
   const cached = _balanceCache.get(address);
   if (!fresh && cached && cached.expires > now) {
-    return Response.json({ balance: cached.balance, cached: true });
+    return Response.json({
+      balance: cached.confirmed,
+      confirmed: cached.confirmed,
+      pending: cached.pending,
+      cached: true,
+    });
   }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -47,17 +52,28 @@ export async function GET(request: Request) {
 
       if (res.ok) {
         const utxos = await res.json();
-        const balance = Array.isArray(utxos)
-          ? utxos.reduce((s: number, u: { value: number }) => s + u.value, 0)
-          : 0;
+        // WhatsOnChain reports height 0 for mempool/unconfirmed UTXOs and a real
+        // block height once mined. Only confirmed coins are reliably spendable for
+        // a boot tx, so we split them: `balance` reports CONFIRMED (spendable) and
+        // `pending` reports 0-conf change/earnings still landing. Summing both (the
+        // old behaviour) overstated spendable funds and made boots look affordable
+        // when they weren't. See SECURITY_AUDIT Phase-1 Deep-Audit balance-display.
+        let confirmed = 0;
+        let pending = 0;
+        if (Array.isArray(utxos)) {
+          for (const u of utxos as Array<{ value: number; height: number }>) {
+            if (u.height && u.height > 0) confirmed += u.value;
+            else pending += u.value;
+          }
+        }
 
         if (_balanceCache.size >= CACHE_MAX) {
           const oldest = _balanceCache.keys().next().value;
           if (oldest) _balanceCache.delete(oldest);
         }
-        _balanceCache.set(address, { balance, expires: now + CACHE_TTL_MS });
+        _balanceCache.set(address, { confirmed, pending, expires: now + CACHE_TTL_MS });
 
-        return Response.json({ balance, cached: false });
+        return Response.json({ balance: confirmed, confirmed, pending, cached: false });
       }
 
       // 429 or 5xx — retry, but serve stale on last attempt
@@ -67,7 +83,13 @@ export async function GET(request: Request) {
           continue;
         }
         if (cached) {
-          return Response.json({ balance: cached.balance, cached: true, stale: true });
+          return Response.json({
+            balance: cached.confirmed,
+            confirmed: cached.confirmed,
+            pending: cached.pending,
+            cached: true,
+            stale: true,
+          });
         }
         return new Response(JSON.stringify({ error: "upstream_busy" }), {
           status: 503,
@@ -87,7 +109,13 @@ export async function GET(request: Request) {
   }
 
   if (cached) {
-    return Response.json({ balance: cached.balance, cached: true, stale: true });
+    return Response.json({
+      balance: cached.confirmed,
+      confirmed: cached.confirmed,
+      pending: cached.pending,
+      cached: true,
+      stale: true,
+    });
   }
   return new Response(JSON.stringify({ error: "fetch_failed" }), {
     status: 502,
