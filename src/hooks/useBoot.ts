@@ -65,6 +65,19 @@ export function useBoot(opts: UseBootOptions = {}) {
         // Try server-side boot first (handles free boots)
         const result = await bootPost(postId, identity.address, identity.name);
 
+        if (result.indeterminate) {
+          // The server broadcast timed out — the free boot MAY have landed on-chain.
+          // Do NOT show a retry: a retry rebuilds a NEW tx and double-pays this post.
+          // Release quietly; the grant was already consumed server-side, and the
+          // feed poll surfaces the boot if it landed. See Phase 2 Build A.
+          clearTimeout(extendedTimer);
+          clearTimeout(preparingTimer);
+          onFreeBootUsed?.();
+          onBooted?.();
+          releaseBoot();
+          return { success: false };
+        }
+
         if (result.error) {
           clearTimeout(extendedTimer);
           clearTimeout(preparingTimer);

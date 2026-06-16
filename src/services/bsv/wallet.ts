@@ -45,6 +45,51 @@ export function getServerAddress(): string | null {
   return key.toPublicKey().toAddress().toString();
 }
 
+// ── Network timeouts (Phase 2 Build A) ─────────────────────────
+// All four external calls below run INSIDE the wallet mutex, so an unbounded
+// hang would wedge EVERY free boot + post-logging site-wide until the socket
+// died. Read calls abort + fail safe (no money moved). The broadcast timeout is
+// treated as INDETERMINATE — see buildAndBroadcast.
+const READ_TIMEOUT_MS = 10_000;
+const BROADCAST_TIMEOUT_MS = 30_000;
+
+class TimeoutError extends Error {
+  constructor() {
+    super("operation timed out");
+    this.name = "TimeoutError";
+  }
+}
+
+/** fetch() with an AbortController deadline — aborts the request on timeout. */
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Race a promise against a deadline. Rejects with TimeoutError on timeout — the
+ *  underlying promise is NOT cancelled (used for tx.broadcast(), where a timeout
+ *  is indeterminate, not a cancellation: the tx may still land at ARC). */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new TimeoutError()), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
 // ── UTXO Types ──────────────────────────────────────────────
 
 interface UTXO {
@@ -58,6 +103,9 @@ export type BroadcastResult =
   | { status: "success"; txid: string }
   | { status: "insufficient_funds" }
   | { status: "broadcast_failed"; error: string }
+  // Broadcast timed out — INDETERMINATE: the tx may have landed at ARC. Callers
+  // MUST treat this as terminal (no rebuild, no refund). See buildAndBroadcast.
+  | { status: "broadcast_timeout" }
   | { status: "no_wallet" };
 
 // ── UTXO Manager ────────────────────────────────────────────
@@ -86,7 +134,10 @@ export async function getUtxos(neededSats?: number): Promise<UTXO[]> {
   }
 
   try {
-    const res = await fetch(`https://api.whatsonchain.com/v1/bsv/main/address/${address}/unspent`);
+    const res = await fetchWithTimeout(
+      `https://api.whatsonchain.com/v1/bsv/main/address/${address}/unspent`,
+      READ_TIMEOUT_MS
+    );
     if (!res.ok) return [..._pendingChange];
     const confirmed = (await res.json()) as UTXO[];
 
@@ -164,7 +215,10 @@ async function getSourceTransaction(utxo: UTXO): Promise<Transaction | null> {
   if (utxo.sourceTransaction) return utxo.sourceTransaction;
 
   try {
-    const res = await fetch(`https://api.whatsonchain.com/v1/bsv/main/tx/${utxo.tx_hash}/hex`);
+    const res = await fetchWithTimeout(
+      `https://api.whatsonchain.com/v1/bsv/main/tx/${utxo.tx_hash}/hex`,
+      READ_TIMEOUT_MS
+    );
     if (!res.ok) {
       console.error(`BSVibes wallet: WoC /tx/hex returned ${res.status} for ${utxo.tx_hash}`);
       return null;
@@ -264,7 +318,28 @@ async function _buildAndBroadcastInner(
       hasChangeOutput = false;
     }
 
-    const broadcastResult = await tx.broadcast();
+    let broadcastResult: Awaited<ReturnType<typeof tx.broadcast>>;
+    try {
+      broadcastResult = await withTimeout(tx.broadcast(), BROADCAST_TIMEOUT_MS);
+    } catch (e) {
+      if (e instanceof TimeoutError) {
+        // A broadcast timeout is INDETERMINATE — ARC may have accepted the tx and
+        // simply responded slowly. We must NEVER rebuild here: a fresh tx = a new
+        // txid = the server DOUBLE-PAYS. Release the RESERVATION (do NOT blacklist
+        // the inputs: WhatsOnChain reflects on-chain reality, the change output —
+        // if the tx landed — resurfaces via WoC, and any rare stale-WoC reuse is
+        // caught by the double-spend self-heal below). Return a distinct terminal
+        // status; callers must not retry or refund. See DECISIONS.md "Free-boot
+        // path consumes the grant BEFORE paying" + Phase 2 Build A.
+        const txid = tx.id("hex") as string;
+        releaseUtxos(utxos);
+        console.error(
+          `BSVibes wallet: broadcast TIMEOUT (indeterminate) txid=${txid} — not rebuilding (tx may have landed)`
+        );
+        return { status: "broadcast_timeout" };
+      }
+      throw e; // non-timeout rejection → handled by the outer catch (broadcast_failed)
+    }
 
     if (broadcastResult.status === "success") {
       const txid = tx.id("hex") as string;
@@ -320,7 +395,10 @@ async function _buildAndBroadcastInner(
       );
       for (const competingTxid of dsResult.more.competingTxs) {
         try {
-          const txRes = await fetch(`https://api.whatsonchain.com/v1/bsv/main/tx/${competingTxid}`);
+          const txRes = await fetchWithTimeout(
+            `https://api.whatsonchain.com/v1/bsv/main/tx/${competingTxid}`,
+            READ_TIMEOUT_MS
+          );
           if (txRes.ok) {
             const txData = (await txRes.json()) as { vin?: Array<{ txid: string; vout: number }> };
             for (const input of txData.vin ?? []) {

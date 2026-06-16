@@ -234,6 +234,18 @@ verified sound; rotation/migration removal left ZERO dangling code references.
   selection/sign/broadcast change. FIXED. See DECISIONS.md "Balance shows spendable
   (confirmed), deposit shortfall includes the fee".
 
+**Phase 2 Build A (2026-06-16) — server-wallet in-mutex timeouts — FIXED.** The
+server wallet held its mutex across 4 un-timed external calls (unspent fetch,
+source-tx-hex fetch, `tx.broadcast()`, double-spend lookup); any hang froze ALL
+free boots + post-logging site-wide until the socket died (a self-DoS / liveness
+hole). FIXED: 10s timeouts on the read calls (abort + fail-safe) + a 30s broadcast
+timeout. The broadcast timeout is treated as INDETERMINATE and NEVER rebuilds —
+a rebuild would mint a new txid and double-pay the server wallet — so it returns a
+terminal `broadcast_timeout` that no retry path re-runs (the grant stays consumed,
+not refunded; the UI shows no "tap to retry"). Auditor-verified money-safe (mutex
+always releases, no rebuild reachable, no control weakened). See DECISIONS.md
+"Broadcast timeout is INDETERMINATE — never rebuild". Builds B/C/D pending.
+
 **On-chain money-integrity verification (2026-06-15) — PASS.** Independent
 adversarial audit of all 29 mainnet `boot_split` txs for the test address against
 the fairness config: every boot conserves value (Σinputs = Σoutputs + miner fee),

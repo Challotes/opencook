@@ -19,6 +19,10 @@ export interface BootResult {
   recipients: number;
   error?: string;
   isFree: boolean;
+  // The broadcast TIMED OUT — the boot MAY have landed on-chain. Terminal: the
+  // grant is already consumed and is NOT refunded, and the caller MUST NOT retry
+  // (a retry rebuilds a new tx → the server double-pays). See Phase 2 Build A.
+  indeterminate?: boolean;
 }
 
 /**
@@ -153,19 +157,27 @@ export async function executeBoot(
     if (result.status === "success") {
       txid = result.txid;
     } else {
+      // A broadcast TIMEOUT is indeterminate (the tx may have landed); any other
+      // status means it definitively did not broadcast. Both are terminal here.
+      const indeterminate = result.status === "broadcast_timeout";
       const errorDetail = result.status === "broadcast_failed" ? result.error : result.status;
-      console.error(`BSVibes: boot split broadcast FAILED for post ${postId}: ${errorDetail}`);
+      console.error(
+        `BSVibes: boot split broadcast ${indeterminate ? "TIMED OUT (indeterminate)" : "FAILED"} for post ${postId}: ${errorDetail}`
+      );
       // Step 8: the free grant was ALREADY consumed before this broadcast and is
-      // deliberately NOT refunded here — a broadcast failure is ambiguous (the tx
-      // may have reached the mempool), so refunding could re-open the double-pay.
-      // The user loses one free boot; the server pays at most once (the accepted
-      // tradeoff in DECISIONS.md "consume the grant BEFORE paying").
+      // deliberately NOT refunded here — a broadcast failure/timeout is ambiguous
+      // (the tx may have reached the mempool), so refunding could re-open the
+      // double-pay. The user loses one free boot; the server pays at most once
+      // (the accepted tradeoff in DECISIONS.md "consume the grant BEFORE paying").
       return {
         success: false,
         price: actualPrice,
         recipients: 0,
-        error: `Broadcast failed: ${errorDetail}`,
+        error: indeterminate
+          ? "Boost submitted but not yet confirmed"
+          : `Broadcast failed: ${errorDetail}`,
         isFree,
+        indeterminate,
       };
     }
   }

@@ -2,6 +2,14 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-16 — Phase 2 Build A: server-wallet in-mutex timeouts
+
+Category: server resilience (money path). Phase 2 kicked off after a 2-agent scope (map current state + money-safety red-team). Owner decided: dry wallet → route free→paid; kill-switch = env var v1; start with timeouts.
+
+- **Problem:** the server wallet held its mutex across 4 un-timed external calls — one hang (slow ARC/WoC) froze ALL free boots + post-logging site-wide until the socket died.
+- **Build A (DONE, auditor-verified PASS):** added `fetchWithTimeout` (AbortController, 10s) to the 3 read calls and `withTimeout` (30s) to `tx.broadcast()` in `wallet.ts`. The broadcast timeout is INDETERMINATE → new terminal status `broadcast_timeout`: releases the reservation, does NOT blacklist inputs or register change, NEVER rebuilds (rebuild = new txid = double-pay). Skipped in both retry sites (`boot-payment.ts` 1s retry, `onchain.ts` post-log retry). Threaded `indeterminate` through orchestrator → `bootPost` (returns it with NO error) → `useBoot` (releases quietly, NO "tap to retry" — a manual retry would also double-pay). Grant consumed pre-broadcast, not refunded (matches "consume the grant BEFORE paying"). Files: `wallet.ts`, `boot-payment.ts`, `onchain.ts`, `boot-orchestrator.ts`, `actions.ts`, `useBoot.ts`. tsc 0, Biome 0, 97/97 tests. DECISIONS + SECURITY_AUDIT + ROADMAP updated.
+- **NEXT:** Build B (pre-consume balance precheck → route free→paid + low-balance alert — fixes the dry-wallet grant-burn), Build C (env-var kill-switch `BSV_WALLET_SPEND_DISABLED`, fail-closed, pre-consume), Build D (broadcast proxy, optional).
+
 ## 2026-06-16 — Doc-sync pass (3-agent MD audit)
 
 Category: docs (no money-path code touched).

@@ -195,6 +195,10 @@ export interface BootPostResult {
   bootPrice?: number;
   // Present on failure
   error?: string;
+  // Free-boot broadcast timed out — the boot MAY have landed. The client must
+  // treat this as "submitted" and NOT offer a retry (a retry double-pays). No
+  // `error` is set so the client doesn't show a failure/retry. Phase 2 Build A.
+  indeterminate?: boolean;
 }
 
 export async function bootPost(
@@ -253,6 +257,13 @@ export async function bootPost(
   const processingMs = Math.round((performance.now() - start) * 100) / 100;
 
   if (!result.success) {
+    // Broadcast timed out — the free boot MAY have landed on-chain. Signal the
+    // client it's "submitted" (NO error → no "tap to retry", which would rebuild
+    // a new tx and double-pay this post). The grant is already consumed; the feed
+    // poll surfaces the boot if it landed. See Phase 2 Build A.
+    if (result.indeterminate) {
+      return { processingMs, indeterminate: true, isFree: true };
+    }
     // Step 8: the free grant was exhausted concurrently (another in-flight boot
     // consumed the last slot between the check above and executeBoot's atomic
     // consume) — executeBoot signals this with isFree:false. Route to the paid

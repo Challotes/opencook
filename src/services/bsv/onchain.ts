@@ -6,7 +6,7 @@
 import type { LockingScript } from "@bsv/sdk";
 import { OP, Script } from "@bsv/sdk";
 import { onchainRecord } from "@/lib/onchain-record";
-import { buildAndBroadcast } from "./wallet";
+import { type BroadcastResult, buildAndBroadcast } from "./wallet";
 
 interface PostData {
   content: string;
@@ -22,7 +22,7 @@ interface PostData {
  * Failures are non-fatal — the post still exists in SQLite.
  */
 export async function logPostOnChain(postData: PostData): Promise<string | null> {
-  const attempt = async (): Promise<string | null> => {
+  const attempt = async (): Promise<BroadcastResult> => {
     const payload = onchainRecord("post", {
       content: postData.content,
       author: postData.author,
@@ -36,24 +36,29 @@ export async function logPostOnChain(postData: PostData): Promise<string | null>
     opReturnScript.writeOpCode(OP.OP_RETURN);
     opReturnScript.writeBin(Array.from(new TextEncoder().encode(payload)));
 
-    const result = await buildAndBroadcast([
+    return buildAndBroadcast([
       {
         lockingScript: opReturnScript as LockingScript,
         satoshis: 0,
       },
     ]);
-
-    return result.status === "success" ? result.txid : null;
   };
 
   try {
-    const txid = await attempt();
-    if (txid) return txid;
+    const result = await attempt();
+    if (result.status === "success") return result.txid;
+
+    // A broadcast TIMEOUT is indeterminate (the OP_RETURN may have landed) — do
+    // NOT retry, or we'd write a duplicate on-chain record and pay a second fee.
+    // Other failures did not broadcast, so the 1s retry below is safe. (Post
+    // logging is fire-and-forget; the post already exists in SQLite either way.)
+    if (result.status === "broadcast_timeout") return null;
 
     // First attempt failed — wait 1s and retry once with fresh UTXO state.
     // The mutex ensures the retry waits for any in-flight transaction to finish.
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    return await attempt();
+    const retry = await attempt();
+    return retry.status === "success" ? retry.txid : null;
   } catch (e) {
     console.error("BSVibes: on-chain logging failed", e);
     return null;

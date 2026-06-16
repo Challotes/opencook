@@ -89,6 +89,14 @@ export async function buildSplitTransaction(
   const result = await buildAndBroadcast(outputs);
   if (result.status === "success") return result;
 
+  // A broadcast TIMEOUT is INDETERMINATE (the tx may have landed at ARC) — NEVER
+  // retry, because the retry rebuilds a NEW tx and the server would DOUBLE-PAY.
+  // Return it as terminal; executeBoot treats it as no-refund/no-rebuild (the
+  // grant was already consumed). The other failures (insufficient_funds, source-tx
+  // fetch failure, ARC rejection) did NOT broadcast, so the 1s retry below is safe.
+  // See DECISIONS.md "Free-boot path consumes the grant BEFORE paying" + Phase 2.
+  if (result.status === "broadcast_timeout") return result;
+
   // First attempt failed — wait 1s and retry once with fresh UTXO state.
   // The mutex ensures the retry waits for any in-flight transaction to finish.
   // Common cause: stale WoC data returned an already-spent UTXO.
