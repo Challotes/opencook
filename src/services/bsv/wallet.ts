@@ -45,6 +45,19 @@ export function getServerAddress(): string | null {
   return key.toPublicKey().toAddress().toString();
 }
 
+/**
+ * Phase 2 Build C — server-wallet kill-switch. When BSV_WALLET_SPEND_DISABLED is
+ * truthy ("true"/"1"), the server wallet refuses to spend: free boots route to
+ * PAID (checked pre-consume in executeBoot, so no grant is consumed) and
+ * post-logging is skipped. Trips via an env var (needs a redeploy); a DB-backed
+ * instant runtime toggle is the documented fast-follow. Paid/client boots are
+ * UNAFFECTED — they spend the user's own funds, not the server wallet.
+ */
+export function isServerSpendDisabled(): boolean {
+  const v = (process.env.BSV_WALLET_SPEND_DISABLED ?? "").trim().toLowerCase();
+  return v === "true" || v === "1";
+}
+
 // ── Network timeouts (Phase 2 Build A) ─────────────────────────
 // All four external calls below run INSIDE the wallet mutex, so an unbounded
 // hang would wedge EVERY free boot + post-logging site-wide until the socket
@@ -106,6 +119,8 @@ export type BroadcastResult =
   // Broadcast timed out — INDETERMINATE: the tx may have landed at ARC. Callers
   // MUST treat this as terminal (no rebuild, no refund). See buildAndBroadcast.
   | { status: "broadcast_timeout" }
+  // Server spending is disabled via the BSV_WALLET_SPEND_DISABLED kill-switch.
+  | { status: "spend_disabled" }
   | { status: "no_wallet" };
 
 /** Fee buffer reserved on top of the output total when selecting UTXOs. Exported
@@ -248,6 +263,16 @@ async function getSourceTransaction(utxo: UTXO): Promise<Transaction | null> {
 export async function buildAndBroadcast(
   outputs: Array<{ lockingScript: LockingScript; satoshis: number }>
 ): Promise<BroadcastResult> {
+  // Kill-switch backstop (Build C). Free boots are already routed to paid
+  // pre-consume in executeBoot; this also stops post-logging and any other server
+  // spend that reaches the wallet directly.
+  if (isServerSpendDisabled()) {
+    console.warn(
+      "BSVibes wallet: spending DISABLED (BSV_WALLET_SPEND_DISABLED) — refusing to broadcast"
+    );
+    return { status: "spend_disabled" };
+  }
+
   const key = getServerKey();
   if (!key) {
     console.error("BSVibes wallet: no BSV_SERVER_WIF configured");

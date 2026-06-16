@@ -1,7 +1,7 @@
 import { PrivateKey } from "@bsv/sdk";
 import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getServerAddress } from "@/services/bsv/wallet";
+import { getBalance, getServerAddress, isServerSpendDisabled } from "@/services/bsv/wallet";
 import { executeBoot } from "./boot-orchestrator";
 import { buildSplitTransaction } from "./boot-payment";
 import { getBootPrice, getBootPriceForUser } from "./pricing";
@@ -67,6 +67,10 @@ describe("executeBoot — free-boot idempotency (Step 8)", () => {
     );
     vi.mocked(getServerAddress).mockReturnValue(platformAddress);
     vi.mocked(getBootPrice).mockReturnValue(1000);
+    // Build B/C defaults: ample server balance + kill-switch OFF, so the
+    // pre-consume prechecks pass and the normal path runs unless a test overrides.
+    vi.mocked(getBalance).mockResolvedValue(1_000_000);
+    vi.mocked(isServerSpendDisabled).mockReturnValue(false);
     // Realistic free check that reads the DB (so the consume guard is exercised).
     vi.mocked(getBootPriceForUser).mockImplementation((database, addr) => {
       const used = freeBootsUsed(database as InstanceType<typeof Database>, addr);
@@ -141,5 +145,19 @@ describe("executeBoot — free-boot idempotency (Step 8)", () => {
     expect(buildSplitTransaction).not.toHaveBeenCalled();
     // Grant unchanged (not over-incremented).
     expect(freeBootsUsed(db, booter)).toBe(FREE_LIMIT);
+  });
+
+  it("routes to paid (isFree:false) without broadcasting when server spending is disabled (kill-switch, Build C)", async () => {
+    vi.mocked(isServerSpendDisabled).mockReturnValue(true);
+
+    const result = await executeBoot(db, 1, booter, "anon_booter");
+
+    expect(result.success).toBe(false);
+    expect(result.isFree).toBe(false);
+    expect(result.error).toBe("SERVER_SPEND_DISABLED");
+    // Checked PRE-consume: the server wallet is never spent and the free grant is
+    // never consumed (tripping the switch must not strand a grant).
+    expect(buildSplitTransaction).not.toHaveBeenCalled();
+    expect(grant(db, booter)).toEqual({ free_boots_used: 0, total_boots: 0 });
   });
 });

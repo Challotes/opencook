@@ -257,6 +257,16 @@ Auditor-verified: no grant-burn path, no fail-open, precheck strictly before the
 consume. See DECISIONS.md "Dry server wallet routes free boots to paid". Builds C/D
 pending.
 
+**Phase 2 Build C (2026-06-16) — server-wallet kill-switch — ADDED.** `BSV_WALLET_SPEND_DISABLED`
+(`isServerSpendDisabled()` in `wallet.ts`) halts ALL server-wallet spending in an
+emergency: free boots route to PAID pre-consume (no grant burned), post-logging is
+skipped via a `buildAndBroadcast` backstop. Paid/client boots are NOT gated (they
+spend the user's funds; boot-confirm re-broadcast uses `parsed.broadcast()`, not the
+gated path). Fail-closed (tripped = stops spending); env var (redeploy) with a
+DB-backed runtime toggle as fast-follow. Unit-tested + auditor-verified PASS (no grant
+burned, no paid-path over-reach). See DECISIONS.md "Server-wallet kill-switch". Build
+D (broadcast proxy) optional/pending.
+
 **On-chain money-integrity verification (2026-06-15) — PASS.** Independent
 adversarial audit of all 29 mainnet `boot_split` txs for the test address against
 the fairness config: every boot conserves value (Σinputs = Σoutputs + miner fee),

@@ -95,7 +95,7 @@ export async function buildSplitTransaction(
   // grant was already consumed). The other failures (insufficient_funds, source-tx
   // fetch failure, ARC rejection) did NOT broadcast, so the 1s retry below is safe.
   // See DECISIONS.md "Free-boot path consumes the grant BEFORE paying" + Phase 2.
-  if (result.status === "broadcast_timeout") return result;
+  if (result.status === "broadcast_timeout" || result.status === "spend_disabled") return result;
 
   // First attempt failed — wait 1s and retry once with fresh UTXO state.
   // The mutex ensures the retry waits for any in-flight transaction to finish.

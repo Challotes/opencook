@@ -198,6 +198,7 @@ BootButton/useBoot → bootPost server action → server wallet builds split tx 
 - **Environment variables.** See `.env.example` for the full list with inline comments. Highlights:
   - `ANTHROPIC_API_KEY` — required for AI agent chat (`/api/agent`)
   - `BSV_SERVER_WIF` — required for on-chain post logging (OP_RETURN). Without it, posts save to DB only with no on-chain fingerprint.
+  - `BSV_WALLET_SPEND_DISABLED` — kill-switch (Phase 2 Build C). Set to `true`/`1` to halt ALL server-wallet spending in an emergency (wallet draining / WIF leaked). Free boots transparently route to PAID (no grant consumed — checked pre-consume in `executeBoot`), post-logging is skipped. Paid/client boots are UNAFFECTED. Env var = takes effect on redeploy (a DB-backed instant runtime toggle is a documented fast-follow). Default (unset) = spending enabled. See `wallet.ts` `isServerSpendDisabled()`.
   - `DATABASE_PATH` — defaults to `./local.db`. Railway: set to `/data/local.db` with a mounted volume.
   - `PORT` — Railway sets this automatically. Vercel ignores it.
 

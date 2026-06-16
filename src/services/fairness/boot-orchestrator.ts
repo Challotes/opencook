@@ -5,7 +5,12 @@
  */
 
 import type BetterSqlite3 from "better-sqlite3";
-import { getBalance, getServerAddress, SERVER_FEE_BUFFER_SATS } from "@/services/bsv/wallet";
+import {
+  getBalance,
+  getServerAddress,
+  isServerSpendDisabled,
+  SERVER_FEE_BUFFER_SATS,
+} from "@/services/bsv/wallet";
 import { buildSplitTransaction } from "./boot-payment";
 import { FAIRNESS_CONFIG } from "./config";
 import { getBootPrice, getBootPriceForUser } from "./pricing";
@@ -127,6 +132,23 @@ export async function executeBoot(
   //    protection > one free boot. Deliberately reverses the old C5 bias for this
   //    server-funded path (SECURITY_AUDIT.md C5).
   if (isFree) {
+    // Build C: kill-switch. If server spending is disabled, route free boots to
+    // PAID BEFORE consuming the grant (so tripping the switch never strands a
+    // grant). Paid/client boots are unaffected — they spend the user's own funds.
+    // Fail-closed by design: when tripped, the server simply stops spending.
+    if (isServerSpendDisabled()) {
+      console.warn(
+        `BSVibes: server spending DISABLED — routing free boot for post ${postId} to paid`
+      );
+      return {
+        success: false,
+        price: getBootPrice(db),
+        recipients: 0,
+        error: "SERVER_SPEND_DISABLED",
+        isFree: false,
+      };
+    }
+
     // Build B: pre-consume balance precheck. NEVER consume a free grant for a boot
     // the server can't pay. Read the spendable balance; if it can't cover price +
     // fee, route to PAID (client-funded) BEFORE consuming the grant. Fails toward

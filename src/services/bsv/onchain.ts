@@ -52,7 +52,7 @@ export async function logPostOnChain(postData: PostData): Promise<string | null>
     // NOT retry, or we'd write a duplicate on-chain record and pay a second fee.
     // Other failures did not broadcast, so the 1s retry below is safe. (Post
     // logging is fire-and-forget; the post already exists in SQLite either way.)
-    if (result.status === "broadcast_timeout") return null;
+    if (result.status === "broadcast_timeout" || result.status === "spend_disabled") return null;
 
     // First attempt failed — wait 1s and retry once with fresh UTXO state.
     // The mutex ensures the retry waits for any in-flight transaction to finish.
