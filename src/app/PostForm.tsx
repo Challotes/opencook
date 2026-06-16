@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { InstallBookmark } from "@/components/InstallBookmark";
+import { PermanenceGate } from "@/components/PermanenceGate";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { AgentChat } from "./AgentChat";
 import { createPost } from "./actions";
@@ -37,6 +38,12 @@ export function PostForm({
   // border pulse once identity arrives, so the user knows their draft is
   // waiting and can hit Enter to send.
   const wantedToPostRef = useRef(false);
+  // One-time permanence acknowledgement gate, shown before the user's FIRST post.
+  const [showPermanenceGate, setShowPermanenceGate] = useState(false);
+  const pendingPostRef = useRef<{
+    identity: NonNullable<typeof identity>;
+    content: string;
+  } | null>(null);
 
   // Clean up recognition on unmount
   useEffect(() => {
@@ -96,6 +103,16 @@ export function PostForm({
 
     if (!requireIdentity() || !identity) {
       wantedToPostRef.current = true;
+      return;
+    }
+
+    // One-time permanence acknowledgement before the user's first permanent
+    // on-chain post (Phase 3 surfacing). After they confirm once, never again.
+    const acked =
+      typeof window !== "undefined" && localStorage.getItem("bsvibes_permanence_ack") === "1";
+    if (!acked) {
+      pendingPostRef.current = { identity, content: trimmed };
+      setShowPermanenceGate(true);
       return;
     }
 
@@ -411,6 +428,25 @@ export function PostForm({
           <AgentChat highlight={agentHighlight} />
         </div>
       </div>
+      {showPermanenceGate && (
+        <PermanenceGate
+          onConfirm={() => {
+            try {
+              localStorage.setItem("bsvibes_permanence_ack", "1");
+            } catch {
+              /* localStorage unavailable — gate re-appears next attempt, acceptable */
+            }
+            const pending = pendingPostRef.current;
+            pendingPostRef.current = null;
+            setShowPermanenceGate(false);
+            if (pending) performSubmit(pending.identity, pending.content);
+          }}
+          onCancel={() => {
+            pendingPostRef.current = null;
+            setShowPermanenceGate(false);
+          }}
+        />
+      )}
     </form>
   );
 }

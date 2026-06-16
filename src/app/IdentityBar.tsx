@@ -1581,6 +1581,17 @@ export function IdentityChip(): React.JSX.Element | null {
                 </button>
               </div>
             )}
+
+            {/* Legal links (Phase 3 surfacing) */}
+            <div className="flex items-center justify-center gap-2 px-3 py-2.5 text-[10px] text-zinc-600">
+              <a href="/terms" className="transition-colors hover:text-zinc-400">
+                Terms
+              </a>
+              <span>·</span>
+              <a href="/privacy" className="transition-colors hover:text-zinc-400">
+                Privacy
+              </a>
+            </div>
           </div>
         )}
       </div>
