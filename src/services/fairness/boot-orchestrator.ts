@@ -5,7 +5,7 @@
  */
 
 import type BetterSqlite3 from "better-sqlite3";
-import { getServerAddress } from "@/services/bsv/wallet";
+import { getBalance, getServerAddress, SERVER_FEE_BUFFER_SATS } from "@/services/bsv/wallet";
 import { buildSplitTransaction } from "./boot-payment";
 import { FAIRNESS_CONFIG } from "./config";
 import { getBootPrice, getBootPriceForUser } from "./pricing";
@@ -23,6 +23,21 @@ export interface BootResult {
   // grant is already consumed and is NOT refunded, and the caller MUST NOT retry
   // (a retry rebuilds a new tx → the server double-pays). See Phase 2 Build A.
   indeterminate?: boolean;
+}
+
+// Build B: proactive low-balance alert. Greppable console warning when the server
+// wallet drops below the alert threshold — fires BEFORE the wallet is empty so the
+// operator has runway to top up. Alert-only (never blocks a boot). Debounced to
+// avoid spamming on a burst. Real alerting (webhook/email) is a Phase 5 follow-up.
+let _lastLowBalanceAlertAt = 0;
+function maybeAlertLowBalance(spendableSats: number): void {
+  if (spendableSats >= FAIRNESS_CONFIG.serverLowBalanceAlertSats) return;
+  const now = Date.now();
+  if (now - _lastLowBalanceAlertAt < 5 * 60_000) return; // debounce: once per 5 min
+  _lastLowBalanceAlertAt = now;
+  console.warn(
+    `[BSVibes ALERT] Server wallet low: ${spendableSats} sats spendable (< ${FAIRNESS_CONFIG.serverLowBalanceAlertSats}). Free boots route to paid once a boot can't be covered. Top up the BSV_SERVER_WIF address.`
+  );
 }
 
 /**
@@ -112,6 +127,28 @@ export async function executeBoot(
   //    protection > one free boot. Deliberately reverses the old C5 bias for this
   //    server-funded path (SECURITY_AUDIT.md C5).
   if (isFree) {
+    // Build B: pre-consume balance precheck. NEVER consume a free grant for a boot
+    // the server can't pay. Read the spendable balance; if it can't cover price +
+    // fee, route to PAID (client-funded) BEFORE consuming the grant. Fails toward
+    // PAID — a WoC read failure reads low → paid, never fail-open into a doomed
+    // broadcast that would burn the grant (the old dry-wallet bug). Also emits the
+    // proactive low-balance alert. See DECISIONS.md "Dry server wallet routes free
+    // boots to paid" + Phase 2 Build B.
+    const spendable = await getBalance();
+    maybeAlertLowBalance(spendable);
+    if (spendable < actualPrice + SERVER_FEE_BUFFER_SATS) {
+      console.warn(
+        `BSVibes: server wallet can't cover free boot for post ${postId} (${spendable} < ${actualPrice + SERVER_FEE_BUFFER_SATS} sats) — routing to paid`
+      );
+      return {
+        success: false,
+        price: getBootPrice(db),
+        recipients: 0,
+        error: "SERVER_WALLET_LOW",
+        isFree: false,
+      };
+    }
+
     const consumed = db.transaction(() => {
       const row = db
         .prepare("SELECT free_boots_used FROM boot_grants WHERE pubkey = ?")

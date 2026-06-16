@@ -246,6 +246,17 @@ not refunded; the UI shows no "tap to retry"). Auditor-verified money-safe (mute
 always releases, no rebuild reachable, no control weakened). See DECISIONS.md
 "Broadcast timeout is INDETERMINATE — never rebuild". Builds B/C/D pending.
 
+**Phase 2 Build B (2026-06-16) — dry-wallet grant-burn — FIXED.** A dry server
+wallet used to consume the user's free-boot grant THEN fail at broadcast with no
+refund (grant burned + error). FIXED: a pre-consume balance precheck in `executeBoot`
+routes free boots to PAID before consuming the grant when the wallet can't cover
+`price + fee` — fails toward paid (a WoC read failure reads low → paid, never
+fail-open), fee-buffer-synced (`SERVER_FEE_BUFFER_SATS`) so it can't green-light-then-
+burn. Plus a debounced low-balance console alert (`serverLowBalanceAlertSats` = 10k).
+Auditor-verified: no grant-burn path, no fail-open, precheck strictly before the
+consume. See DECISIONS.md "Dry server wallet routes free boots to paid". Builds C/D
+pending.
+
 **On-chain money-integrity verification (2026-06-15) — PASS.** Independent
 adversarial audit of all 29 mainnet `boot_split` txs for the test address against
 the fairness config: every boot conserves value (Σinputs = Σoutputs + miner fee),

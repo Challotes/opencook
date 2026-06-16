@@ -108,6 +108,13 @@ export type BroadcastResult =
   | { status: "broadcast_timeout" }
   | { status: "no_wallet" };
 
+/** Fee buffer reserved on top of the output total when selecting UTXOs. Exported
+ *  so the free-boot balance precheck (boot-orchestrator, Build B) uses the SAME
+ *  figure the broadcast path needs — keeps "can the wallet cover this boot?" in
+ *  sync with reserveUtxos so the precheck never green-lights a boot that would
+ *  then hit insufficient_funds and burn the grant. */
+export const SERVER_FEE_BUFFER_SATS = 500;
+
 // ── UTXO Manager ────────────────────────────────────────────
 
 const _reserved = new Set<string>();
@@ -265,7 +272,7 @@ async function _buildAndBroadcastInner(
   outputs: Array<{ lockingScript: LockingScript; satoshis: number }>,
   retryCount = 0
 ): Promise<BroadcastResult> {
-  const totalNeeded = outputs.reduce((sum, o) => sum + o.satoshis, 0) + 500; // +500 for estimated fee
+  const totalNeeded = outputs.reduce((sum, o) => sum + o.satoshis, 0) + SERVER_FEE_BUFFER_SATS;
   const utxos = await reserveUtxos(totalNeeded);
 
   if (!utxos) {

@@ -16,5 +16,9 @@ export const FAIRNESS_CONFIG = {
   priceCacheTtlMs: 60 * 60 * 1000,
   activeWindowDays: 30,
   freeBootsPerUser: 15,
+  // Server-wallet ops threshold (Phase 2 Build B): emit a low-balance alert when
+  // the server wallet's spendable balance drops below this, so the operator can
+  // top up BEFORE free boots start routing to paid.
+  serverLowBalanceAlertSats: 10_000,
   formulaVersion: "0.1.0",
 } as const;
