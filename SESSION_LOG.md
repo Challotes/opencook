@@ -2,6 +2,14 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-16 — Phase 3 (governance) right-sized + thin content filter
+
+Category: governance / product strategy + a small eng guard. Scoped with 2 agents (legal-risk + moderation/eng). A strategic discussion with the owner RIGHT-SIZED Phase 3 around a free-speech / censorship-resistant ethos:
+
+- **Decision (DECISIONS.md "Thin-core content moderation … REFINED 2026-06-16"):** posts STAY on-chain (provable timestamped attribution is the product). NO editorial/opinion moderation, NO hidden-flag/admin/report apparatus (handle the rare display case by hand). The ONE launch guard is a pre-publish filter scoped to the ILLEGAL FLOOR ONLY — because the SERVER broadcasts every OP_RETURN, so the operator is the publisher (the catastrophic-tail case, CSAM, is criminal not editorial). Considered + REJECTED (recorded so not re-litigated): client-broadcast/faucet posts (breaks free zero-friction posting — the core magic), off-chain posts (kills attribution), OP_RETURN obfuscation (doesn't reduce liability — substance over format — and hurts attribution).
+- **Built — thin content filter (DONE):** `src/lib/content-filter.ts` `screenContent()` + `parseDenylist()` — operator-supplied `CONTENT_DENYLIST` env (line/comma patterns, `/regex/` or substring; NOT committed — no slur dump in a public repo). Called in `createPost` BEFORE the DB insert + broadcast (the only point that can stop content reaching the immutable chain). Best-effort + extensible; PERMISSIVE when unset (a "before public launch" operator gate); rejects surface as "Can't be posted" in the feed. 5 unit tests → 103/103. Files: `content-filter.ts`(+test), `actions.ts` (new `rejected_content` reason + call), `Feed.tsx` (message). `.env.example` + CLAUDE.md documented.
+- **NEXT (Phase 3 remaining):** disclaimer docs (ToS/Privacy/Permanence Acknowledgement as lawyer-ready templates) + surfacing (`/terms` `/privacy` pages, footer links, pre-first-post permanence acknowledgement). **OWNER before public launch (not a build blocker):** set `CONTENT_DENYLIST`; ~1hr lawyer on the 3 hard risks (GDPR-erasure, CSAM/broadcaster, money-transmitter); DMCA agent + fill `[TODO]` placeholders.
+
 ## 2026-06-16 — Phase 2 Build A: server-wallet in-mutex timeouts
 
 Category: server resilience (money path). Phase 2 kicked off after a 2-agent scope (map current state + money-safety red-team). Owner decided: dry wallet → route free→paid; kill-switch = env var v1; start with timeouts.

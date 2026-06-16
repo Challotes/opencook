@@ -199,6 +199,7 @@ BootButton/useBoot → bootPost server action → server wallet builds split tx 
   - `ANTHROPIC_API_KEY` — required for AI agent chat (`/api/agent`)
   - `BSV_SERVER_WIF` — required for on-chain post logging (OP_RETURN). Without it, posts save to DB only with no on-chain fingerprint.
   - `BSV_WALLET_SPEND_DISABLED` — kill-switch (Phase 2 Build C). Set to `true`/`1` to halt ALL server-wallet spending in an emergency (wallet draining / WIF leaked). Free boots transparently route to PAID (no grant consumed — checked pre-consume in `executeBoot`), post-logging is skipped. Paid/client boots are UNAFFECTED. Env var = takes effect on redeploy (a DB-backed instant runtime toggle is a documented fast-follow). Default (unset) = spending enabled. See `wallet.ts` `isServerSpendDisabled()`.
+  - `CONTENT_DENYLIST` — pre-publish content filter (Phase 3, illegal-floor only). Patterns (one per line / comma-separated; `/regex/` or case-insensitive substring) that reject a post in `createPost` BEFORE the DB insert + on-chain broadcast — the only point that can stop content reaching the immutable chain. Scope to ILLEGAL content only, not opinions (free-speech ethos). NOT committed (no slur dump in a public repo). Unset = permissive (no filtering) → MUST be set before a public launch. Best-effort + extensible, not comprehensive. See `lib/content-filter.ts` `screenContent()`.
   - `DATABASE_PATH` — defaults to `./local.db`. Railway: set to `/data/local.db` with a mounted volume.
   - `PORT` — Railway sets this automatically. Vercel ignores it.
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { screenContent } from "@/lib/content-filter";
 import { db } from "@/lib/db";
 import { tryConsumeFreeBootForIp } from "@/lib/free-boot-cap";
 import { rateLimit } from "@/lib/rate-limit";
@@ -18,7 +19,12 @@ import type { BootboardData, BootboardHistoryRow, BootboardRow, Post } from "@/t
 
 export interface CreatePostResult {
   ok: boolean;
-  reason?: "bad_input" | "missing_pubkey" | "rate_limited" | "invalid_signature";
+  reason?:
+    | "bad_input"
+    | "missing_pubkey"
+    | "rate_limited"
+    | "invalid_signature"
+    | "rejected_content";
 }
 
 export async function createPost(formData: FormData): Promise<CreatePostResult> {
@@ -52,6 +58,12 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
   } catch {
     return { ok: false, reason: "invalid_signature" };
   }
+
+  // Pre-publish content screen (Phase 3, thin-core, illegal-floor only). This is the
+  // ONLY point that can stop content reaching the immutable chain — the OP_RETURN is
+  // broadcast fire-and-forget right after the insert below. Best-effort + extensible;
+  // permissive when CONTENT_DENYLIST is unset. See lib/content-filter.ts.
+  if (!screenContent(content.trim()).ok) return { ok: false, reason: "rejected_content" };
 
   const result = db
     .prepare("INSERT INTO posts (content, author_name, signature, pubkey) VALUES (?, ?, ?, ?)")

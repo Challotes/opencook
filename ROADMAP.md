@@ -315,6 +315,15 @@ Exhaustive multi-agent deep-audit of the whole rotation-removal + boot-hardening
 
 **Phase 1 (launch-critical) CLOSED. Next: Phase 2 — server resilience.**
 
+## Phase 3: Governance (right-sized 2026-06-16) — IN PROGRESS
+
+Right-sized after an owner free-speech discussion (see DECISIONS.md "Thin-core content moderation … REFINED 2026-06-16"). The product is censorship-resistant by design; posts stay on-chain (provable timestamped attribution IS the product). NO editorial moderation, NO hidden-flag/admin/report apparatus (handle the rare case by hand). Rejected + recorded: client-broadcast/faucet (breaks free posting), off-chain posts (kills attribution), OP_RETURN obfuscation (doesn't help, hurts attribution).
+
+- [x] **Thin pre-publish content filter (illegal-floor only) — DONE 2026-06-16.** `lib/content-filter.ts` `screenContent()` in `createPost` before DB insert + broadcast; operator-supplied `CONTENT_DENYLIST` env (not committed); best-effort + extensible; permissive when unset (a "before public launch" operator gate). Unit-tested. The one real guard, because the server broadcasts the OP_RETURN.
+- [ ] **Plain disclaimer docs** — ToS / Privacy / Permanence Acknowledgement as lawyer-ready templates (`[TODO]`/`[LAWYER]` markers).
+- [ ] **Disclaimer surfacing** — `/terms` + `/privacy` static pages, footer/menu links, one-time pre-first-post permanence acknowledgement.
+- [ ] **OWNER, before public launch (not a build blocker):** (a) set `CONTENT_DENYLIST`; (b) ~1hr lawyer on the 3 hard risks — GDPR-erasure-vs-immutable-chain wording, CSAM/operator-as-broadcaster exposure, money-transmitter characterization; (c) register a DMCA agent + fill the doc `[TODO]` placeholders.
+
 ## Phase 7: The Recursive Model — PLANNED
 
 - [ ] Post-to-project spawning
