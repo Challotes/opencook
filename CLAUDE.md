@@ -46,6 +46,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 - `src/lib/boot-audit.ts` — `bootAuditPayload(...)` builds the boot_split record via `onchainRecord`. Single source of truth shared by BOTH boot tx builders (`boot-payment.ts` server-funded, `client-boot.ts` client-funded) so the on-chain shape can't drift. Unit-tested in `boot-audit.test.ts`.
 - `src/lib/boot-message.ts` — `bootConfirmMessage(postId, txid)` → `boot:<postId>:<txid>`, the canonical string the booter signs for `/api/boot-confirm`. Single source of truth shared by the client (`useBoot`) and server (boot-confirm) so the signed message is byte-identical. Unit-tested (incl. sign↔verify round-trip) in `boot-message.test.ts`.
 - `src/lib/free-boot-cap.ts` — Per-IP cap on SERVER-FUNDED free boots (`tryConsumeFreeBootForIp`, 40/IP/24h, reuses rate-limit.ts). Additive defense behind the per-identity `boot_grants` cap, bounding the "fresh identity per incognito tab" server-wallet drain. Fails toward PAID, never fail-open. Consulted by `bootPost` only when the per-identity grant would make the boot free. Unit-tested in `free-boot-cap.test.ts`.
+- `src/lib/server-spend-budget.ts` — In-memory daily server-wallet spend ceiling (`hasDailyBudget`/`recordDailySpend`, env `SERVER_DAILY_SPEND_SATS`, ~$0.20/day default). Caps total server spend/day across post on-chain logging AND free-boost payouts (shared wallet) — the aggregate backstop behind the per-IP caps. Checked on accept (refuse / route-to-paid), recorded on actual spend. In-memory by design (Phase 4 — a redeploy can over-spend ~$0.40 once, trivial). The durable anchor sweep RECORDS but never GATES (already-accepted posts must still anchor). Unit-tested.
 - `src/lib/utils.ts` — Shared utilities (generateAnonName, cn helper)
 - `src/data/agent-prompt.ts` — Dynamic agent prompt builder (loads MDs at request time)
 - `src/data/genesis.ts` — Genesis conversation data
@@ -102,7 +103,8 @@ if (!requireIdentity() || !identity) return;   // opens SignInModal if locked, r
 - `src/services/bsv/restore-from-file.ts` — Pure recovery-file parser (`parseRecoveryFile`). Accepts files with `fileVersion === 1` only. Rejects plaintext files and any file missing the version stamp with `unsupported_version`. Supports the marker-block format. Used by `RestoreModal` and `HomeScreenWelcomeGate`.
 - `src/services/bsv/client-boot.ts` — Client-side trustless boot tx builder (browser → contributors, zero custody)
 - `src/services/bsv/wallet.ts` — Server wallet with UTXO manager (mutex, spent-blacklist, 0-conf chaining)
-- `src/services/bsv/onchain.ts` — OP_RETURN post logging (fire-and-forget)
+- `src/services/bsv/onchain.ts` — OP_RETURN post logging (fire-and-forget; a timeout/failure leaves `tx_id` NULL for the sweep to retry)
+- `src/services/bsv/anchor-sweep.ts` — Durable on-chain anchor sweep (`sweepOrphans`). Guarantees the all-posts-on-chain invariant: the queue is just posts with `tx_id IS NULL`, drained by an ambient-traffic single-flight sweep fired fire-and-forget from `createPost` + `GET /api/posts` (no dedicated worker, 0 schema change). 90s min-age avoids racing the inline attempt; in-memory exponential backoff; one broadcast per sweep. Posts re-broadcast on timeout (boosts don't — no payee, no double-pay). See DECISIONS "Durable post-retry: timeout => re-sweep". Unit-tested.
 
 ### OP_RETURN Formats (On-Chain Audit Trail)
 

@@ -2,6 +2,16 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-19 — Phase 4 build (Waves 0–3): abuse/cost caps + durable on-chain retry
+
+Category: abuse/cost hardening (money path). Built the lean Phase 4 after a full scope + simplicity pass (multiple agents: scoping, red-team, build-plan, DB-sizing, durable-retry design, anti-over-engineering). Locked principle: **every accepted post must land on-chain — no off-chain orphans**; over-limit / over-budget / kill-switch REFUSE the post rather than store it off-chain. The two heaviest proposed pieces (a setInterval retry worker, a DB-backed budget) were cut as over-engineering. All money-path waves auditor-verified.
+
+- **Wave 0 (commit `8056e82`):** rate-limiter cleanup-window bug — pruned every key against the first caller's window, silently resetting the 24h free-boot cap (server-wallet drain). Per-entry windows + `interval.unref()`. +1 regression test. A real security bug (two agents had disagreed on severity; reading the code confirmed it).
+- **Wave 1 (`ed30f1a`, auditor CLEAN):** durable on-chain retry — `anchor-sweep.ts`, ambient-traffic single-flight sweep (no worker), 0 schema change (queue = `tx_id IS NULL`), 90s min-age, in-memory backoff. Posts re-broadcast on timeout (boosts don't — no payee, no double-pay); DECISIONS divergence recorded. +3 tests. Fired fire-and-forget from `createPost` + `GET /api/posts`.
+- **Wave 2 (`1be60a4` + audit-fix `3ca4bc3`):** refuse-gates + in-memory daily spend ceiling (`server-spend-budget.ts`, ~$0.20/day env-adjustable `SERVER_DAILY_SPEND_SATS`, gates posts + free boosts). `createPost`: 200/day per-IP block (env `ONCHAIN_POST_IP_LIMIT`) + kill-switch→refuse + budget→refuse, all pre-insert. `bootPost`: free→paid when ceiling hit (no grant burned). New `daily_limit`/`paused` reasons + Feed.tsx messages. Auditor: no Critical/High; fixed OBS-1 (record indeterminate free-boost spend) + OBS-5 (env-parse guard); OBS-2 concurrency over-admit accepted (cents). +2 tests.
+- **Wave 3 (`9a1280e`):** boot-price anti-inflation — count only ≥3-post identities (`HAVING COUNT(*) >= 3`, `minPostsForPricing` config), so fake-identity floods can't pin the price at the ceiling. Pricing query only; payout split untouched. +2 tests.
+- **Tests 103→112, tsc/biome clean throughout.** DEFERRED (no invariant weakened): LRU rate-limit cap, persist agent counter, prompt cache_control; user-funded posting escape valve. **NEXT:** finish remaining Phase 4 docs (CLAUDE file-map + FAIRNESS gaming note), then Phase 5 (observability — webhook alerting is the real kill-switch-trigger upgrade, per the Wave-2 design).
+
 ## 2026-06-19 — Fee-model forensics + verified per-post cost + doc corrections
 
 Category: investigation + doc accuracy (NO logic changed). Owner pushed on "what does a post actually cost / can we pay less / batch them." Investigated across several agents:
