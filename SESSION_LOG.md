@@ -2,6 +2,15 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-20 — Phase 5 (observability): /api/health endpoint
+
+Category: observability (additive, read-only — no money-path code touched). Scoped with 1 agent; right-sized HARD. Key realization: the system already DETECTS every operator-critical condition (low wallet, posts-not-anchoring, kill-switch, spend ceiling) — it just dies in stdout. And two functions (`pendingAnchorCount`, `dailySpendStatus`) were written "for observability" with zero callers, waiting for this.
+
+- **Owner has no Slack/Discord** → dropped the in-app webhook (`alert.ts`) idea entirely. Instead: a single read-only **`GET /api/health`** (`src/app/api/health/route.ts`) returns the operational snapshot (wallet balance + low flag, pending-anchor count + backlog-high flag, daily-spend status + ceiling flag, kill-switch state, addressConfigured) and **200 when healthy / 503 when a critical condition trips**. The operator points a FREE uptime monitor (UptimeRobot) at it → it emails them (existing email) on any non-200. Zero new app dependencies, uses existing email, and catches "server fully down" too.
+- **Lean by design:** snapshot cached 10s (so it can't fan out to WhatsOnChain), optional `HEALTH_TOKEN` gate, rate-limited 30/min. **Exposes NO secrets** — never the WIF or the server ADDRESS (only `addressConfigured: boolean`), never per-user identity. A failed WoC balance read is a non-critical issue flag (doesn't false-page on upstream blips).
+- **DEFERRED** (right-sized): in-app webhook/email alerting, Sentry/APM, dashboards/metrics-history, the log-prefix normalizer. The uptime-monitor-on-/api/health covers the launch need.
+- tsc/biome clean, 112/112 (additive). New env var `HEALTH_TOKEN` in `.env.example`. **NEXT:** owner sets up the UptimeRobot monitor (steps provided); then Phase 6 (e2e tests).
+
 ## 2026-06-19 — Phase 4 build (Waves 0–3): abuse/cost caps + durable on-chain retry
 
 Category: abuse/cost hardening (money path). Built the lean Phase 4 after a full scope + simplicity pass (multiple agents: scoping, red-team, build-plan, DB-sizing, durable-retry design, anti-over-engineering). Locked principle: **every accepted post must land on-chain — no off-chain orphans**; over-limit / over-budget / kill-switch REFUSE the post rather than store it off-chain. The two heaviest proposed pieces (a setInterval retry worker, a DB-backed budget) were cut as over-engineering. All money-path waves auditor-verified.
