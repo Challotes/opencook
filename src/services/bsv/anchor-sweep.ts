@@ -15,6 +15,7 @@
  * NOT a double-pay. See DECISIONS.md "Durable post-retry: timeout => re-sweep".
  */
 import { db as defaultDb } from "@/lib/db";
+import { POST_LOG_COST_SATS, recordDailySpend } from "@/lib/server-spend-budget";
 import { logPostOnChain } from "./onchain";
 
 type DB = typeof defaultDb;
@@ -70,6 +71,7 @@ export async function sweepOrphans(db: DB = defaultDb): Promise<void> {
       });
       if (txid) {
         db.prepare("UPDATE posts SET tx_id = ? WHERE id = ?").run(txid, row.id);
+        recordDailySpend(POST_LOG_COST_SATS);
         nextAttemptAt.delete(row.id);
         attemptCount.delete(row.id);
       } else {

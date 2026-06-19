@@ -255,9 +255,13 @@ function FeedContent({
                         <span className="text-red-400 text-[10px]">
                           {op.failReason === "rate_limited"
                             ? "Too fast — try again"
-                            : op.failReason === "rejected_content"
-                              ? "Can't be posted"
-                              : "Failed to post"}
+                            : op.failReason === "daily_limit"
+                              ? "Daily post limit reached"
+                              : op.failReason === "paused"
+                                ? "Posting briefly paused"
+                                : op.failReason === "rejected_content"
+                                  ? "Can't be posted"
+                                  : "Failed to post"}
                         </span>
                       )}
                     </div>

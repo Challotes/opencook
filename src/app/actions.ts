@@ -5,6 +5,12 @@ import { screenContent } from "@/lib/content-filter";
 import { db } from "@/lib/db";
 import { tryConsumeFreeBootForIp } from "@/lib/free-boot-cap";
 import { rateLimit } from "@/lib/rate-limit";
+import {
+  FREE_BOOT_COST_SATS,
+  hasDailyBudget,
+  POST_LOG_COST_SATS,
+  recordDailySpend,
+} from "@/lib/server-spend-budget";
 import { generateAnonName } from "@/lib/utils";
 
 async function getBsvSdk() {
@@ -14,6 +20,7 @@ async function getBsvSdk() {
 
 import { sweepOrphans } from "@/services/bsv/anchor-sweep";
 import { logPostOnChain } from "@/services/bsv/onchain";
+import { isServerSpendDisabled } from "@/services/bsv/wallet";
 import { executeBoot } from "@/services/fairness/boot-orchestrator";
 import { getBootPrice, getBootPriceForUser } from "@/services/fairness/pricing";
 import type { BootboardData, BootboardHistoryRow, BootboardRow, Post } from "@/types";
@@ -24,6 +31,8 @@ export interface CreatePostResult {
     | "bad_input"
     | "missing_pubkey"
     | "rate_limited"
+    | "daily_limit"
+    | "paused"
     | "invalid_signature"
     | "rejected_content";
 }
@@ -66,6 +75,25 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
   // permissive when CONTENT_DENYLIST is unset. See lib/content-filter.ts.
   if (!screenContent(content.trim()).ok) return { ok: false, reason: "rejected_content" };
 
+  // Phase 4 abuse/cost gates — ALL run BEFORE the DB insert, so a refused post is
+  // never inserted (the all-posts-on-chain invariant: never store a post we won't
+  // fund on-chain). Run after the content screen so a rejected-content attempt
+  // doesn't burn a legit user's daily cap.
+  const hdrs = await headers();
+  const ip =
+    hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    hdrs.get("x-real-ip")?.trim() ||
+    "unknown";
+  const postIpDailyLimit = Number(process.env.ONCHAIN_POST_IP_LIMIT) || 200;
+  const ipRl = rateLimit(`postIp:${ip}`, { limit: postIpDailyLimit, windowMs: 24 * 60 * 60_000 });
+  if (!ipRl.success) return { ok: false, reason: "daily_limit" };
+
+  // Kill-switch + daily spend ceiling: REFUSE rather than insert-off-chain (a
+  // post we can't fund on-chain must not exist). The durable sweep still anchors
+  // already-accepted posts; these gates only block NEW acceptance.
+  if (isServerSpendDisabled()) return { ok: false, reason: "paused" };
+  if (!hasDailyBudget(POST_LOG_COST_SATS)) return { ok: false, reason: "paused" };
+
   const result = db
     .prepare("INSERT INTO posts (content, author_name, signature, pubkey) VALUES (?, ?, ?, ?)")
     .run(
@@ -85,6 +113,7 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
     .then((txid) => {
       if (txid) {
         db.prepare("UPDATE posts SET tx_id = ? WHERE id = ?").run(txid, postId);
+        recordDailySpend(POST_LOG_COST_SATS);
       } else {
         console.error(`BSVibes: on-chain logging returned null for post ${postId}`);
       }
@@ -248,16 +277,23 @@ export async function bootPost(
   let isFree = grantAllowsFree;
   let effectiveBootPrice = bootPrice;
   if (grantAllowsFree) {
-    const hdrs = await headers();
-    const ip =
-      hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      hdrs.get("x-real-ip")?.trim() ||
-      "unknown";
-    if (!tryConsumeFreeBootForIp(ip)) {
-      // IP cap binds → route to paid, exactly like grant exhaustion. The grant
-      // path returns price 0, so recompute the real dynamic price for the client.
+    if (!hasDailyBudget(FREE_BOOT_COST_SATS)) {
+      // Daily server-spend ceiling reached → route this free boost to paid (the
+      // boost still happens, the user funds it), exactly like grant exhaustion.
       isFree = false;
       effectiveBootPrice = getBootPrice(db);
+    } else {
+      const hdrs = await headers();
+      const ip =
+        hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        hdrs.get("x-real-ip")?.trim() ||
+        "unknown";
+      if (!tryConsumeFreeBootForIp(ip)) {
+        // IP cap binds → route to paid, exactly like grant exhaustion. The grant
+        // path returns price 0, so recompute the real dynamic price for the client.
+        isFree = false;
+        effectiveBootPrice = getBootPrice(db);
+      }
     }
   }
 
@@ -290,6 +326,9 @@ export async function bootPost(
     }
     return { processingMs, error: result.error ?? "Boot failed", isFree: true };
   }
+
+  // Server wallet spent on this free boost — count it against the daily ceiling.
+  recordDailySpend(FREE_BOOT_COST_SATS);
 
   return {
     processingMs,
