@@ -123,9 +123,9 @@ This makes every split publicly verifiable on-chain. Anyone can look up the tran
 
 | Attack | Effective? | Why |
 |--------|-----------|-----|
-| **Spam posts** | No | sqrt scaling + 10/min rate limit + 30-day decay = diminishing returns. 1000 spam posts barely moves the needle. Per-day limits are planned (see ROADMAP Phase 5) but not yet enforced |
+| **Spam posts** | No | sqrt scaling + 10/min rate limit + 30-day decay = diminishing returns. 1000 spam posts barely moves the needle. **Per-day cap now enforced (Phase 4):** 200 server-funded on-chain posts/IP/day (`ONCHAIN_POST_IP_LIMIT`) + a global ~$0.20/day server-spend ceiling; over the cap a post is refused (never stored off-chain) |
 | **Self-boot** | No | Pay 10,000, get back ~3,500 max (your share + bonus). Net loss every time unless you believe in massive future volume |
-| **Sybil (fake identities)** | Weak | Each identity has its own rate limit (10/min), sqrt scaling per identity. Expensive to maintain, low reward |
+| **Sybil (fake identities)** | Weak | Each identity has its own rate limit (10/min), sqrt scaling per identity. Expensive to maintain, low reward. **Phase 4:** fresh identities no longer inflate the dynamic boot price — only pubkeys with ≥3 posts in the window count (`pricing.ts`) — nor drain the server wallet (per-IP 200/day post cap + daily spend ceiling) |
 | **Collusion ring** | Neutral | Two users booting each other's posts spend real money. The rest of the community benefits from their boot payments via the pool |
 | **One great post** | Intended | A single viral post that gets booted 50 times builds significant weight through the engagement multiplier. This is the behavior we WANT |
 
