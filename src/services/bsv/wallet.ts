@@ -336,8 +336,9 @@ async function _buildAndBroadcastInner(
       change: true,
     });
 
-    // Use an explicit 50 sat/kb fee model — avoids GorillaPool round-trip and ensures
-    // ARC acceptance while keeping fees low (10x cheaper than 500 sat/kb).
+    // Explicit 100 sat/kB fee — matches the live ARC miner floor (GorillaPool
+    // miningFee = 100 sat / 1000 bytes, verified 2026-06-19), so txs always clear
+    // the floor without a per-tx policy round-trip.
     await tx.fee(new SatoshisPerKilobyte(100));
     await tx.sign();
 

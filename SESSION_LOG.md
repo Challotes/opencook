@@ -2,6 +2,17 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-19 — Fee-model forensics + verified per-post cost + doc corrections
+
+Category: investigation + doc accuracy (NO logic changed). Owner pushed on "what does a post actually cost / can we pay less / batch them." Investigated across several agents:
+
+- **100 sat/kB is the LIVE GorillaPool ARC miner floor** — probed `/v1/policy` 2026-06-19: `miningFee` = 100 sat / 1000 bytes. The app pays exactly the floor, NOT an overpay; no safe room below it (below-floor txs risk never being mined). The earlier "~1 sat/kB floor" guess was refuted by the live probe.
+- **Owner's "1-sat-per-post, accumulate until a miner sweeps it" idea — refuted four ways:** fee density is invariant in count (each post adds ~1 sat fee AND ~400 bytes, stays ~2.5 sat/kB forever); sub-floor txs bounce at broadcast (don't accumulate); the wallet caps the 0-conf chain at 50 (`wallet.ts` `_pendingChange`); CPFP just re-pays the same per-byte cost. Full-content-on-chain cost ≈ feeRate × bytes — the only levers are a lower rate (impossible, already at floor) or fewer bytes (batching/hash-anchor).
+- **Forensic on the April "cascade":** git-proven the server post/boot path was NEVER on the old 10 sat/kB tier (only client consolidation/sweeps were). The cascade was ~50% ARC infra (incl. a dev-PC DNS cache fixed by reboot) + self-inflicted optimistic-blacklist/confirmed-only-filter layers (since removed) + WoC indexing lag — not the post-path fee. So DECISIONS.md:172's blanket rationale was over-generalized.
+- **Verified real per-post cost** (byte-exact from the @bsv/sdk fee model, not estimate): ~35 sats unsigned-short / **~66 sats typical-signed** / ~156 sats max-1000-char. At $11.62/BSV (WoC, 2026-06-19) a typical post ≈ $0.0000077; ~$0.02/mo at 100 posts/day, ~$0.23/mo at 1k/day, ~$2.30/mo at 10k/day; the ~$50/mo budget funds **~217k posts/day**. On-chain logging is a rounding error — **abuse, not cost, is the Phase 4 problem.**
+- **Corrections applied (this commit):** fixed stale wrong comment in `wallet.ts:339-340` (said "50 sat/kb / 10x cheaper than 500" — code is `SatoshisPerKilobyte(100)`); corrected `DECISIONS.md:172` rationale (100 = live floor verified 2026-06-19; post/boot path never on the 10 sat/kb tier; folded in verified per-post cost). `client-boot.ts` comments were already correct ("100 sat/kb — GorillaPool's minimum") — left as-is.
+- **Phase 4 direction (pending owner sign-off):** cost optimization is a dead end at the fee level → Phase 4 = the light caps (per-IP post cap protecting boot-price + DB; persist agent daily counter + add prompt `cache_control`; rate-limiter LRU cap; `fresh=1` throttle). Batching / hash-anchor parked as a deliberate post-launch option (byte-reduction is the only real cost lever, but cost is negligible at launch volume).
+
 ## 2026-06-16 — Phase 3 (governance) right-sized + thin content filter
 
 Category: governance / product strategy + a small eng guard. Scoped with 2 agents (legal-risk + moderation/eng). A strategic discussion with the owner RIGHT-SIZED Phase 3 around a free-speech / censorship-resistant ethos:
