@@ -84,7 +84,9 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
     hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     hdrs.get("x-real-ip")?.trim() ||
     "unknown";
-  const postIpDailyLimit = Number(process.env.ONCHAIN_POST_IP_LIMIT) || 200;
+  const envPostIpLimit = Number(process.env.ONCHAIN_POST_IP_LIMIT);
+  const postIpDailyLimit =
+    Number.isFinite(envPostIpLimit) && envPostIpLimit > 0 ? envPostIpLimit : 200;
   const ipRl = rateLimit(`postIp:${ip}`, { limit: postIpDailyLimit, windowMs: 24 * 60 * 60_000 });
   if (!ipRl.success) return { ok: false, reason: "daily_limit" };
 
@@ -315,6 +317,10 @@ export async function bootPost(
     // a new tx and double-pay this post). The grant is already consumed; the feed
     // poll surfaces the boot if it landed. See Phase 2 Build A.
     if (result.indeterminate) {
+      // Broadcast timed out — the server wallet MAY have spent (the tx may have
+      // landed; the grant is consumed, not refunded). Count it against the daily
+      // ceiling — over-counting a non-landed tx is the safe direction for a cap.
+      recordDailySpend(FREE_BOOT_COST_SATS);
       return { processingMs, indeterminate: true, isFree: true };
     }
     // Step 8: the free grant was exhausted concurrently (another in-flight boot
