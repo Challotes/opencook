@@ -15,6 +15,11 @@ export const FAIRNESS_CONFIG = {
   satsPerContributor: 156,
   priceCacheTtlMs: 60 * 60 * 1000,
   activeWindowDays: 30,
+  // Phase 4: count only pubkeys with >= this many posts in the window toward the
+  // dynamic boot price, so drive-by fake identities (one post each) can't inflate
+  // the price real payers face. A genuine contributor crosses it; a spammer
+  // minting one identity per post does not.
+  minPostsForPricing: 3,
   freeBootsPerUser: 15,
   // Server-wallet ops threshold (Phase 2 Build B): emit a low-balance alert when
   // the server wallet's spendable balance drops below this, so the operator can
