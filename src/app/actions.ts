@@ -12,6 +12,7 @@ async function getBsvSdk() {
   return { PublicKey, Signature };
 }
 
+import { sweepOrphans } from "@/services/bsv/anchor-sweep";
 import { logPostOnChain } from "@/services/bsv/onchain";
 import { executeBoot } from "@/services/fairness/boot-orchestrator";
 import { getBootPrice, getBootPriceForUser } from "@/services/fairness/pricing";
@@ -91,6 +92,10 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
     .catch((e) => {
       console.error(`BSVibes: on-chain logging failed for post ${postId}`, e);
     });
+
+  // Durable guarantee: drain any older un-anchored post (this one is too fresh
+  // to be swept — see anchor-sweep MIN_AGE). Fire-and-forget, single-flight.
+  void sweepOrphans();
 
   return { ok: true };
 }

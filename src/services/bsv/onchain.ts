@@ -49,9 +49,12 @@ export async function logPostOnChain(postData: PostData): Promise<string | null>
     if (result.status === "success") return result.txid;
 
     // A broadcast TIMEOUT is indeterminate (the OP_RETURN may have landed) — do
-    // NOT retry, or we'd write a duplicate on-chain record and pay a second fee.
-    // Other failures did not broadcast, so the 1s retry below is safe. (Post
-    // logging is fire-and-forget; the post already exists in SQLite either way.)
+    // NOT retry it INLINE here. The post stays tx_id=NULL and the durable anchor
+    // sweep (anchor-sweep.ts) re-attempts it later. Posts may safely re-broadcast
+    // on timeout (unlike boots) — a post-log has no payee, so a rare duplicate is
+    // one wasted ~66-sat OP_RETURN, not a double-pay. See DECISIONS.md
+    // "Durable post-retry: timeout => re-sweep". spend_disabled likewise stays
+    // NULL and is re-swept once spending is re-enabled.
     if (result.status === "broadcast_timeout" || result.status === "spend_disabled") return null;
 
     // First attempt failed — wait 1s and retry once with fresh UTXO state.
