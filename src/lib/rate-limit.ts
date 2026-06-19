@@ -6,6 +6,9 @@
 
 interface RateLimitEntry {
   timestamps: number[];
+  /** The window this key is limited on — stored so cleanup prunes each key
+   *  against ITS OWN window (see scheduleCleanup). */
+  windowMs: number;
 }
 
 const store = new Map<string, RateLimitEntry>();
@@ -13,19 +16,32 @@ const store = new Map<string, RateLimitEntry>();
 // Clean up expired entries every 60 seconds to prevent unbounded memory growth.
 let cleanupScheduled = false;
 
-function scheduleCleanup(windowMs: number) {
+// Prune each entry against ITS OWN window. The old behaviour captured the
+// FIRST caller's windowMs and applied it to every key — so with a 60s-window
+// caller registering first (the feed/agent/post routes, hit constantly), the
+// 24h free-boot cap's timestamps were pruned after ~60s, silently resetting
+// that cap and defeating it (server-wallet drain). Per-entry windows fix this
+// regardless of caller order.
+function pruneStore(now: number): void {
+  for (const [key, entry] of store) {
+    const cutoff = now - entry.windowMs;
+    entry.timestamps = entry.timestamps.filter((ts) => ts > cutoff);
+    if (entry.timestamps.length === 0) {
+      store.delete(key);
+    }
+  }
+}
+
+function scheduleCleanup() {
   if (cleanupScheduled) return;
   cleanupScheduled = true;
-  setInterval(() => {
-    const cutoff = Date.now() - windowMs;
-    for (const [key, entry] of store) {
-      entry.timestamps = entry.timestamps.filter((ts) => ts > cutoff);
-      if (entry.timestamps.length === 0) {
-        store.delete(key);
-      }
-    }
-  }, 60_000);
+  const interval = setInterval(() => pruneStore(Date.now()), 60_000);
+  // Don't keep the event loop alive just for cleanup (clean test/process exit).
+  interval.unref?.();
 }
+
+/** Exposed for tests only — drives the cleanup loop deterministically. */
+export const __test = { pruneStore };
 
 export interface RateLimitConfig {
   /** Maximum number of requests allowed in the window. */
@@ -52,15 +68,18 @@ export interface RateLimitResult {
 export function rateLimit(key: string, config: RateLimitConfig): RateLimitResult {
   const { limit, windowMs } = config;
 
-  scheduleCleanup(windowMs);
+  scheduleCleanup();
 
   const now = Date.now();
   const cutoff = now - windowMs;
 
   let entry = store.get(key);
   if (!entry) {
-    entry = { timestamps: [] };
+    entry = { timestamps: [], windowMs };
     store.set(key, entry);
+  } else {
+    // Keep the stored window current (config is stable per key, but be safe).
+    entry.windowMs = windowMs;
   }
 
   // Drop timestamps outside the current window.
