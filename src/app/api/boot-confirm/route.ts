@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { bootConfirmMessage } from "@/lib/boot-message";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
+import { broadcastTx } from "@/services/bsv/broadcast";
 import { getServerAddress } from "@/services/bsv/wallet";
 import { FAIRNESS_CONFIG } from "@/services/fairness/config";
 
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
     // (still success — tx is in mempool). If the client's broadcast silently
     // failed, ARC accepts the fresh submission. Either way, past this point
     // the tx is GUARANTEED in ARC's mempool — eliminates phantom recordings.
-    const broadcast = await parsed.broadcast();
+    const broadcast = await broadcastTx(parsed);
     const bcResult = broadcast as {
       status?: string | number;
       code?: string | number;
