@@ -2,6 +2,15 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-20 — Phase 6 (e2e integration test harness)
+
+Category: test infrastructure (additive; one tiny additive production seam). Built option 1 (full lean harness) — delegated implementation to the tester agent, then verified INDEPENDENTLY (re-ran both suites, reviewed the seam diff line-by-line, reverted out-of-scope line-ending noise the agent had touched on 4 unrelated files).
+
+- **38 integration tests** (commit `b8a6626`) → **112 unit + 38 = 150 green.** Covers the cross-layer journeys with zero prior e2e coverage: `createPost` happy path + all 7 refuse-gates; `bootPost` free→paid routing (ip-cap / budget / indeterminate / grant-race); the full `/api/boot-confirm` route (replay 409, bad-sig 401, txid-mismatch 400, conservation-floor 422, 404, 429, + a real-signed-P2PKH-tx happy path); the durable-sweep round-trip (`createPost`→`tx_id` NULL→`sweepOrphans` anchors it); `/api/health` (each critical condition → ok/issues + 200 vs 503).
+- **Harness:** vitest `unit` + `integration` projects (`npm test` = unit, `npm run test:integration` = integration). Integration uses in-memory SQLite (`DATABASE_PATH=:memory:` in `src/test-support/integration-setup.ts`) + REAL @bsv/sdk crypto, with ARC broadcast + WhatsOnChain MOCKED — **never touches mainnet** (BSV_SERVER_WIF deleted + spend-disabled in setup, belt-and-suspenders).
+- **One additive production seam:** `src/services/bsv/broadcast.ts` `broadcastTx(tx)` (3-line delegation to `tx.broadcast()`) so boot-confirm's ARC call is mockable; boot-confirm change is 2 lines (import + call swap), NO conservation/replay/signature logic touched. Verified tsc/biome clean + both suites green on my own run.
+- **Honest coverage note:** the boot-confirm rejection paths (the security-critical ones) are airtight; the happy-path test builds a real signed tx and asserts DB rows on 200. **DEFERRED** (right-sized): Playwright browser tests (Phase 8 manual QA covers the UI), visual/load/cross-browser. **NEXT:** Phase 7 (OpenCook rebrand) — this harness is the safety net for that big rename.
+
 ## 2026-06-20 — Phase 5 (observability): /api/health endpoint
 
 Category: observability (additive, read-only — no money-path code touched). Scoped with 1 agent; right-sized HARD. Key realization: the system already DETECTS every operator-critical condition (low wallet, posts-not-anchoring, kill-switch, spend ceiling) — it just dies in stdout. And two functions (`pendingAnchorCount`, `dailySpendStatus`) were written "for observability" with zero callers, waiting for this.

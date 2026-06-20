@@ -213,7 +213,8 @@ BootButton/useBoot → bootPost server action → server wallet builds split tx 
 npm run dev      # Start dev server
 npm run build    # Production build
 npm run start    # Start production server
-npm run test     # Run tests (vitest)
+npm run test     # Run UNIT tests (vitest, `unit` project — fast, no network)
+npm run test:integration  # Run e2e INTEGRATION tests (vitest `integration` project — in-memory SQLite + real crypto, chain mocked; Phase 6)
 npm run lint     # Biome linting
 npm run format   # Biome formatting
 ```
