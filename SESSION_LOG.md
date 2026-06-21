@@ -2,6 +2,16 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-21 — Phase 7 (rebrand BSVibes → OpenCook)
+
+Category: rebrand (name-only sweep; one money-path-adjacent constant). Scoped by an agent (exhaustive inventory: 218 occurrences / 58 files, no forced file renames, no money path reads the brand string). Executed in test-gated groups; 150-test harness as the before/after gate (the reason Phase 6 came first).
+
+- **Group 1 (commit `765e7a2`, done by me):** flipped the single on-chain constant `ONCHAIN_APP` "bsvibes"→"opencook" (`onchain-record.ts`) + its 2 unit asserts (`onchain-record.test`, `boot-audit.test`). Fresh start from post #1, clean break, NO `v` bump. Isolated commit (irreversible identifier).
+- **Groups 2–6 (commit `aac4df1`, agent-executed + my verification):** storage keys `bsvibes_*`→`opencook_*` (**`bfn_*` identity keys KEPT** — owner's original project name, invisible, renaming would reset wallets); metadata/PWA/`package.json`/`manifest.json`/domain→**opencook.fun**; user-facing copy + recovery-file template + agent prompt + GitHub link; legal docs (product name only — operator `[TODO]`s kept for the lawyer); console prefixes + comments + internal MDs. **Logo:** `<span amber>Open</span>Cook`. **Removed the amber iOS safe-area band** at the top of `page.tsx` (owner's "line at the top" — now plain black). Fixed 2 sweep misses (`generate-wallet.mjs` label, `package-lock.json` name).
+- **Verification (mine, independent):** 55 files; 150/150 tests; tsc + biome clean; `next build` green (all routes incl. `/terms` `/privacy` static). `bfn_` keys grep-confirmed intact. Reverted 3 EOL-only noise files the tools re-touched (BootContext, install-pitch, install-pitch.test — zero content change).
+- **Deliberate choice:** historical brand references in DECISIONS/SESSION_LOG/ROADMAP left as the honest record (former-name + old key names in dated entries); CLAUDE.md (current reference) is correctly swept; code is functionally consistent (no split keys).
+- **OWNER follow-ups (not code blockers):** rename the GitHub repo to `opencook`; produce the "OC" icon artwork (references updated, the actual icon/favicon art is a separate asset task); the iOS-top-band removal is reversible if wanted. **NEXT: Phase 8 — cross-device QA.**
+
 ## 2026-06-20 — Phase 6 (e2e integration test harness)
 
 Category: test infrastructure (additive; one tiny additive production seam). Built option 1 (full lean harness) — delegated implementation to the tester agent, then verified INDEPENDENTLY (re-ran both suites, reviewed the seam diff line-by-line, reverted out-of-scope line-ending noise the agent had touched on 4 unrelated files).
