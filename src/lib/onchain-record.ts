@@ -24,12 +24,14 @@
  *    authoritative time is the block/confirmation time, NOT this `ts` — do not
  *    let attribution logic trust a client-built record's `ts` as ground truth.
  *
- * `app` stays "bsvibes" until the Phase-7 name-only sweep flips this single
- * constant. NOTE: the (now-removed) migration signed-message `app` literal is a
+ * `app` is "opencook" — flipped from "bsvibes" at the Phase-7 rebrand (2026-06-21,
+ * fresh start from post #1, clean break, NO `v` bump since there are no old
+ * records to stay compatible with). This single constant is the on-chain brand
+ * identity. NOTE: the (now-removed) migration signed-message `app` literal is a
  * DIFFERENT concern — its bytes are signed and re-verified, so it must never be
  * routed through this audit-record helper.
  */
-export const ONCHAIN_APP = "bsvibes";
+export const ONCHAIN_APP = "opencook";
 export const ONCHAIN_RECORD_VERSION = 1;
 
 export function onchainRecord(type: string, body: Record<string, unknown>): string {

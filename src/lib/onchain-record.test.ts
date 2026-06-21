@@ -6,7 +6,7 @@ describe("onchainRecord", () => {
     const p = JSON.parse(onchainRecord("post", { content: "hi", author: "anon" }));
     expect(p.v).toBe(ONCHAIN_RECORD_VERSION);
     expect(p.app).toBe(ONCHAIN_APP);
-    expect(p.app).toBe("bsvibes"); // stays bsvibes until the Phase-7 rename flips this one constant
+    expect(p.app).toBe("opencook"); // flipped from bsvibes at the Phase-7 rebrand
     expect(p.type).toBe("post");
     expect(p.content).toBe("hi");
     expect(p.author).toBe("anon");
