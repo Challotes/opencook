@@ -1,0 +1,18 @@
+# Normalize line endings to LF for all text files (overrides core.autocrlf=true),
+# so the working tree, index, and commits stay LF on every platform. Stops the
+# recurring "LF will be replaced by CRLF" churn / phantom-modified files on Windows.
+* text=auto eol=lf
+
+# Treat these as binary — never normalize line endings or diff as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.db binary
+*.wasm binary
