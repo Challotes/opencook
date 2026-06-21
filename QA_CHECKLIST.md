@@ -7,10 +7,16 @@
 > LAUNCH_CHECKLIST). Mark each row PASS / FAIL / notes as you go.
 
 ## Before you start
-- **Test against a deployed HTTPS preview, not localhost.** PWA install, the manifest
-  name, iOS Quick Look, and balance-latency behaviors only work over HTTPS. (Desktop
-  flows can run locally; the iOS/Android PWA + install checks need the deploy — Phase 8
-  and Phase 9 interleave here.)
+- **Serve over HTTPS via the cloudflared tunnel** (the owner's method): build first, then
+  tunnel — `npm run build && npm run start`, then `cloudflared tunnel --url http://localhost:3000`.
+  **Use the production build, NOT `npm run dev`** — dev's React StrictMode double-fires
+  effects and breaks the one-time flows you most need to test (PermanenceGate,
+  IosStorageToast, GoatModeToast, first-earning toast). The tunnel's HTTPS URL is what
+  enables PWA install + iOS Quick Look/ITP testing without a full deploy.
+- **The tunnel URL changes each run, and an installed PWA caches that origin** — so install
+  and finish a device's PWA section (A/B or C/D) within one tunnel session before restarting.
+- **Device map (owner's kit):** iPhone 11 → Sections A+B; Samsung S22 Ultra → C+D; Desktop PC
+  → E (+F if Firefox). Section G (desktop Safari) is macOS-only → SKIP.
 - **Fund a fresh test wallet** with ~10,000 sats for paid boosts + the deposit flow.
   Not your production key — these trigger real transactions.
 - **Two physical devices if possible** — an iPhone (Safari + installed PWA) and any
