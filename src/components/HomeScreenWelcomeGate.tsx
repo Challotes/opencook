@@ -83,7 +83,7 @@ export function HomeScreenWelcomeGate({
           result.error === "unsupported_version"
             ? "This recovery file is from an older version and can't be restored. Use a file you saved recently."
             : result.error === "parse_failed"
-              ? "Could not read this file — make sure it's a BSVibes recovery file (.html or .json)"
+              ? "Could not read this file — make sure it's an OpenCook recovery file (.html or .json)"
               : "File does not contain a valid recovery key"
         );
         return;
@@ -172,7 +172,7 @@ export function HomeScreenWelcomeGate({
                 your recovery file — not just on this device.
               </p>
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Open <span className="text-zinc-200">bsvibes.com</span> in Safari, set up your
+                Open <span className="text-zinc-200">opencook.fun</span> in Safari, set up your
                 identity, save your recovery file. Then come back to this app and restore.
               </p>
             </div>

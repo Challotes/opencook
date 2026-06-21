@@ -48,7 +48,7 @@ Early thinking on how revenue could flow between parent and child projects.
 **The cascade pattern (don't flatten into one transaction):**
 - Within a project: real-time split in one tx (trustless, no custody) — already works
 - Between projects: daily batch to parent treasury address, parent distributes to its own contributors
-- A song purchase on a Music Store spawned from BSVibes: Customer → Artist + Music Store contributors (split inline) + BSVibes treasury (one output)
+- A song purchase on a Music Store spawned from OpenCook: Customer → Artist + Music Store contributors (split inline) + OpenCook treasury (one output)
 
 **On-chain record types (conceptual):**
 - `agfair.genesis` — project registration
@@ -70,7 +70,7 @@ Early thinking on how revenue could flow between parent and child projects.
 
 ## Patterns We've Noticed
 
-The codebase has started doing things we didn't fully plan. Most of these are already built INSIDE BSVibes — what's still future is extracting them as standalone primitives anyone could reuse without adopting the whole platform.
+The codebase has started doing things we didn't fully plan. Most of these are already built INSIDE OpenCook — what's still future is extracting them as standalone primitives anyone could reuse without adopting the whole platform.
 
 **Revenue distribution that governs itself** *(surface shipped, watcher future)*. The fairness logic has tunable parameters, scoring weights, and decay curves. The obvious next step is letting an AI watch the numbers and adjust those knobs — tighten the gaming resistance when someone's exploiting it, widen the grants when the platform's healthy. We built the surface. We haven't built the watcher yet.
 

@@ -19,7 +19,7 @@ Everyone. Not just developers.
 
 The person in Lagos with a brilliant idea but no money for a patent. The ex-Google architect who disagrees with how things are built but has no platform to prove it. The graphic designer browsing spawned projects at midnight, offering their eye for UI. The attorney who spots a legal gap. The music artist who wants fair royalties. The marketer who knows how to make things spread. The property owner with an idea for how rentals should work. The teenager with vibes and nothing else.
 
-**BSVibes doesn't care who you are. It cares what you did.**
+**OpenCook doesn't care who you are. It cares what you did.**
 
 Every contribution is timestamped on-chain. An anonymous user posting as `anon_k` gets the same credit as anyone else. No resumes, no interviews, no gatekeepers. You contribute, you're credited, you earn. The poorest person with the best idea earns the same as the richest person with the same idea.
 
@@ -39,7 +39,7 @@ The endgame isn't one platform. It's a universal system where **whoever contribu
 
 An idea posted on-chain has a timestamp. If someone codes that idea later, the original poster gets credit — the idea came first. If code exists before someone posts it as an idea, the coder gets credit. On-chain timestamps are the arbiter. No disputes, no committees, no politics.
 
-This works across forks. BSVibes is open source. Anyone can fork it, improve it, launch their own version. That's not a threat — it's the model working. Contributors don't pick sides. They post ideas, write code, and earn proportionally from every project that uses their contribution. The best projects attract the most activity. Competition drives quality, not lock-in.
+This works across forks. OpenCook is open source. Anyone can fork it, improve it, launch their own version. That's not a threat — it's the model working. Contributors don't pick sides. They post ideas, write code, and earn proportionally from every project that uses their contribution. The best projects attract the most activity. Competition drives quality, not lock-in.
 
 **How it works:**
 - Every contribution is timestamped on-chain (posts, code commits linked to BSV identity)
@@ -52,7 +52,7 @@ This works across forks. BSVibes is open source. Anyone can fork it, improve it,
 **Why open source is the only strategy:**
 - Every fork proves the model works — that's compounding credibility
 - The value isn't the code (anyone can copy it) — it's the community, the on-chain history, and the rules everyone plays by
-- BSVibes designed the fairness rules. That's the moat. The code is just the implementation.
+- OpenCook designed the fairness rules. That's the moat. The code is just the implementation.
 
 **What exists today:** On-chain posts, contribution scoring, trustless split payments, zero-friction identity (key generated silently, encrypted in place when protected — no rotation, no migration chains). The foundation.
 
@@ -60,7 +60,7 @@ This works across forks. BSVibes is open source. Anyone can fork it, improve it,
 
 ## Where We Are Now
 
-BSVibes is the first project built on this model — the proof that it works before anyone else uses it.
+OpenCook is the first project built on this model — the proof that it works before anyone else uses it.
 
 **The fairness system is live but in trial mode.** Right now it rewards posting and boot activity. This is the working proof of concept — real money flows, real payments split, real on-chain records. But it's Phase 1.
 
@@ -75,7 +75,7 @@ BSVibes is the first project built on this model — the proof that it works bef
 - Some or all existing parameters may be updated or refined
 - Everything is work in progress — that's the point. The platform builds itself.
 
-Once this model is proven on BSVibes, any idea posted here can spawn its own project using the same fairness system. BSVibes is the seed. The vision is the forest.
+Once this model is proven on OpenCook, any idea posted here can spawn its own project using the same fairness system. OpenCook is the seed. The vision is the forest.
 
 ## The Core Loop
 
@@ -118,13 +118,13 @@ It doesn't matter what the idea is. The model works for anything:
 The person who spawns a project becomes the project owner. They can:
 - Direct development priorities
 - Set the initial fairness parameters for their project
-- Use BSVibes' community as their first users and contributors
+- Use OpenCook's community as their first users and contributors
 - Drop tokens to their users if they want (BSV-21 — nothing stops them)
 - The fairness system tracks contributions automatically — no payroll, no invoicing
 
 ### Yeah, we pump. We pump real value.
 
-There's no BSVibes token. No presale. No "buy our coin." The value IS the contribution. You earn by doing, not by speculating.
+There's no OpenCook token. No presale. No "buy our coin." The value IS the contribution. You earn by doing, not by speculating.
 
 If a project owner wants to issue their own token on their spawned project — loyalty points, governance tokens, whatever — that's their choice. But the base layer is always: real work → real payment. The fairness system pays in real money (BSV), not promises.
 
@@ -140,11 +140,11 @@ Enforcement is phased: start with instructions only, add hooks when contributors
 
 ## Competitive Positioning
 
-BSVibes combines elements that exist separately elsewhere, but nobody has put them all together on a chain where the economics actually work.
+OpenCook combines elements that exist separately elsewhere, but nobody has put them all together on a chain where the economics actually work.
 
 ### Why existing approaches failed
 
-| Platform | What they tried | Why it failed | BSVibes' response |
+| Platform | What they tried | Why it failed | OpenCook's response |
 |----------|----------------|---------------|-------------------|
 | **Steemit/Hive** | Community-rewarded on-chain posts | Whale-dominated voting, inflationary tokens, reward farming | AI-adjudicated fairness, real revenue not inflation, no stake-weighted politics |
 | **SourceCred** | Algorithmic contribution scoring | Synthetic tokens not real money, organization dissolved | Real BSV micropayments, sustainable revenue from boot fees |
@@ -153,7 +153,7 @@ BSVibes combines elements that exist separately elsewhere, but nobody has put th
 | **Friend.tech/DeSo** | Social tokens, speculation on creators | Pure speculation, no intrinsic value, bubbles pop | Rewards actual contribution, not speculation |
 | **Botto** | AI + community + value distribution | Token-weighted voting (plutocracy risk), aesthetic not contribution | AI evaluates contribution quality, inverted agency model |
 
-### What makes BSVibes possible (and why nobody else did it)
+### What makes OpenCook possible (and why nobody else did it)
 
 **BSV's micropayment economics.** A single transaction splitting payment to 30 contributors costs ~$0.003 on BSV. This is economically impossible on Ethereum (gas) or BTC (block space). The reason Steemit used token inflation, SourceCred used synthetic "Grain", and Coordinape uses peer tokens is that real-money micropayment splitting to dozens of contributors doesn't work on high-fee chains. BSV removes that constraint.
 
@@ -173,4 +173,4 @@ The innovation lives or dies on one demo: **a user posts an idea, someone boots 
 - Not a crypto wallet app
 - Not a social media platform (yet — it may evolve into one)
 - Not a fundraising tool
-- Not built on bOpen.ai — bOpen is the toolkit, the product is BSVibes
+- Not built on bOpen.ai — bOpen is the toolkit, the product is OpenCook

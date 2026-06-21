@@ -1,5 +1,5 @@
 /**
- * Client-side trustless boot transaction builder for BSVibes.
+ * Client-side trustless boot transaction builder for OpenCook.
  *
  * Runs entirely in the BROWSER. The user's browser builds a multi-output
  * split transaction, signs it with their private key, and broadcasts
@@ -90,7 +90,7 @@ function acquireTxMutex(): Promise<() => void> {
 
 /** UTXOs consumed as inputs — blacklist for stale WoC data.
  *  Persisted to localStorage so it survives page refreshes. */
-const SPENT_STORAGE_KEY = "bsvibes_spent_utxos";
+const SPENT_STORAGE_KEY = "opencook_spent_utxos";
 
 function loadSpentSet(): Set<string> {
   try {

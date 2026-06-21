@@ -32,7 +32,7 @@
 
 ## Executive summary
 
-BSVibes is feature-complete for launch — Phase 6 is shipped, real BSV is moving, fairness payments are live, identity flows are deeply hardened. The remaining work to reach a credible public launch is **resilience + cross-device polish**, not new features.
+OpenCook is feature-complete for launch — Phase 6 is shipped, real BSV is moving, fairness payments are live, identity flows are deeply hardened. The remaining work to reach a credible public launch is **resilience + cross-device polish**, not new features.
 
 This plan captures the strategic decisions reached during the 2026-05-09 brainstorming session and sequences the work into **five buckets**:
 
@@ -42,7 +42,7 @@ This plan captures the strategic decisions reached during the 2026-05-09 brainst
 4. **Server-side resilience** (Phase 6.5 first item, already in ROADMAP) — `/api/broadcast` proxy with GorillaPool→TAAL ARC failover, server wallet sharing the client's resilience stack. This is the single biggest "won't get pulled back in by ARC outages" win.
 5. **QR device sync** (future layer) — encrypted-blob handoff via short-lived server record + decryption key in the QR; plaintext WIF never leaves source device. **Not blocking launch.**
 
-**Strategic decision logged**: web-first / PWA is the durable architecture for BSVibes. Not pursuing iOS App Store (Apple's 30% IAP cut + crypto-rejection patterns + UGC-with-payments scrutiny make it incompatible with the fairness model; spending months on submissions has high cost and low success rate). Google Play might be technically possible but Android-only would create a third storage silo and worsen identity confusion. The PWA install flow IS the "app experience."
+**Strategic decision logged**: web-first / PWA is the durable architecture for OpenCook. Not pursuing iOS App Store (Apple's 30% IAP cut + crypto-rejection patterns + UGC-with-payments scrutiny make it incompatible with the fairness model; spending months on submissions has high cost and low success rate). Google Play might be technically possible but Android-only would create a third storage silo and worsen identity confusion. The PWA install flow IS the "app experience."
 
 ---
 
@@ -72,7 +72,7 @@ Reached when:
 
 1. iPhone Safari users get a coherent mobile experience: no oversized modals, taps land, downloads work, the recovery file flow is bullet-proof.
 2. Users arriving from in-app browsers (X, Instagram, Discord, etc.) are redirected out before they create a sandboxed identity that will get wiped.
-3. Users who save a recovery file get a clear path to install BSVibes to their home screen with notifications enabled.
+3. Users who save a recovery file get a clear path to install OpenCook to their home screen with notifications enabled.
 4. The server-side broadcast path has the same resilience the client path got in April 2026 (no ARC outage = no platform freeze).
 5. Deployed to Railway with custom domain.
 
@@ -151,7 +151,7 @@ shouldShowInstallPitch =
 The home-screen first-launch screen presents three options framed by user intent, not by sandbox mechanics:
 
 ```
-Welcome to BSVibes
+Welcome to OpenCook
 
 Are you returning to an account you already use, or starting fresh?
 
@@ -185,7 +185,7 @@ Sit on top of the recovery file primitive. Same trust model (passphrase + someth
 **Cryptography model** (validated this session, pending code-auditor review):
 - Source device reads its already-encrypted blob (`bfn_keypair_enc`) from localStorage. No decryption. No passphrase needed at source.
 - Wraps that blob in a fresh one-time AES-GCM envelope.
-- Sends envelope to bsvibes.com server, gets back short ID. Server stores envelope ≤5 min, auto-deletes.
+- Sends envelope to opencook.fun server, gets back short ID. Server stores envelope ≤5 min, auto-deletes.
 - QR contains: `{id, transferKey}` packed as URL with key in fragment (`#key=…`) so server never sees the key.
 - Destination device scans QR, fetches envelope by ID, decrypts with transfer key from QR → has the original encrypted blob.
 - Destination prompts user for passphrase → unlocks the encrypted blob locally → identity loaded.
@@ -234,7 +234,7 @@ Goal: protect users arriving from social app webviews from creating phantom iden
 | Detection helper (UA parse + crawler bypass) | new: `src/lib/in-app-browser.ts` | 1 h |
 | Splash page component (logo + "Open in Safari/Chrome" button + iOS-specific visual instructions) | new: `src/components/InAppBrowserSplash.tsx` | 2 h |
 | Wire splash check into `src/app/layout.tsx` (or middleware) — render splash instead of children when detected | `src/app/layout.tsx` or `middleware.ts` | 30 min |
-| Android intent-link: `intent://bsvibes.com#Intent;scheme=https;…` for Chrome | `src/components/InAppBrowserSplash.tsx` | 30 min |
+| Android intent-link: `intent://opencook.fun#Intent;scheme=https;…` for Chrome | `src/components/InAppBrowserSplash.tsx` | 30 min |
 | iOS animated arrow pointing at share-menu icon | `src/components/InAppBrowserSplash.tsx` (asset + CSS) | 1 h |
 | "Wrong instructions? Tap here" manual-fallback link for the 2–5% misdetection edge | same | 15 min |
 | Manual test from inside X / Instagram / Discord webviews on iPhone | — | 1 h |
@@ -348,7 +348,7 @@ These need decisions before the corresponding work can ship.
 
 ### Q1. ~~What's the trigger for "save your recovery file"?~~ — RESOLVED (Status #4, shipped)
 
-Resolved via Option (b): **first-earning trigger.** `<FirstEarningToast>` fires from the 30-second `/api/earnings` poll when `total_sats > 0`, with a 48h backoff via `bsvibes_first_earning_save_dismissed_until` localStorage timestamp. The toast CTA flows into the save-recovery-file path. The amber "Unsaved key" dot in IdentityBar remains the persistent fallback between re-fires. See DECISIONS.md "First earning toast trigger wires to `/api/earnings` polling".
+Resolved via Option (b): **first-earning trigger.** `<FirstEarningToast>` fires from the 30-second `/api/earnings` poll when `total_sats > 0`, with a 48h backoff via `opencook_first_earning_save_dismissed_until` localStorage timestamp. The toast CTA flows into the save-recovery-file path. The amber "Unsaved key" dot in IdentityBar remains the persistent fallback between re-fires. See DECISIONS.md "First earning toast trigger wires to `/api/earnings` polling".
 
 ### Q2. Notification frequency / batching policy
 
@@ -457,12 +457,12 @@ After review synthesis, this document becomes the canonical launch reference and
 | 4 | First earning event toast | Trigger: first earning > 0 sats, fires once ever per device. Copy: *"You just earned your first sats. Save your recovery file — if you lose this device without it, they're gone."* Buttons: **Save now** (primary) / **Later** (secondary, 48h suppression). |
 | 5 | Welcome gate copy + body | Header: *"Welcome back or starting fresh?"* + body sentence: *"We couldn't find your identity on this device."* Then two buttons with sub-text (button order in #9). |
 | 6 | Notification copy (both surfaces) | *"Get notified when you earn."* Used identically for permission prompt AND install pitch. No roadmap hedging. Broaden when new triggers ship. |
-| 7 | In-app browser splash | Headline: *"Open BSVibes in your browser"*. Body: *"You're inside [X/Instagram]'s built-in browser. Sign up here and your account disappears when you close this app. Open in your browser instead — your account stays with you."* **Android:** real button `[ Open in browser ]` fires intent link. **iOS:** NO button — static inline tip *"Tap Share, then 'Open in Browser'"* with share icon. Differentiate the surface, not the words. |
+| 7 | In-app browser splash | Headline: *"Open OpenCook in your browser"*. Body: *"You're inside [X/Instagram]'s built-in browser. OpenCook uses your browser's secure storage. Open in your browser instead — your account stays with you."* **Android:** real button `[ Open in browser ]` fires intent link. **iOS:** NO button — static inline tip *"Tap Share, then 'Open in Browser'"* with share icon. Differentiate the surface, not the words. |
 | 8 | Bucket order | **Mobile polish (Bucket 1) first**, **in-app browser splash (Bucket 2) second**. Per user's call (nothing ships until both done; risk-ordering during build doesn't change launch state). |
 | 9 | Welcome gate primary button | *"Restore from your saved file"* primary (sub-text: *"Use your most recent recovery file. Your posts and earnings come back."*). *"Start with a new identity"* secondary (sub-text: *"Begin fresh on this device. You can save and restore later."*). Most welcome-gate visitors are returning users (gate fires only after recovery file save → install). |
 | 10 | Install pitch surfaces | **Inline pitch in You modal done-state** (primary, fires on "Got it" tap after recovery file save) **+ gentle bottom banner** (secondary; designer's calibrated dismissal: max once per session, vanishes on next page load, 30-day suppression on X tap, permanent suppression on engagement with either surface). Both visible at launch (Designer's option). |
 | 11 | Welcome gate "Why did this happen?" explainer | **DROP** the collapsible. Keep one body sentence (*"We couldn't find your identity on this device."* — already in #5) which is honest in all causes. If post-launch confusion signals emerge, the collapsible is a 30-min add. |
-| 12 | iOS post-install ITP toast | **ADD.** iOS standalone only (`navigator.standalone === true`). Fires once on first standalone launch (gated by `bsvibes_ios_storage_notice_shown` localStorage flag). **Sequenced AFTER welcome gate** if both apply (architect's collision fix). Auto-dismiss after 8s, single "Got it" button, no "Remind me later." Copy: *Headline: "You're all set. One thing to know." Body: "Apple may clear saved site data after long periods of inactivity. If that ever happens, your recovery file brings everything back in seconds — you're covered." Button: "Got it"* |
+| 12 | iOS post-install ITP toast | **ADD.** iOS standalone only (`navigator.standalone === true`). Fires once on first standalone launch (gated by `opencook_ios_storage_notice_shown` localStorage flag). **Sequenced AFTER welcome gate** if both apply (architect's collision fix). Auto-dismiss after 8s, single "Got it" button, no "Remind me later." Copy: *Headline: "You're all set. One thing to know." Body: "Apple may clear saved site data after long periods of inactivity. If that ever happens, your recovery file brings everything back in seconds — you're covered." Button: "Got it"* |
 
 ## Detailed notes per decision
 
@@ -480,7 +480,7 @@ Architect flagged that the next session shouldn't re-derive the four-causes logi
 
 ### #4 First earning toast — wired into boot-confirm
 
-Fires from `/api/boot-confirm` flow when the recipient is the user AND `bsvibes_first_earning_save_offered` localStorage flag is unset. Sets the flag whether they tap Save or Later. "Later" sets `bsvibes_first_earning_save_dismissed_until` to (now + 48h). Toast can return after 48h if they ignored — gentle backoff, not 30 days, because this is the highest-stakes moment.
+Fires from `/api/boot-confirm` flow when the recipient is the user AND `opencook_first_earning_save_offered` localStorage flag is unset. Sets the flag whether they tap Save or Later. "Later" sets `opencook_first_earning_save_dismissed_until` to (now + 48h). Toast can return after 48h if they ignored — gentle backoff, not 30 days, because this is the highest-stakes moment.
 
 ### #5 + #9 Welcome gate full layout
 
@@ -574,7 +574,7 @@ Plus medium-priority Bucket 6 items: don't-screenshot warning, `history.replaceS
 
 ## Marketer's risk additions + success metrics (folded in)
 
-**R11 added to risk register:** broken/missing OG preview when bsvibes.com is shared on X/Discord/Slack. Mitigation: verify `og:image` (1200×630), `twitter:card`, OG title + description in Bucket 5 deploy checklist. Test via X card validator + Slack unfurl.
+**R11 added to risk register:** broken/missing OG preview when opencook.fun is shared on X/Discord/Slack. Mitigation: verify `og:image` (1200×630), `twitter:card`, OG title + description in Bucket 5 deploy checklist. Test via X card validator + Slack unfurl.
 
 **Bucket 1 mitigation upgrade:** before shipping, add a **plain-text fallback display of the recovery key with copy-to-clipboard** as a secondary path when the file download fails. R1 mitigation upgrade — never leave a user stranded after their first earning.
 
@@ -675,7 +675,7 @@ Total effort unchanged (~5.75 days focused work). Order changed to fix the urgen
 
 **Why this was wrong:** the `boot-confirm` route is Bucket 4's territory — it's the same emit-site `publishPayout()` will own. Wiring a new client-side trigger directly to `boot-confirm` creates rework when Bucket 4 lands.
 
-**Refined approach:** the toast trigger reads from the existing `/api/earnings` polling response (already polled every 30s per CLAUDE.md). On poll: if total earnings > 0 AND `bsvibes_first_earning_save_offered` localStorage flag is unset → fire toast → set flag (whether user taps Save or Later).
+**Refined approach:** the toast trigger reads from the existing `/api/earnings` polling response (already polled every 30s per CLAUDE.md). On poll: if total earnings > 0 AND `opencook_first_earning_save_offered` localStorage flag is unset → fire toast → set flag (whether user taps Save or Later).
 
 **Why this is better:**
 - Zero new emit-site in `boot-confirm`
@@ -708,7 +708,7 @@ The locked decisions from the Final synthesis (2026-05-10) carry forward unchang
 
 | # | Decision | Updated final answer |
 |---|----------|----------------------|
-| 4 | First earning event toast | Trigger: first earning > 0 sats detected via `/api/earnings` polling response (NOT a new emit-site in `boot-confirm`). Fires once ever per device gated by `bsvibes_first_earning_save_offered` localStorage flag. Copy + buttons unchanged. |
+| 4 | First earning event toast | Trigger: first earning > 0 sats detected via `/api/earnings` polling response (NOT a new emit-site in `boot-confirm`). Fires once ever per device gated by `opencook_first_earning_save_offered` localStorage flag. Copy + buttons unchanged. |
 | 5 | Welcome gate detection | Detection condition: `isStandaloneMode() && !hasIdentity()`. No first-launch flag. Synchronous pre-hydration check in `IdentityProvider` lazy initializer. |
 
 All other Status table rows (1, 2, 3, 6, 7, 8, 9, 10, 11, 12) unchanged.

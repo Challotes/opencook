@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 
 export type CurrencyMode = "noob" | "goat";
 
-const STORAGE_KEY = "bsvibes_currency_mode";
+const STORAGE_KEY = "opencook_currency_mode";
 const IDENTITY_ENC_KEY = "bfn_keypair_enc";
 
 /**

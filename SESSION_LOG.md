@@ -48,7 +48,7 @@ Category: governance / product strategy + a small eng guard. Scoped with 2 agent
 - **Decision (DECISIONS.md "Thin-core content moderation … REFINED 2026-06-16"):** posts STAY on-chain (provable timestamped attribution is the product). NO editorial/opinion moderation, NO hidden-flag/admin/report apparatus (handle the rare display case by hand). The ONE launch guard is a pre-publish filter scoped to the ILLEGAL FLOOR ONLY — because the SERVER broadcasts every OP_RETURN, so the operator is the publisher (the catastrophic-tail case, CSAM, is criminal not editorial). Considered + REJECTED (recorded so not re-litigated): client-broadcast/faucet posts (breaks free zero-friction posting — the core magic), off-chain posts (kills attribution), OP_RETURN obfuscation (doesn't reduce liability — substance over format — and hurts attribution).
 - **Built — thin content filter (DONE):** `src/lib/content-filter.ts` `screenContent()` + `parseDenylist()` — operator-supplied `CONTENT_DENYLIST` env (line/comma patterns, `/regex/` or substring; NOT committed — no slur dump in a public repo). Called in `createPost` BEFORE the DB insert + broadcast (the only point that can stop content reaching the immutable chain). Best-effort + extensible; PERMISSIVE when unset (a "before public launch" operator gate); rejects surface as "Can't be posted" in the feed. 5 unit tests → 103/103. Files: `content-filter.ts`(+test), `actions.ts` (new `rejected_content` reason + call), `Feed.tsx` (message). `.env.example` + CLAUDE.md documented.
 - **Disclaimer drafts (DONE):** `legal/terms-of-service.md`, `legal/privacy-policy.md`, `legal/permanence-acknowledgement.md` — lawyer-ready, drafted by the legal agent then reviewed line-by-line. All operator/jurisdiction/email/date fields are `[TODO]` (Hard Rule #6 holds — nothing invented); every hard clause carries a `[LAWYER]` marker (CSAM/broadcaster, GDPR-erasure-vs-immutable-chain, money-transmitter, warranty/liability/indemnity/governing-law, entity, age); accurate "hidden-from-feed not deleted" verbs; describes only the moderation that exists (no over-promised report/dashboard). DMCA deliberately left as a lawyer-decision (no fake agent/process invented).
-- **Surfacing (DONE):** `/terms` + `/privacy` static pages — a small no-dependency markdown renderer (`components/LegalDoc.tsx`) renders the cleaned drafts (`lib/legal-doc.ts` `cleanLegalMarkdown` strips the HTML comment + internal `[LAWYER]` notes, keeps `[TODO]`; unit-tested) behind a DRAFT banner (`LegalPageShell`); both pages read the `.md` at BUILD time → prerender static (verified `next build` green, both `○`). "Terms · Privacy" links in the You modal (`IdentityBar`) + the Ask-AI footer (`AgentChat`). One-time pre-first-post **permanence acknowledgement gate** (`components/PermanenceGate.tsx`, localStorage `bsvibes_permanence_ack`, wired in `PostForm.submitForm`) — affirmative consent at the first permanent on-chain post, preserves 2-click onboarding (one tap, once). tsc 0, Biome 0, 104/104.
+- **Surfacing (DONE):** `/terms` + `/privacy` static pages — a small no-dependency markdown renderer (`components/LegalDoc.tsx`) renders the cleaned drafts (`lib/legal-doc.ts` `cleanLegalMarkdown` strips the HTML comment + internal `[LAWYER]` notes, keeps `[TODO]`; unit-tested) behind a DRAFT banner (`LegalPageShell`); both pages read the `.md` at BUILD time → prerender static (verified `next build` green, both `○`). "Terms · Privacy" links in the You modal (`IdentityBar`) + the Ask-AI footer (`AgentChat`). One-time pre-first-post **permanence acknowledgement gate** (`components/PermanenceGate.tsx`, localStorage `opencook_permanence_ack`, wired in `PostForm.submitForm`) — affirmative consent at the first permanent on-chain post, preserves 2-click onboarding (one tap, once). tsc 0, Biome 0, 104/104.
 - **PHASE 3 BUILD COMPLETE.** Remaining is OWNER-only, before public launch (NOT build blockers): set `CONTENT_DENYLIST`; ~1hr lawyer on the 3 hard risks (GDPR-erasure, CSAM/broadcaster, money-transmitter); register a DMCA agent; fill the `legal/*.md` `[TODO]` placeholders. **Next phase: Phase 4 — abuse/cost surfaces.**
 
 ## 2026-06-16 — Phase 2 Build A: server-wallet in-mutex timeouts
@@ -157,7 +157,7 @@ Category: implementation (launch-critical-path execution). Continued Phase 1. Ea
 
 - **Step 3** (`2220fda`): honest `booterPubkey`→`booterAddress` rename on the boot-confirm path. SECURITY_AUDIT's documented "BUG-6 derive address from pubkey" fix would have THROWN — `useBoot` already sent `identity.address`; keying was already consistent, only the name lied. Renamed instead of "fixing." BUG-6 marked RESOLVED.
 - **Step 4 (delete rotation) — DONE, 3 commits:**
-  - Group A (`7fc68ff`): removed the E30 stale-key client machine (useIdentity union variant, IdentityContext API, useFeedPolling `x-bsvibes-pubkey` header, PostForm banner, IdentityBar guards) + deleted `StaleKeyModal.tsx`.
+  - Group A (`7fc68ff`): removed the E30 stale-key client machine (useIdentity union variant, IdentityContext API, useFeedPolling `x-opencook-pubkey` header, PostForm banner, IdentityBar guards) + deleted `StaleKeyModal.tsx`.
   - Group B (`10633fa`): **version-gated restore policy** — `RECOVERY_FILE_VERSION=1` stamped centrally in `generateBackupHtml`; `restore-from-file` rejects plaintext OR non-`fileVersion:1` files as `unsupported_version` (ALL legacy files rejected, owner "start clean"). Deleted `importIdentity` (restore is encrypted-only), the RestoreModal inline parser (routed to shared parser), the E29 preflight in RestoreModal + welcome gate, the server-side E30 emitter (`key-status-validation.ts` + posts/route key_status), `E30_STALE_KEY_ENABLED`.
   - Groups C+D (`5719988`): deleted `MoveAddressModal.tsx`, `restore-eligibility/route.ts`, `migration.ts`; removed `migrateIdentity`/`verifyMigrationChain` from actions.ts; stripped the rotation backend from identity.ts (upgrade/commit/reset/sweep/autoTransfer/_rotationInProgress); pruned `BackupData` (oldWif_encrypted/oldAddress, rotation/pre-rotation pathTypes) + every previous-key path in the recovery-file template. Added `backup-template.test.ts` (generate↔parse round-trip — the smoke test for the stringified-HTML surgery).
 - **Step 5 (migrations table + chain resolution)** (`062dcd0`): owner confirmed migration/payout history is throwaway test data → removed the `migrations` table from db.ts, `buildMigrationMap` from weights.ts (scoring now attributes posts directly to `post.pubkey` — identical over an empty table), `resolveAllAddresses` from earnings (now `[address]`; pubkey→address is 1:1 so no earned address is dropped), and the 2 chain tests. Auditor rigorously confirmed the money-attribution equivalence.
@@ -325,7 +325,7 @@ Category: UX polish + Android device-test bug fixes + documentation accuracy swe
 
 Continued iteration on the install pitch surface after E32 scaffolding. Final shape:
 - **Slide-up sheet** (`<InstallPitch variant="banner" />`) mounted globally in `Feed.tsx`, drives the full-impact first-tab-session experience via `installSheetMode` from `InstallContext`. Sheet has chevron-minimise (NOT X) to bookmark.
-- **Bookmark chip** (`<InstallBookmark />`) — 34×34 chip with 30px BSVibes icon, geometry matches the Ask AI pill exactly (`border` not `ring`, `mt-1` baseline offset, `border-zinc-800` rest / `border-amber-500 + scale-110 + glow` highlight). Centered in PostForm footer via `grid-cols-3` layout. Highlight flash on sheet→bookmark collapse.
+- **Bookmark chip** (`<InstallBookmark />`) — 34×34 chip with 30px OpenCook icon, geometry matches the Ask AI pill exactly (`border` not `ring`, `mt-1` baseline offset, `border-zinc-800` rest / `border-amber-500 + scale-110 + glow` highlight). Centered in PostForm footer via `grid-cols-3` layout. Highlight flash on sheet→bookmark collapse.
 - **Inline variant** inside the You modal done-state — branches on `installType` so one-tap platforms (Android Chrome, desktop Chrome) fire `promptInstall()` directly on tap; manual-instructions platforms (iOS Safari, Firefox Android) open the slide-up sheet for instructions.
 - **No timer-based dismissal anywhere** — the 30-day `dismissedUntil` suppression mechanism was removed entirely (`install-suppression.{ts,test.ts}` deleted). The chevron-minimise + bookmark IS the persistent reminder. `engaged` flag is set only on `appinstalled` event or native prompt "accepted" outcome.
 - **Modal-overlap fix** — ref-counted `blockInstallPitch()` / `unblockInstallPitch()` in `InstallContext` (mirrors `blockSessionClear` pattern in `IdentityContext`). MoveAddressModal / ChangePassphraseModal / RestoreModal call it during their flows so the install pitch doesn't ambush the user mid-rotation. `installPitchBlockTick` is the React-observable proxy.
@@ -358,7 +358,7 @@ User requested a deep doc-vs-code audit after noticing MDs hadn't been updated i
 - **LAUNCH_PLAN.md (medium):** Bucket status table accurate, but "Where we are now" table has 4 outdated rows; Q1/Q3/Q6 marked open but actually resolved. **Deferred to Tier 2.**
 - **FUTURE.md (medium):** QR sync bullet duplicates LAUNCH_PLAN Bucket 6, "Patterns" section conflates "shipped in-app" with "future reusable primitive". **Deferred to Tier 3.**
 - **DIRECTION.md (healthy):** Tagline mismatch (minor), Phase 7 vs Phases 1-3 inconsistency. **Deferred to Tier 3.**
-- **README.md (medium — fixed this session):** Broken `your-org/bsvibes` repo URL. **Fixed.** (Audit also flagged `generate-wallet.mjs` as broken, but it actually exists — false alarm.) Node version note deferred to Tier 3.
+- **README.md (medium — fixed this session):** Broken `your-org/opencook` repo URL. **Fixed.** (Audit also flagged `generate-wallet.mjs` as broken, but it actually exists — false alarm.) Node version note deferred to Tier 3.
 - **SESSION_LOG.md (stale — fixed by this entry):** 14 commits since 2026-06-01 unlogged. **Fixed by this entry.**
 
 ### Files touched in Tier 1 doc updates (this session)
@@ -425,7 +425,7 @@ Biome clean, tsc clean, 87/87 tests pass, prod build clean.
 
 Category: security architecture + UX — completes the rotation/revocation story by closing the "existing device unaware its key was revoked elsewhere" hole. E29 closed "new device adopts stale key"; E30 closes the symmetric case.
 
-**Shape:** UI-layer session-lockout (not per-mutation server gating). Polling sends `x-bsvibes-pubkey` header on every `/api/posts` request; server returns `key_status: { stale: true }` when the pubkey has a forward migration. Client transitions identity to a `staleKey` state, surfaces `<StaleKeyModal>`, replaces the textarea with an amber banner. `createPost` / `bootPost` server actions UNMODIFIED — a malicious WIF holder bypassing the UI is documented as residual risk L7 with retreat path. Reasoning: open/closed principle — `requireIdentity()` Hard Rule #7 universal pattern automatically inherits the lock for any future mutation feature.
+**Shape:** UI-layer session-lockout (not per-mutation server gating). Polling sends `x-opencook-pubkey` header on every `/api/posts` request; server returns `key_status: { stale: true }` when the pubkey has a forward migration. Client transitions identity to a `staleKey` state, surfaces `<StaleKeyModal>`, replaces the textarea with an amber banner. `createPost` / `bootPost` server actions UNMODIFIED — a malicious WIF holder bypassing the UI is documented as residual risk L7 with retreat path. Reasoning: open/closed principle — `requireIdentity()` Hard Rule #7 universal pattern automatically inherits the lock for any future mutation feature.
 
 **Shipped as two commits:**
 
@@ -435,7 +435,7 @@ Category: security architecture + UX — completes the rotation/revocation story
 - IdentityContext wraps `markIdentityStale` with `isSessionClearBlocked()` guard (F3 mitigation — prevents self-stale during own-device rotation).
 - `requireIdentity()` gains stale-key branch with stub opener (replaced in E30b).
 - RestoreModal z-[70] → z-[100]; `currentIdentity` prop made nullable.
-- `/api/posts` flag-gated `key_status` field via `shouldCheckStaleness` helper; reads `x-bsvibes-pubkey` header (not query string — privacy P2); strict env flag check `=== "true"` (F1+F2 fail-open); errors caught + swallowed.
+- `/api/posts` flag-gated `key_status` field via `shouldCheckStaleness` helper; reads `x-opencook-pubkey` header (not query string — privacy P2); strict env flag check `=== "true"` (F1+F2 fail-open); errors caught + swallowed.
 - 24 new tests (20 pubkey-shape + flag-gating + fail-open, 4 derivePubkeyFromWif pinning).
 - Code-auditor verdict: SHIP. All invariants confirmed.
 
@@ -474,7 +474,7 @@ Category: design / planning — no code changes. Locked the full E30 (session-lo
 3. UX lockdown + docs draft — final modal copy, amber banner spec, visual spec mirroring SignInModal, SECURITY_AUDIT.md L7 draft, DECISIONS.md entry draft, RestoreModal dead-end copy refinement.
 
 **Q&A resolution after agent triage:**
-- Q1 soak window → **same-day** (no soak instrumentation exists at BSVibes scale; signal value is low)
+- Q1 soak window → **same-day** (no soak instrumentation exists at OpenCook scale; signal value is low)
 - Q2 chain head → **dropped** (poll returns `{stale: true}` only with no pubkey data; `/api/restore-eligibility` already handles each hop one at a time via 1-hop forward check, so R6 is non-issue with this design)
 - Q3 modal stacking → **global bump RestoreModal z-[70] → z-[100]** (YAGNI on the z-prop option)
 - Q4 feature flag default → **on** (`E30_STALE_KEY_ENABLED=true` at deploy time)
@@ -537,7 +537,7 @@ PostForm.tsx mic diagnostic logs (task #50) intentionally still uncommitted.
 
 Category: security architecture — block restoring any key that has been rotated forward on-chain.
 
-**Why:** every BSVibes user's first identity is plaintext by default. Its recovery file is a permanent leak vector. If restore-then-reclaim were allowed (the previous behavior via the auto-`cleanupMigrations` chain rewrite), anyone who ever obtained the plaintext file could later take over the user's future earnings — even years after upgrading to a strong passphrase. E29 closes this by treating the on-chain migration record as a permanent revocation event (parallel to Google / Apple invalidating sessions on a password change). Three parallel architecture-reviewer agents independently arrived at the same conclusion — pure Design B (warn-only) and B-hybrid (opt-in reclaim) both leave the attack vector open; only Design C-strict (block entirely) closes it.
+**Why:** every OpenCook user's first identity is plaintext by default. Its recovery file is a permanent leak vector. If restore-then-reclaim were allowed (the previous behavior via the auto-`cleanupMigrations` chain rewrite), anyone who ever obtained the plaintext file could later take over the user's future earnings — even years after upgrading to a strong passphrase. E29 closes this by treating the on-chain migration record as a permanent revocation event (parallel to Google / Apple invalidating sessions on a password change). Three parallel architecture-reviewer agents independently arrived at the same conclusion — pure Design B (warn-only) and B-hybrid (opt-in reclaim) both leave the attack vector open; only Design C-strict (block entirely) closes it.
 
 **Implementation across 6 files (~140 LOC added, ~25 removed):**
 
@@ -555,7 +555,7 @@ Category: security architecture — block restoring any key that has been rotate
 
 **Fail-safe behavior:** any network/parse failure during the eligibility check ALSO blocks the restore with "Couldn't verify this key — check your connection and try again." Without verification we can't safely allow the restore.
 
-**Trade-off accepted:** users who lost their newer key and only have a pre-rotation file cannot recover via BSVibes UI. Mitigated by the existing combined-recovery-file pattern (every rotation file contains BOTH keys under one passphrase), so only the very first plaintext save (before any rotation) is unrecoverable. UTXOs at old addresses remain spendable via external BSV wallets.
+**Trade-off accepted:** users who lost their newer key and only have a pre-rotation file cannot recover via OpenCook UI. Mitigated by the existing combined-recovery-file pattern (every rotation file contains BOTH keys under one passphrase), so only the very first plaintext save (before any rotation) is unrecoverable. UTXOs at old addresses remain spendable via external BSV wallets.
 
 **Next**: E30 (planned) — block stale-key MUTATIONS (posts / boots) at the server. Different surface from E29: E29 handles "NEW device adopting stale key", E30 handles "EXISTING device discovering it's stale after rotation on another device". Will reuse the `getForwardMigration` helper from E29.
 
@@ -662,7 +662,7 @@ Implementation guided by three pre-investigation agents (researcher for iOS Web 
 
 5. **`shareOrDownloadBackup(data): Promise<ShareResult>` in `backup-template.ts`** — new export. Uses `navigator.share({ files: [file] })` when available with `application/octet-stream` MIME (iOS HTML-MIME-hostile workaround). Builds `File` synchronously to preserve iOS transient activation across the click→share boundary. `AbortError` = user cancelled = no fallback (would re-trigger the intrusive download sheet). Other errors fall back to `downloadBackup`. Legacy `downloadBackup` retained for fallback + sync emergency paths.
 
-6. **Per-address saved flag** — `bsvibes_saved:<addr6>` localStorage key, ISO date value. Helpers `markAddressSaved` / `isAddressSaved` / `getAddressSavedDate` in `backup-template.ts`. Global `backedUp` flag kept (drives install pitch, first-earning toast). `IdentityBar.showWarningDot` reads `backedUp === false || !isAddressSaved(identity.address)` — either condition surfaces the amber dot. `markBackedUp()` updated to also write the per-address flag (handles existing Save/Copy/Show key paths).
+6. **Per-address saved flag** — `opencook_saved:<addr6>` localStorage key, ISO date value. Helpers `markAddressSaved` / `isAddressSaved` / `getAddressSavedDate` in `backup-template.ts`. Global `backedUp` flag kept (drives install pitch, first-earning toast). `IdentityBar.showWarningDot` reads `backedUp === false || !isAddressSaved(identity.address)` — either condition surfaces the amber dot. `markBackedUp()` updated to also write the per-address flag (handles existing Save/Copy/Show key paths).
 
 7. **RestoreModal restore-pre Save-or-Skip prompt** — `doImport` no longer auto-emits the outgoing identity's file. A `useEffect` lazily builds `outgoingBackupPayload` (encrypted if protected + reAuthPassphrase, plaintext if unprotected) so the Save click handler can call `shareOrDownloadBackup` synchronously. Two-step Skip: tap "Skip" → red warning state with "Go back" + "Skip & restore anyway" requiring second tap. Force-save explicitly rejected per design discussion.
 
@@ -692,7 +692,7 @@ Three parallel agents (code-auditor, designer, architecture-reviewer) investigat
 3. Remove auto-download in `MoveAddressModal.runRecording`. Keep `combinedBackupRef`.
 4. Rotation done-state becomes a context card with stats (*"This device has X posts and Y sats..."*) + primary Save button + secondary "I'll do it later" link.
 5. Replace `<a download>` with `navigator.share({ files: [file] })` — iOS shows native share drawer instead of intrusive download sheet. Fall back to `<a download>` on browsers without Web Share API. Pattern used by Bitwarden.
-6. Per-address saved flag (`bsvibes_saved:<addr6>: <ISO date>`); amber "Unsaved key" badge in IdentityBar persists until address is marked saved.
+6. Per-address saved flag (`opencook_saved:<addr6>: <ISO date>`); amber "Unsaved key" badge in IdentityBar persists until address is marked saved.
 7. Same context-card pattern in RestoreModal restore-pre. Allow Skip with confirmation toggle ("I understand I'll lose this identity"). Force-save explicitly rejected.
 
 **Filename improvement (Option E from architecture-reviewer's options)** DEFERRED. Stays in scope post-launch.
@@ -707,9 +707,9 @@ A-D iPhone testing paused at this point too — B5-B8, C1-C4, D1b, D3 still unte
 
 Category: iOS PWA bugfix — two distinct bugs surfaced in B-category iPhone testing on PWA.
 
-**Bug 1 — iCloud Keychain stopped prompting after first rotation.** User saw exactly ONE saved entry in Settings → Passwords for bsvibes.com, regardless of how many rotations they performed. The form had no `autocomplete="username"` anchor, so iOS's heuristic for "is this a new credential or an update?" fell through to silent — no Save sheet, no Update sheet, nothing.
+**Bug 1 — iCloud Keychain stopped prompting after first rotation.** User saw exactly ONE saved entry in Settings → Passwords for opencook.fun, regardless of how many rotations they performed. The form had no `autocomplete="username"` anchor, so iOS's heuristic for "is this a new credential or an update?" fell through to silent — no Save sheet, no Update sheet, nothing.
 
-**Bug 2 — Rotation/Restore modals closed prematurely when iOS Save Password sheet dismissed.** User tapped Done on the iOS sheet; the BSVibes modal also closed, never showing the done state with Download again / Got it buttons. Reported for MoveAddressModal and RestoreModal.
+**Bug 2 — Rotation/Restore modals closed prematurely when iOS Save Password sheet dismissed.** User tapped Done on the iOS sheet; the OpenCook modal also closed, never showing the done state with Download again / Got it buttons. Reported for MoveAddressModal and RestoreModal.
 
 Three parallel agents (code-auditor, researcher, nextjs) identified four distinct root causes:
 
@@ -814,7 +814,7 @@ Type-check clean, 63/63 tests pass, Biome clean.
 
 Category: Build, iOS-specific resilience UX
 
-Wired the one-time iOS standalone heads-up — fires on a user's first home-screen-icon launch surfacing iOS Intelligent Tracking Prevention reality (Safari may clear saved site data after long inactivity) and reassuring them their recovery file brings everything back. Card-shape (rounded-2xl), 8s auto-dismiss, single "Got it" button (no "Remind me later" — informational, not a save prompt). Detection: `navigator.standalone === true` (iOS-Safari-specific signal, NOT the broader `display-mode: standalone` that includes Android). Flag `bsvibes_ios_storage_notice_shown` set on display (not on dismiss) so backgrounding mid-toast still counts as shown — once per device guaranteed.
+Wired the one-time iOS standalone heads-up — fires on a user's first home-screen-icon launch surfacing iOS Intelligent Tracking Prevention reality (Safari may clear saved site data after long inactivity) and reassuring them their recovery file brings everything back. Card-shape (rounded-2xl), 8s auto-dismiss, single "Got it" button (no "Remind me later" — informational, not a save prompt). Detection: `navigator.standalone === true` (iOS-Safari-specific signal, NOT the broader `display-mode: standalone` that includes Android). Flag `opencook_ios_storage_notice_shown` set on display (not on dismiss) so backgrounding mid-toast still counts as shown — once per device guaranteed.
 
 Mounted inside `FeedContent` in `Feed.tsx`, which only renders when `awaitingWelcomeGate === false` — satisfies the LAUNCH_PLAN #12 sequencing requirement (welcome gate FIRST, then ITP toast) by mount point alone, no coordination state needed.
 
@@ -828,7 +828,7 @@ Bucket 3a build complete (tasks 6–13). Next: Task 14 — manual QA on iPhone (
 
 Category: Build, growth surfaces
 
-Wired the high-stakes save prompt — pill-card toast at `fixed bottom-24 left-1/2` that fires on the user's first non-zero earnings: *"You just earned your first sats. Save your recovery file — if you lose this device without it, they're gone."* with Save now / Later buttons. Both buttons set `bsvibes_first_earning_save_dismissed_until = now + 48h` (architect's correction on LAUNCH_PLAN intent — Save-now needs the same 48h backoff so the toast doesn't re-fire on the next 30s earnings poll if the user abandons the save mid-flow).
+Wired the high-stakes save prompt — pill-card toast at `fixed bottom-24 left-1/2` that fires on the user's first non-zero earnings: *"You just earned your first sats. Save your recovery file — if you lose this device without it, they're gone."* with Save now / Later buttons. Both buttons set `opencook_first_earning_save_dismissed_until = now + 48h` (architect's correction on LAUNCH_PLAN intent — Save-now needs the same 48h backoff so the toast doesn't re-fire on the next 30s earnings poll if the user abandons the save mid-flow).
 
 Mounted in IdentityBar near the existing `GoatModeToast` — `earnedSats`, `backedUp`, and `setShowManage` are all already in scope, no context refactor needed. `onSaveNow` opens the You modal (works for both protected and unprotected users; direct `handleSaveFile` call doesn't work for protected users without the manage gate). Trigger conditions: `earnedSats > 0 && backedUp === false && dismissed_until < now && !sessionDismissed`. Pre-hydration null guards on both `earnedSats` and `backedUp` prevent SSR mismatch.
 
@@ -953,7 +953,7 @@ User: "i am thinking we add github somewhere here whats your thoughts." Conversa
 
 **Shipped (1 file, 3 doc updates):**
 - `src/app/AgentChat.tsx` (pill button at lines 159-185) — added `group` class, decorative octocat SVG (14x14, `text-zinc-300` normal / `text-amber-200/70` highlight) after "Ask AI" label.
-- `src/app/AgentChat.tsx` (modal footer after input row) — new `<div className="border-t border-zinc-800/50 px-4 py-2.5 flex justify-center">` containing an `<a>` to `github.com/Challotes/bsvibes-` with octocat (16x16) + "The code is open." + `↗` arrow, `text-xs text-zinc-300 hover:text-zinc-100`.
+- `src/app/AgentChat.tsx` (modal footer after input row) — new `<div className="border-t border-zinc-800/50 px-4 py-2.5 flex justify-center">` containing an `<a>` to `github.com/Challotes/opencook` with octocat (16x16) + "The code is open." + `↗` arrow, `text-xs text-zinc-300 hover:text-zinc-100`.
 - DECISIONS.md gains "GitHub link: pill tease + modal footer" entry with full rationale + anti-patterns (rejected: header link, peer icon next to pill, manifesto-only, live star count widget, embedded clickable icon).
 - CLAUDE.md `AgentChat.tsx` paragraph rewritten to describe the dual-surface structure + the anti-pattern guard.
 
@@ -1004,7 +1004,7 @@ User reviewed yesterday's backup overhaul output and flagged three issues: (1) t
 - **"Decryption successful" → "Key unlocked"** (warmer, shorter, consistent with the unlock framing of the decrypt label).
 - **Metadata Address label** flips to *"Current address"* on rotation files (where the file contains both current + previous keys), stays as *"Address"* everywhere else.
 - **Green "Private & Offline" banner removed** as cargo. Three places saying "no network calls" (banner, offline badge, footer) was bloat. Offline badge stays; the HTML comment `<!-- No network calls. Verify: View Source. -->` is the actual proof for anyone who cares to verify.
-- **Footer trimmed** to a small monospace stamp `Recovery file · <pathType> · saved <date>` + bsvibes.com link. Stamp helps support tickets ("user sent me a screenshot — what variant?") without taking up real estate.
+- **Footer trimmed** to a small monospace stamp `Recovery file · <pathType> · saved <date>` + opencook.fun link. Stamp helps support tickets ("user sent me a screenshot — what variant?") without taking up real estate.
 - **Universal `copyText(id, btn)` JS helper** hoisted out of the variant-conditional `jsSection` into the always-loaded script block, so both the metadata Address row and the previous-address row use one implementation.
 - **CSS additions:** `.context-block`, `.meta-row.with-copy`, `.meta-copy-btn` + states, `.wif-warning strong`, `.footer-stamp`. **CSS removed:** `.privacy-banner` family (banner gone), `.address-note` (no longer rendered).
 
@@ -1029,7 +1029,7 @@ User asked for an end-to-end audit of every download/display surface that expose
 4. **Red warning beneath every WIF**: "Anyone who has this key controls your account and any funds in it. Never share it — not with support, not with friends, not with anyone." Previous-key blocks gain an extra "may still hold funds if the transfer was skipped" line above the share warning.
 5. **Plaintext-WIF files get a red banner above the card** ("This file is not encrypted. Anyone who can open it can take your account.") and the privacy-banner is hidden (the red signal would otherwise compete).
 6. **Done-state for ChangePassphraseModal** now matches MoveAddressModal — a `'done'` step with "Download again" + "Got it" buttons and copy explaining the file contains both keys. Replaces the prior auto-close so the user sees completion before dismissing.
-7. **Filename pattern** `bsvibes-<pathType>-<anon_name>-<addr6>[-to-<newAddr6>]-<YYYY-MM-DD-HHmm>.html`. `addr6 = address.slice(1, 7)` (skip leading `1` of P2PKH, take next 6 chars). `-to-` (not `>`) between addresses because Windows reserves `>`. anon_name kept verbatim (sanitised to `[a-zA-Z0-9_]` with `-` fallback) so users can correlate files to identities.
+7. **Filename pattern** `opencook-<pathType>-<anon_name>-<addr6>[-to-<newAddr6>]-<YYYY-MM-DD-HHmm>.html`. `addr6 = address.slice(1, 7)` (skip leading `1` of P2PKH, take next 6 chars). `-to-` (not `>`) between addresses because Windows reserves `>`. anon_name kept verbatim (sanitised to `[a-zA-Z0-9_]` with `-` fallback) so users can correlate files to identities.
 
 **Shipped diff (5 files, 1 commit):**
 - `src/services/bsv/backup-template.ts` — `BackupData` adds required `pathType` and optional `oldAddress`. `downloadBackup` signature changed to `(data)` only — filename auto-built via new `buildFilename` helper. HTML template gains `addressSectionHtml` + `wifWarningHtml` helpers, `plaintext-banner` / `address-section` / `address-note` / `wif-warning` styles, plaintext-file privacy-banner suppression, and the post-decrypt result section now displays current/previous addresses above each WIF block.
@@ -1141,7 +1141,7 @@ Three bundled changes to the identity card after live brand-discussion + designe
 
 **closeDropdown also resets activityExpanded.** "View all N" sub-disclosure was the only one that persisted across reopen, inconsistent with `showAdvanced`/`keyRevealed`/`copied`. Two stray `setOpen(false)` paths (Not protected banner click, Add funds link) routed through `closeDropdown` for consistent reset semantics. Architect-reviewer audited all 30 useState entries in `IdentityChip` to confirm no other state needed touching — `chartExpanded` (default-true) deliberately excluded; `addressCopied`/`transferStatus` are minor sister-inconsistencies left for a future pass.
 
-**Currency display defaults to Goat on protected accounts.** `useCurrencyMode` gained protection-aware default (reads `bfn_keypair_enc` synchronously in lazy initializer to avoid `$ → sats` first-paint flash), `hasUserChosen` flag (derived from localStorage presence of `bsvibes_currency_mode`), and `setModeProgrammatically` (in-session switch that does NOT mark as chosen, so reload still re-applies the protection-aware default). New `GoatModeToast` (positive amber styling, auto-dismiss 6s) fires once ever — gated by `bsvibes_goat_welcome_shown` — when a user transitions from unprotected to protected without having toggled. User's explicit toggle (in either direction) is honored forever once set. Code-auditor pre-commit pass verified: no infinite loop, state coherence holds across reload, hydration-safe in client boundary, multi-tab race is cosmetic and acceptable.
+**Currency display defaults to Goat on protected accounts.** `useCurrencyMode` gained protection-aware default (reads `bfn_keypair_enc` synchronously in lazy initializer to avoid `$ → sats` first-paint flash), `hasUserChosen` flag (derived from localStorage presence of `opencook_currency_mode`), and `setModeProgrammatically` (in-session switch that does NOT mark as chosen, so reload still re-applies the protection-aware default). New `GoatModeToast` (positive amber styling, auto-dismiss 6s) fires once ever — gated by `opencook_goat_welcome_shown` — when a user transitions from unprotected to protected without having toggled. User's explicit toggle (in either direction) is honored forever once set. Code-auditor pre-commit pass verified: no infinite loop, state coherence holds across reload, hydration-safe in client boundary, multi-tab race is cosmetic and acceptable.
 
 Brand discussion sidebar (no code): explored renaming BSVibes → OpenCook for builder-targeted positioning. User owns `opencook.fun`; .ai is taken by a Solana token launchpad but considered low-traffic and not blocking. Rebrand mechanics deferred until launch. No DECISIONS.md entry yet — name not yet ratified, deferred.
 
@@ -1704,7 +1704,7 @@ Major simplification of identity dropdown:
 - All 6 bugs fixed (B1-B6): plaintext fallback, double encrypt, fragile regex,
   state persistence, mutual exclusion, download throttle
 - Unified recovery files: always both keys, no more "backup" terminology
-- Self-contained HTML recovery files with embedded BSVibes icon
+- Self-contained HTML recovery files with embedded OpenCook icon
 - Private & Offline banner in recovery files
 - Passphrase hint in all download paths
 - File naming: bsvibes-{name}-{date}.html
@@ -1927,7 +1927,7 @@ UI:
 - Created `useFeedPolling` hook: polls every 5s, pauses when tab is hidden, resumes on visibilitychange
 - Feed.tsx wired to polling hook — server-rendered initial data stays fresh without any page reload
 - Optimistic UI: post appears immediately after submit with spinner + 50% opacity; auto-pruned when polling confirms it
-- Identity chip now shows an amber pulsing dot (like a notification badge) until user opens the dropdown for the first time; stored in localStorage as `bsvibes_identity_backed_up`
+- Identity chip now shows an amber pulsing dot (like a notification badge) until user opens the dropdown for the first time; stored in localStorage as `opencook_identity_backed_up`
 
 ## 2026-03-25 — Security, Error Handling, UX & Streaming Sprint
 

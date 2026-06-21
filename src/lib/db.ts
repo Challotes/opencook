@@ -7,7 +7,7 @@ try {
   db = new Database(process.env.DATABASE_PATH || path.join(process.cwd(), "local.db"));
 } catch (err) {
   throw new Error(
-    `BSVibes DB: failed to open local.db — ${err instanceof Error ? err.message : String(err)}`
+    `OpenCook DB: failed to open local.db — ${err instanceof Error ? err.message : String(err)}`
   );
 }
 
@@ -101,7 +101,7 @@ try {
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_txid ON payouts(txid, recipient_address)");
 } catch (err) {
   throw new Error(
-    `BSVibes DB: failed during schema init — ${err instanceof Error ? err.message : String(err)}`
+    `OpenCook DB: failed during schema init — ${err instanceof Error ? err.message : String(err)}`
   );
 }
 

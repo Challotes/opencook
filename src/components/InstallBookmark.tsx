@@ -13,7 +13,7 @@ import { shouldShowInstallPitch } from "@/lib/install-pitch";
  * (`<InstallPitch variant="banner" />`).
  *
  * Design (settled 2026-06-03):
- * - 30×30 BSVibes app icon inside a 34×34 container (border-zinc-800 +
+ * - 30×30 OpenCook app icon inside a 34×34 container (border-zinc-800 +
  *   1px padding ring) — fills the chip while keeping the container shape
  *   readable. Geometry matches the Ask AI pill exactly (34×34 outer,
  *   `border` not `ring`, `mt-1` baseline offset) so tops and bottoms

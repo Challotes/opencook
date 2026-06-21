@@ -1,10 +1,10 @@
 /**
  * backup-template.ts
- * Generates a self-contained HTML recovery file for BSVibes identities.
+ * Generates a self-contained HTML recovery file for OpenCook identities.
  * The generated file works entirely offline — no network calls, no external scripts.
  */
 
-// The BSVibes icon SVG, embedded as a base64 favicon.
+// The OpenCook icon SVG, embedded as a base64 favicon.
 // Source: public/icon.svg
 const ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">' +
@@ -77,7 +77,7 @@ function formatSavedDate(createdAt: string): string {
 /**
  * Builds the filename for a backup download.
  *
- * Pattern: bsvibes-<pathType>-<anon_name>-<addr6>-<YYYY-MM-DD-HHmm>.html
+ * Pattern: opencook-<pathType>-<anon_name>-<addr6>-<YYYY-MM-DD-HHmm>.html
  *
  * addr6 = address.slice(1, 7)  (skip leading '1' of P2PKH, take next 6 chars)
  */
@@ -95,7 +95,7 @@ function buildFilename(data: BackupData): string {
   // Sanitise anon name: keep alphanumeric + underscore, replace others with hyphen
   const safeName = data.name.replace(/[^a-zA-Z0-9_]/g, "-");
 
-  return `bsvibes-${data.pathType}-${safeName}-${addrPart}-${datePart}.html`;
+  return `opencook-${data.pathType}-${safeName}-${addrPart}-${datePart}.html`;
 }
 
 /**
@@ -115,7 +115,7 @@ export function generateBackupHtml(data: BackupData): string {
   // caller built the BackupData (spread-then-override guarantees the stamp wins).
   const dataJson = JSON.stringify({ ...data, fileVersion: RECOVERY_FILE_VERSION });
 
-  const title = `BSVibes Recovery — ${data.name}`;
+  const title = `OpenCook Recovery — ${data.name}`;
 
   // Resolved at template-build time so iOS Files Quick Look (which blocks
   // inline JS in local HTML previews) renders these values without needing
@@ -132,7 +132,7 @@ export function generateBackupHtml(data: BackupData): string {
       case "restore-pre":
         return "This is a snapshot of the account that was on this device before you restored. If you need to go back, this file is your way in.";
       default:
-        return "This file lets you recover your BSVibes account on any device. Your posts and earnings are tied to the address above.";
+        return "This file lets you recover your OpenCook account on any device. Your posts and earnings are tied to the address above.";
     }
   }
 
@@ -162,7 +162,7 @@ export function generateBackupHtml(data: BackupData): string {
     "      <p>Apple's file preview can't run the code this file needs for decryption. Your recovery key is still securely encrypted with your passphrase.</p>",
     "      <p><strong>Two ways to access it:</strong></p>",
     "      <ul>",
-    "        <li><strong>From the BSVibes app:</strong> Open the You menu and tap <em>Restore key from file</em> &mdash; decryption happens inside the app itself.</li>",
+    "        <li><strong>From the OpenCook app:</strong> Open the You menu and tap <em>Restore key from file</em> &mdash; decryption happens inside the app itself.</li>",
     "        <li><strong>From a browser:</strong> Open this file in Safari, Chrome, or Firefox on any Mac or PC to enter your passphrase and view your recovery key directly.</li>",
     "      </ul>",
     "    </div>",
@@ -432,7 +432,7 @@ export function generateBackupHtml(data: BackupData): string {
     "\n" +
     "    <footer>\n" +
     `      <div class="footer-stamp">${escapeHtml(footerStamp)}</div>\n` +
-    '      <a href="https://bsvibes.com" target="_blank" rel="noopener">bsvibes.com</a>\n' +
+    '      <a href="https://opencook.fun" target="_blank" rel="noopener">opencook.fun</a>\n' +
     "    </footer>\n" +
     "  </div>\n" +
     "\n" +
@@ -649,7 +649,7 @@ export function getStoredHint(): string | undefined {
 // that flips true on first-ever save. It drives the install pitch, the first-
 // earning prompt, etc. We keep it as-is for those existing consumers.
 //
-// E27 adds a per-address flag layered on top: `bsvibes_saved:<addr6>` storing
+// E27 adds a per-address flag layered on top: `opencook_saved:<addr6>` storing
 // the ISO date of the most recent save for that address. Each rotation creates
 // a new address, so users need to save once per identity — but global
 // "backedUp ever?" semantics are preserved.
@@ -657,7 +657,7 @@ export function getStoredHint(): string | undefined {
 // `addr6 = address.slice(1, 7)` to match `buildFilename`'s addr6 convention
 // (skip the leading "1" since all P2PKH addresses start with that).
 
-const ADDR_SAVED_KEY_PREFIX = "bsvibes_saved:";
+const ADDR_SAVED_KEY_PREFIX = "opencook_saved:";
 
 function addrSlug(address: string): string {
   return address.slice(1, 7);

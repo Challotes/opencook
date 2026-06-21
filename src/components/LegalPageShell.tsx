@@ -8,7 +8,7 @@ export function LegalPageShell({ markdown }: { markdown: string }) {
     <main className="min-h-[100dvh] bg-black text-zinc-200">
       <div className="mx-auto max-w-2xl px-5 py-8">
         <Link href="/" className="text-xs text-amber-400 transition-colors hover:text-amber-300">
-          ← Back to BSVibes
+          ← Back to OpenCook
         </Link>
         <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-xs leading-relaxed text-amber-200/90">
           <strong className="font-semibold">Draft — not final.</strong> This is a working draft and

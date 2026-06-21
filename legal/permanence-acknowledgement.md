@@ -1,6 +1,6 @@
-<!-- DRAFT — not legal advice — [LAWYER] review required before launch. [TODO: product name BSVibes → OpenCook at rebrand] -->
+<!-- DRAFT — not legal advice — [LAWYER] review required before launch. -->
 
-# BSVibes — Permanence Acknowledgement (DRAFT)
+# OpenCook — Permanence Acknowledgement (DRAFT)
 
 > **This is a working draft for attorney review. It is not legal advice and is not yet in force.**
 > This short notice is shown to a user **before their first post**, as an affirmative-consent gate.

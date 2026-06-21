@@ -24,9 +24,9 @@ import { encryptWif } from "@/services/bsv/crypto";
 import { getStoredAnonName, isEffectivelyProtected, unlockIdentity } from "@/services/bsv/identity";
 import { FundAddress } from "./FundAddress";
 
-const BACKED_UP_KEY = "bsvibes_identity_backed_up";
-const GOAT_WELCOME_SHOWN_KEY = "bsvibes_goat_welcome_shown";
-const PASSPHRASE_NUDGE_DISMISSED_UNTIL_KEY = "bsvibes_passphrase_nudge_dismissed_until";
+const BACKED_UP_KEY = "opencook_identity_backed_up";
+const GOAT_WELCOME_SHOWN_KEY = "opencook_goat_welcome_shown";
+const PASSPHRASE_NUDGE_DISMISSED_UNTIL_KEY = "opencook_passphrase_nudge_dismissed_until";
 const PASSPHRASE_NUDGE_BACKOFF_DAYS = 30;
 
 function isPassphraseNudgeSuppressed(): boolean {
@@ -472,7 +472,7 @@ export function IdentityChip(): React.JSX.Element | null {
       });
       setJustDownloaded(true);
     } catch {
-      console.error("BSVibes: save encrypted failed");
+      console.error("OpenCook: save encrypted failed");
     } finally {
       setTimeout(() => setDownloading(false), 1000);
     }

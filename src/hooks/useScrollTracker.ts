@@ -40,7 +40,7 @@ export function useScrollTracker({
   const unreadIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
-    if (localStorage.getItem("bsvibes_genesis_visited") === "1") {
+    if (localStorage.getItem("opencook_genesis_visited") === "1") {
       setGenesisVisited(true);
     }
     setGenesisHydrated(true);
@@ -67,7 +67,7 @@ export function useScrollTracker({
       setIsAtTop(atTop);
       if (atTop && !genesisVisited) {
         setGenesisVisited(true);
-        localStorage.setItem("bsvibes_genesis_visited", "1");
+        localStorage.setItem("opencook_genesis_visited", "1");
       }
       if (atBottom) setUnreadCount(0);
     }

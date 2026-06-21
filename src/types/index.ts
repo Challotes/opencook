@@ -1,4 +1,4 @@
-// Shared domain types for BSVibes.
+// Shared domain types for OpenCook.
 
 export interface Identity {
   name: string;

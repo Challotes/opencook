@@ -4,7 +4,7 @@ import { cleanLegalMarkdown } from "./legal-doc";
 describe("cleanLegalMarkdown", () => {
   it("strips the HTML draft comment and inline [LAWYER:] notes but keeps [TODO:] + body", () => {
     const raw = [
-      "<!-- DRAFT — [TODO: product name BSVibes → OpenCook] -->",
+      "<!-- DRAFT — not legal advice — [LAWYER] review required before launch. -->",
       "",
       "# Title",
       "",

@@ -34,7 +34,7 @@ function getServerKey(): PrivateKey | null {
     _serverKey = PrivateKey.fromWif(wif);
     return _serverKey;
   } catch (e) {
-    console.error("BSVibes: invalid BSV_SERVER_WIF", e);
+    console.error("OpenCook: invalid BSV_SERVER_WIF", e);
     return null;
   }
 }
@@ -242,13 +242,13 @@ async function getSourceTransaction(utxo: UTXO): Promise<Transaction | null> {
       READ_TIMEOUT_MS
     );
     if (!res.ok) {
-      console.error(`BSVibes wallet: WoC /tx/hex returned ${res.status} for ${utxo.tx_hash}`);
+      console.error(`OpenCook wallet: WoC /tx/hex returned ${res.status} for ${utxo.tx_hash}`);
       return null;
     }
     const hex = await res.text();
     return Transaction.fromHex(hex);
   } catch (e) {
-    console.error(`BSVibes wallet: getSourceTransaction failed for ${utxo.tx_hash}`, e);
+    console.error(`OpenCook wallet: getSourceTransaction failed for ${utxo.tx_hash}`, e);
     return null;
   }
 }
@@ -268,14 +268,14 @@ export async function buildAndBroadcast(
   // spend that reaches the wallet directly.
   if (isServerSpendDisabled()) {
     console.warn(
-      "BSVibes wallet: spending DISABLED (BSV_WALLET_SPEND_DISABLED) — refusing to broadcast"
+      "OpenCook wallet: spending DISABLED (BSV_WALLET_SPEND_DISABLED) — refusing to broadcast"
     );
     return { status: "spend_disabled" };
   }
 
   const key = getServerKey();
   if (!key) {
-    console.error("BSVibes wallet: no BSV_SERVER_WIF configured");
+    console.error("OpenCook wallet: no BSV_SERVER_WIF configured");
     return { status: "no_wallet" };
   }
 
@@ -301,7 +301,7 @@ async function _buildAndBroadcastInner(
   const utxos = await reserveUtxos(totalNeeded);
 
   if (!utxos) {
-    console.error("BSVibes wallet: insufficient funds or no UTXOs available");
+    console.error("OpenCook wallet: insufficient funds or no UTXOs available");
     return { status: "insufficient_funds" };
   }
 
@@ -312,7 +312,7 @@ async function _buildAndBroadcastInner(
     for (const utxo of utxos) {
       const sourceTx = await getSourceTransaction(utxo);
       if (!sourceTx) {
-        console.error(`BSVibes wallet: failed to fetch source tx ${utxo.tx_hash}`);
+        console.error(`OpenCook wallet: failed to fetch source tx ${utxo.tx_hash}`);
         releaseUtxos(utxos);
         return { status: "broadcast_failed", error: "Failed to fetch source transaction" };
       }
@@ -367,7 +367,7 @@ async function _buildAndBroadcastInner(
         const txid = tx.id("hex") as string;
         releaseUtxos(utxos);
         console.error(
-          `BSVibes wallet: broadcast TIMEOUT (indeterminate) txid=${txid} — not rebuilding (tx may have landed)`
+          `OpenCook wallet: broadcast TIMEOUT (indeterminate) txid=${txid} — not rebuilding (tx may have landed)`
         );
         return { status: "broadcast_timeout" };
       }
@@ -424,7 +424,7 @@ async function _buildAndBroadcastInner(
       retryCount < 3
     ) {
       console.warn(
-        `BSVibes wallet: double-spend detected, blacklisting competing UTXOs and retrying (attempt ${retryCount + 1}/3)`
+        `OpenCook wallet: double-spend detected, blacklisting competing UTXOs and retrying (attempt ${retryCount + 1}/3)`
       );
       for (const competingTxid of dsResult.more.competingTxs) {
         try {
@@ -447,11 +447,11 @@ async function _buildAndBroadcastInner(
     }
 
     releaseUtxos(utxos);
-    console.error("BSVibes: broadcast failed", broadcastResult);
+    console.error("OpenCook: broadcast failed", broadcastResult);
     return { status: "broadcast_failed", error: String(broadcastResult) };
   } catch (e) {
     releaseUtxos(utxos);
-    console.error("BSVibes: transaction error", e);
+    console.error("OpenCook: transaction error", e);
     return { status: "broadcast_failed", error: e instanceof Error ? e.message : String(e) };
   }
 }

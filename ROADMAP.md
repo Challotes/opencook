@@ -18,7 +18,7 @@
 
 ## Phase 1.5: UI Overhaul & Bootboard — COMPLETE
 
-- [x] Renamed project to BSVibes (from "Build From Nothing")
+- [x] Renamed project to BSVibes (from "Build From Nothing") → rebranded to OpenCook 2026-06-13
 - [x] Telegram-style feed layout (newest at bottom, scroll-to-bottom with unread count)
 - [x] Bootboard feature (pay-to-spotlight, boot counter per post, live timer)
 - [x] Bootboard animations (shake, glow, slide-in on holder change)
@@ -321,7 +321,7 @@ Right-sized after an owner free-speech discussion (see DECISIONS.md "Thin-core c
 
 - [x] **Thin pre-publish content filter (illegal-floor only) — DONE 2026-06-16.** `lib/content-filter.ts` `screenContent()` in `createPost` before DB insert + broadcast; operator-supplied `CONTENT_DENYLIST` env (not committed); best-effort + extensible; permissive when unset (a "before public launch" operator gate). Unit-tested. The one real guard, because the server broadcasts the OP_RETURN.
 - [x] **Plain disclaimer docs — DONE 2026-06-16** (`legal/terms-of-service.md`, `legal/privacy-policy.md`, `legal/permanence-acknowledgement.md`) — lawyer-ready drafts: every operator/jurisdiction field is a `[TODO]`, every hard clause carries a `[LAWYER]` marker, accurate "hidden-not-deleted" verbs, only the moderation that actually exists. Reviewed line-by-line (Hard Rule #6 holds).
-- [x] **Disclaimer surfacing — DONE 2026-06-16.** `/terms` + `/privacy` static pages (render the drafts behind a DRAFT banner via a small no-dependency markdown renderer; internal `[LAWYER]` notes stripped, `[TODO]` placeholders kept; build-time file read → both pages prerender static). "Terms · Privacy" links in the You modal + the Ask-AI modal footer. One-time pre-first-post **permanence acknowledgement gate** (`PermanenceGate`, localStorage `bsvibes_permanence_ack`) — affirmative consent at the legally-meaningful first-post moment, preserves 2-click onboarding (one tap, once).
+- [x] **Disclaimer surfacing — DONE 2026-06-16.** `/terms` + `/privacy` static pages (render the drafts behind a DRAFT banner via a small no-dependency markdown renderer; internal `[LAWYER]` notes stripped, `[TODO]` placeholders kept; build-time file read → both pages prerender static). "Terms · Privacy" links in the You modal + the Ask-AI modal footer. One-time pre-first-post **permanence acknowledgement gate** (`PermanenceGate`, localStorage `opencook_permanence_ack`) — affirmative consent at the legally-meaningful first-post moment, preserves 2-click onboarding (one tap, once).
 - [ ] **OWNER, before public launch (not a build blocker):** (a) set `CONTENT_DENYLIST`; (b) ~1hr lawyer on the 3 hard risks — GDPR-erasure-vs-immutable-chain wording, CSAM/operator-as-broadcaster exposure, money-transmitter characterization; (c) register a DMCA agent + fill the doc `[TODO]` placeholders.
 
 ## Phase 7: The Recursive Model — PLANNED

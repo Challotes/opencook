@@ -98,7 +98,7 @@ Every split transaction includes an OP_RETURN with metadata. Both boot paths
 ```json
 {
   "v": 1,
-  "app": "bsvibes",
+  "app": "opencook",
   "type": "boot_split",
   "post_id": 42,
   "booter": "1BooterAddress…",
@@ -200,7 +200,7 @@ No `contributor_balances` table — true no-custody means no stored balances.
 
 ### Key Attribution
 
-Key rotation was removed from BSVibes at launch (2026-06-14) in favour of encrypt-in-place: adding or changing a passphrase wraps the existing WIF without changing the key or address. The `migrations` DB table and the `buildMigrationMap` / chain-resolver code in `weights.ts` have been deleted.
+Key rotation was removed from OpenCook at launch (2026-06-14) in favour of encrypt-in-place: adding or changing a passphrase wraps the existing WIF without changing the key or address. The `migrations` DB table and the `buildMigrationMap` / chain-resolver code in `weights.ts` have been deleted.
 
 Posts attribute directly to the signing pubkey and its derived address. A user's weight is the sum of all posts signed by that single, permanent pubkey. No chain-walk is needed.
 

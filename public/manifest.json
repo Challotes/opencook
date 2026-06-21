@@ -1,6 +1,6 @@
 {
-  "name": "BSVibes",
-  "short_name": "BSVibes",
+  "name": "OpenCook",
+  "short_name": "OpenCook",
   "description": "A platform that builds itself. Agentic Fairness on BSV.",
   "start_url": "/",
   "display": "standalone",

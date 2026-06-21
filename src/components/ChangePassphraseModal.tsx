@@ -197,7 +197,7 @@ export function ChangePassphraseModal({
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       setError(msg || "Something went wrong — try again");
-      console.error("BSVibes: passphrase change failed", e);
+      console.error("OpenCook: passphrase change failed", e);
       unblock();
     } finally {
       setWorking(false);

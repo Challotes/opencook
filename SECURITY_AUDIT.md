@@ -150,7 +150,7 @@ Read-only feed polling was historically unrate-limited by design (every client h
 **Status:** shipped 2026-06-03 commit `7891355`.
 
 ### OBS-S4: E30 stale-key detection in `/api/posts` — SUPERSEDED (2026-06-14)
-Already documented in L7; noted here for cross-reference. Polling sent `x-bsvibes-pubkey`; server returned `key_status: { stale: true }` gated by `E30_STALE_KEY_ENABLED`. **Superseded 2026-06-14:** key rotation removed; stale keys cannot exist when the address never changes. The header, the `key_status` response field, and the `E30_STALE_KEY_ENABLED` env flag have all been removed. `StaleKeyModal` deleted.
+Already documented in L7; noted here for cross-reference. Polling sent `x-opencook-pubkey`; server returned `key_status: { stale: true }` gated by `E30_STALE_KEY_ENABLED`. **Superseded 2026-06-14:** key rotation removed; stale keys cannot exist when the address never changes. The header, the `key_status` response field, and the `E30_STALE_KEY_ENABLED` env flag have all been removed. `StaleKeyModal` deleted.
 
 ### OBS-N1: `/api/agent` rate-limit header parsing inconsistency — FIXED 2026-06-05
 **Severity:** LOW — minor rate-limit bypass vector.
@@ -273,7 +273,7 @@ the fairness config: every boot conserves value (Σinputs = Σoutputs + miner fe
 the paid boot's 5/15/80 split matches config to the satoshi (platform 249 = exact
 5% of 4,992; net cost 3,703 after the user's own creator/pool share returned from
 booting their own post), and all 29 OP_RETURN records are well-formed + consistent
-(`v:1`/`app:bsvibes`/`type:boot_split`, `total` == on-chain split). DB payouts
+(`v:1`/`app:opencook`/`type:boot_split`, `total` == on-chain split). DB payouts
 ledger (7,172) matches the chain exactly — no value created/destroyed, no ledger
 drift, no malformed/missing record. The only delta was a cosmetic earnings-display
 LAG (UI showed 7,071 vs 7,172 on chain/DB) caused by a stale read before the last

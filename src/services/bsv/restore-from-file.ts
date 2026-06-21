@@ -1,5 +1,5 @@
 /**
- * Pure file-format parser for BSVibes recovery files. No side effects (no DOM,
+ * Pure file-format parser for OpenCook recovery files. No side effects (no DOM,
  * no storage, no network). Returns a typed payload that callers (`RestoreModal`,
  * `HomeScreenWelcomeGate`) hand off to `decryptWif` and `importEncryptedIdentity`.
  *
