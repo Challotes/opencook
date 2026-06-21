@@ -230,6 +230,7 @@ Read these to understand the full picture:
 - **ROADMAP.md** — What's done, what's next, what's planned
 - **LAUNCH_PLAN.md** — Active launch-prep scratchpad (temporary; will be `git rm`'d at launch-close per memory `project_launch_plan_lifecycle.md`). 12 confirmed decisions, five work buckets, sequenced build plan
 - **LAUNCH_CHECKLIST.md** — Temporary deploy-day do-list (env vars, infra, UptimeRobot, legal, verify) consolidated from every phase. Execute at Phases 8–9; `git rm` at launch-close (same lifecycle as LAUNCH_PLAN.md).
+- **QA_CHECKLIST.md** — Temporary Phase 8 manual device-QA script (73 prioritized checks across 7 device profiles, 12 history-grounded fragile-area hotspots, 6 launch-blocker callouts, rebrand visual checks). Owner works through it on real devices; `git rm` at launch-close.
 - **FUTURE.md** — Ideas and explorations not yet built (handles, AFP protocol, agents, boot signals)
 - **SESSION_LOG.md** — What happened in each working session
 
