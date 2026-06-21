@@ -9,11 +9,10 @@
 const ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">' +
   '<rect width="512" height="512" rx="96" fill="#000000"/>' +
-  '<rect x="0" y="0" width="512" height="8" rx="4" fill="#f59e0b"/>' +
   '<text x="256" y="300" font-family="ui-monospace,\'SF Mono\',\'Cascadia Code\',monospace"' +
-  ' font-weight="800" font-size="220" fill="#f59e0b" text-anchor="middle"' +
-  ' dominant-baseline="middle" letter-spacing="-8">BS</text>' +
-  '<circle cx="256" cy="420" r="10" fill="#f59e0b" opacity="0.5"/>' +
+  ' font-weight="800" font-size="220" text-anchor="middle"' +
+  ' dominant-baseline="middle" letter-spacing="-10">' +
+  '<tspan fill="#f59e0b">O</tspan><tspan fill="#ffffff">C</tspan></text>' +
   "</svg>";
 
 function svgToBase64(svg: string): string {
