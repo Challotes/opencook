@@ -302,8 +302,9 @@ export function ChangePassphraseModal({
                 <>
                   <div className="border-l-2 border-amber-500/60 pl-2.5 py-0.5">
                     <p className="text-[11px] text-amber-400/90 leading-relaxed">
-                      Passphrase changed. Save your updated recovery file now &mdash; your old file
-                      no longer works.
+                      Passphrase changed. Save your new recovery file now. Your old file still works
+                      with your old passphrase &mdash; delete old copies if that passphrase was ever
+                      exposed.
                     </p>
                   </div>
                   <div className="flex gap-2 pt-3">
@@ -395,7 +396,8 @@ export function ChangePassphraseModal({
                   hidden
                 />
                 <p className="text-[11px] text-amber-400/80 leading-relaxed">
-                  Your old recovery file will stop working. You&apos;ll save a new one next.
+                  You&apos;ll save a new recovery file that uses your new passphrase. Your old file
+                  still opens with your old passphrase.
                 </p>
                 <input
                   type="password"

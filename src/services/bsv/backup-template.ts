@@ -151,11 +151,21 @@ export function generateBackupHtml(data: BackupData): string {
   // address, because that's the only place it appears.
   const bodySection = [
     "    <!-- Encrypted recovery file: passphrase required -->",
-    "    <!-- Quick Look notice: visible by default in renderers that don't run JS",
-    "         (iOS Files / Quick Look, email previews). The script block hides this",
-    "         on load when JS runs, so browsers see only the decrypt UI. We can't",
-    "         use <noscript> here because iOS Quick Look's WebKit reports scripting",
-    "         as 'enabled' at the engine level even when it never executes scripts. -->",
+    '    <div class="card" id="decrypt-section">',
+    data.hint
+      ? `      <div class="hint-box"><strong>Memory clue:</strong> ${escapeHtml(data.hint)}</div>`
+      : "",
+    '      <label for="passphrase-input">Enter your passphrase to unlock your secret key</label>',
+    '      <input type="password" id="passphrase-input" placeholder="Your passphrase" autocomplete="current-password" onfocus="this.scrollIntoView({block:\'center\'})" />',
+    '      <button class="primary" id="decrypt-btn" onclick="handleDecrypt()">Decrypt</button>',
+    "    </div>",
+    "",
+    "    <!-- Quick Look notice, placed BELOW the decrypt panel (people try decrypt",
+    "         first, then read this). Visible by default in renderers that don't run",
+    "         JS (iOS Files / Quick Look, email previews); the inline script right",
+    "         after it hides it synchronously where JS runs, so a real browser never",
+    "         flashes it. We can't use <noscript> — iOS Quick Look reports scripting",
+    "         'enabled' at the engine level even though it never executes scripts. -->",
     '    <div id="quicklook-notice" class="noscript-banner">',
     "      <strong>Your key is safe &mdash; but this preview can't unlock it.</strong>",
     "      <p>Phones usually can't run the code this file needs to decrypt. Your secret key is still safely encrypted with your passphrase.</p>",
@@ -165,14 +175,7 @@ export function generateBackupHtml(data: BackupData): string {
     "        <li><strong>Or restore it in OpenCook</strong> &mdash; open the You menu and tap <em>Restore</em>; decryption happens inside the app.</li>",
     "      </ul>",
     "    </div>",
-    '    <div class="card" id="decrypt-section">',
-    data.hint
-      ? `      <div class="hint-box"><strong>Memory clue:</strong> ${escapeHtml(data.hint)}</div>`
-      : "",
-    '      <label for="passphrase-input">Enter your passphrase to unlock your secret key</label>',
-    '      <input type="password" id="passphrase-input" placeholder="Your passphrase" autocomplete="current-password" />',
-    '      <button class="primary" id="decrypt-btn" onclick="handleDecrypt()">Decrypt all</button>',
-    "    </div>",
+    "    <script>document.getElementById('quicklook-notice').style.display='none';</script>",
     "",
     '    <div id="spinner" class="spinner"></div>',
     "",
