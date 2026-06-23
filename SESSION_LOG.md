@@ -2,6 +2,18 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-24 — Phase 8 Android QA round 1 (fixes from owner device-testing)
+
+Category: device-QA fixes (mobile UX + copy + display; no money-path logic). 4 read-only agents diagnosed the 9 Android findings (validated vs DECISIONS); fixed in commit `e240e90`.
+
+- **Feed scroll (#1):** the old `isAtBottom` check flip-flopped once the keyboard shrank the viewport (the reported "sometimes scrolls, sometimes badges"). New policy: the user's OWN post always scrolls to it + sticks through the ~500ms confirmation (`useScrollTracker.markJustPosted`, fired from `Feed` on optimistic-post add); other users' polled posts NEVER yank the scroll — they go to the unread badge. Consistent across all devices.
+- **Enter key (#3):** on touch devices (`pointer: coarse`) Return inserts a newline (post via the send button); desktop keeps Enter-to-post (`PostForm`).
+- **Earnings decimals (#4/#8):** owner decided KEEP dollars as default; the fix is removing the hard 2-decimal cap. `RestoreModal` now uses the shared `satsToDollars` dynamic formatter (matching the chip) instead of an inline `.toFixed(2)` — sub-cent no longer shows `$0.00`. (The chip already used dynamic decimals; the "$0.00" the owner saw was the honest 0-conf balance.) The earlier "+amount" flash fix works; in $ mode it shows dynamic-decimal dollars.
+- **Mobile passphrase modal (#5/#6):** `onFocus` scrollIntoView keeps the focused input above the Android keyboard (ProtectModal + ChangePassphraseModal + the shared PassphrasePrompt → covers RestoreModal). Outside-tap no longer dismisses the three content-creating modals (Protect / ChangePassphrase / Restore) — high-stakes, X+Cancel remain; SignInModal/FundAddress unchanged.
+- **Recovery-file preview (#7):** generalized the "Apple preview can't decrypt" notice to device-neutral wording (it correctly shows in ANY JS-off file preview incl. Android Files/Gmail — the inverse-noscript mechanism, kept); removed the address Copy button (clipboard fails in mobile file previews but still flipped to "Copied!" — a false success; the `<input readonly>` long-press Select All copies the full address). Deferred (maybe-follow-up): swap the address input → wrapping textarea if visual clipping bugs the owner on re-test.
+- **Copy (#2):** first-earning toast 2nd line → "it's your only way back in if you lose this device."
+- All UI/copy/display; tsc + biome + 150 tests + next build green. NEXT: owner re-tests on Android + continues (iPhone A/B remaining; Samsung re-test).
+
 ## 2026-06-23 — Phase 8 desktop QA round 1 (fixes from owner device-testing)
 
 Category: device-QA fixes (display/copy/UI + one additive feed feature). Owner ran the desktop QA pass; findings diagnosed by 4 read-only agents (validated vs DECISIONS), then fixed.
