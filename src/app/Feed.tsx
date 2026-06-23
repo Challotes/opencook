@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { BootToast } from "@/components/BootToast";
 import { HomeScreenWelcomeGate } from "@/components/HomeScreenWelcomeGate";
 import { InstallPitch } from "@/components/InstallPitch";
@@ -163,7 +163,17 @@ function FeedContent({
     genesisHydrated,
     scrollToBottom,
     scrollToGenesis,
+    markJustPosted,
   } = useScrollTracker({ postCount: serverPosts.length, postIds });
+
+  // When the user posts, their optimistic post appears at the bottom — scroll to
+  // it and stick there through the ~500ms confirmation (markJustPosted). Other
+  // users' posts never yank the scroll (they go to the unread badge). (QA 2026-06-23)
+  const prevOptimisticLen = useRef(optimisticPosts.length);
+  useEffect(() => {
+    if (optimisticPosts.length > prevOptimisticLen.current) markJustPosted();
+    prevOptimisticLen.current = optimisticPosts.length;
+  }, [optimisticPosts.length, markJustPosted]);
 
   // iOS Safari scroll-compositor warmup. iOS's auto-scroll-into-view (which
   // brings the focused textarea above the soft keyboard) skips its

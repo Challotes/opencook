@@ -19,6 +19,7 @@ interface UseScrollTrackerReturn {
   genesisHydrated: boolean;
   scrollToBottom: () => void;
   scrollToGenesis: () => void;
+  markJustPosted: () => void;
 }
 
 export function useScrollTracker({
@@ -54,6 +55,16 @@ export function useScrollTracker({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     setUnreadCount(0);
   }, []);
+
+  // Set when the LOCAL user posts. While recent, an incoming post-count change
+  // (their optimistic post + its ~500ms server confirmation) scrolls to show it
+  // instead of badging. Other users' polled posts (outside this window) never
+  // yank the scroll — they accumulate in the unread badge. (QA 2026-06-23)
+  const justPostedAtRef = useRef(0);
+  const markJustPosted = useCallback(() => {
+    justPostedAtRef.current = Date.now();
+    requestAnimationFrame(() => scrollToBottom());
+  }, [scrollToBottom]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -110,16 +121,20 @@ export function useScrollTracker({
     prevCountRef.current = postCount;
 
     if (newPosts > 0) {
-      if (isAtBottom) {
+      if (Date.now() - justPostedAtRef.current < 2500) {
+        // The user just posted — keep them on their own post + its confirmation.
         requestAnimationFrame(() => scrollToBottom());
       } else {
+        // Other users' polled posts NEVER yank the scroll — badge only. This is
+        // the consistent behavior (the old isAtBottom check was unreliable once
+        // the keyboard shrank the viewport, causing the reported flip-flop).
         for (let i = 0; i < newPosts; i++) {
           unreadIdsRef.current.add(postIds[i]);
         }
         setUnreadCount(unreadIdsRef.current.size);
       }
     }
-  }, [postCount, postIds, isAtBottom, scrollToBottom]);
+  }, [postCount, postIds, scrollToBottom]);
 
   return {
     scrollRef,
@@ -133,5 +148,6 @@ export function useScrollTracker({
     genesisHydrated,
     scrollToBottom,
     scrollToGenesis,
+    markJustPosted,
   };
 }

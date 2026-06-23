@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PassphrasePrompt } from "@/components/PassphrasePrompt";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { useInstallContext } from "@/contexts/InstallContext";
-import { useBsvPrice } from "@/hooks/useBsvPrice";
+import { satsToDollars, useBsvPrice } from "@/hooks/useBsvPrice";
 import {
   type BackupData,
   getStoredHint,
@@ -361,13 +361,9 @@ export function RestoreModal({
 
   return (
     <>
-      {/* Backdrop — full-screen click target for dismiss */}
-      <button
-        type="button"
-        className="fixed inset-0 z-[100] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
-        aria-label="Close modal"
-        onClick={handleClose}
-      />
+      {/* Non-dismissing backdrop — high-stakes flow; outside taps must NOT discard
+          the entry. Exit via the X or Cancel. (QA 2026-06-23) */}
+      <div className="fixed inset-0 z-[100] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" />
 
       {/* Modal — pinned to top of viewport (iOS-native pattern). */}
       {/* z-[100]: above SignInModal (z-[80]) so the restore flow always sits */}
@@ -453,7 +449,9 @@ export function RestoreModal({
                           {outgoingEarnings.toLocaleString()} sats
                         </span>
                         {bsvPrice > 0 ? (
-                          <> (~${((outgoingEarnings / 1e8) * bsvPrice).toFixed(2)})</>
+                          // Same dynamic-decimal formatter as the chip/identity card
+                          // (not a hard 2-decimal cap, which showed sub-cent as $0.00).
+                          <> (~{satsToDollars(outgoingEarnings, bsvPrice)})</>
                         ) : null}{" "}
                         on this device.
                       </p>

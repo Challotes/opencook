@@ -36,6 +36,7 @@ export function PassphrasePrompt({
         onKeyDown={(e) => {
           if (e.key === "Enter" && value) onConfirm(value);
         }}
+        onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
         className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
       />
       {hint && (

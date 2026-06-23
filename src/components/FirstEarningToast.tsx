@@ -134,8 +134,7 @@ export function FirstEarningToast({
       <div className="rounded-2xl border border-amber-400/40 bg-zinc-900 px-4 py-3 shadow-lg">
         <p className="text-sm text-amber-300 font-medium">You just got paid.</p>
         <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
-          Save your recovery file — without it, you&apos;ll lose your account and earnings if this
-          device is gone.
+          Save your recovery file — it&apos;s your only way back in if you lose this device.
         </p>
         <div className="flex gap-2 mt-3">
           <button

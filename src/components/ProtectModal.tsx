@@ -174,13 +174,9 @@ export function ProtectModal({
 
   return (
     <>
-      {/* Backdrop */}
-      <button
-        type="button"
-        className="fixed inset-0 z-[70] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
-        aria-label="Close modal"
-        onClick={handleClose}
-      />
+      {/* Non-dismissing backdrop — high-stakes multi-field flow; an outside tap
+          must NOT discard the entry. Exit via the X or Cancel. (QA 2026-06-23) */}
+      <div className="fixed inset-0 z-[70] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" />
 
       <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[6svh] pointer-events-none">
         <div
@@ -296,6 +292,7 @@ export function ProtectModal({
                     setPass(e.target.value);
                     setError("");
                   }}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
                   className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                 />
                 <input
@@ -307,6 +304,7 @@ export function ProtectModal({
                     setConfirm(e.target.value);
                     setError("");
                   }}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
                   className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                 />
 
@@ -329,6 +327,7 @@ export function ProtectModal({
                     autoCapitalize="off"
                     spellCheck={false}
                     onChange={(e) => setHint(e.target.value)}
+                    onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
                     className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                   />
                   <p className="text-[10px] text-zinc-600">

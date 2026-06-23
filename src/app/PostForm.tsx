@@ -138,6 +138,12 @@ export function PostForm({
   }, [identity]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    // On touch devices the on-screen Return key should insert a newline, not post
+    // (you post via the send button there). Desktop keeps Enter-to-post /
+    // Shift+Enter-for-newline. (QA 2026-06-23)
+    const isTouch =
+      typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+    if (isTouch) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submitForm();

@@ -231,13 +231,9 @@ export function ChangePassphraseModal({
 
   return (
     <>
-      {/* Backdrop — full-screen click target for dismiss */}
-      <button
-        type="button"
-        className="fixed inset-0 z-[70] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] cursor-default"
-        aria-label="Close modal"
-        onClick={handleClose}
-      />
+      {/* Non-dismissing backdrop — high-stakes flow; outside taps must NOT discard
+          the entry. Exit via the X or Cancel. (QA 2026-06-23) */}
+      <div className="fixed inset-0 z-[70] w-full bg-black/75 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" />
 
       {/* Modal — pinned to top of viewport (iOS-native pattern). Does
           NOT track the keyboard; sits above where it slides up. */}
@@ -349,6 +345,7 @@ export function ChangePassphraseModal({
                     setCurrentPass(e.target.value);
                     setError("");
                   }}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && currentPass) void handleVerify();
                   }}
@@ -409,6 +406,7 @@ export function ChangePassphraseModal({
                     setNewPass(e.target.value);
                     setError("");
                   }}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
                   className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                 />
                 <input
@@ -420,6 +418,7 @@ export function ChangePassphraseModal({
                     setConfirmPass(e.target.value);
                     setError("");
                   }}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
                   className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                 />
 

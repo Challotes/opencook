@@ -157,12 +157,12 @@ export function generateBackupHtml(data: BackupData): string {
     "         use <noscript> here because iOS Quick Look's WebKit reports scripting",
     "         as 'enabled' at the engine level even when it never executes scripts. -->",
     '    <div id="quicklook-notice" class="noscript-banner">',
-    "      <strong>Your keys are safe &mdash; but this preview can't decrypt them.</strong>",
-    "      <p>Apple's file preview can't run the code this file needs for decryption. Your recovery key is still securely encrypted with your passphrase.</p>",
-    "      <p><strong>Two ways to access it:</strong></p>",
+    "      <strong>Your key is safe &mdash; but this preview can't unlock it.</strong>",
+    "      <p>Phones usually can't run the code this file needs to decrypt. Your secret key is still safely encrypted with your passphrase.</p>",
+    "      <p><strong>To unlock it:</strong></p>",
     "      <ul>",
-    "        <li><strong>From the OpenCook app:</strong> Open the You menu and tap <em>Restore key from file</em> &mdash; decryption happens inside the app itself.</li>",
-    "        <li><strong>From a browser:</strong> Open this file in Safari, Chrome, or Firefox on any Mac or PC to enter your passphrase and view your recovery key directly.</li>",
+    "        <li><strong>Open it on a computer</strong> &mdash; open this file in any browser (Chrome, Safari, Firefox, Edge) on a Mac or PC and enter your passphrase.</li>",
+    "        <li><strong>Or restore it in OpenCook</strong> &mdash; open the You menu and tap <em>Restore</em>; decryption happens inside the app.</li>",
     "      </ul>",
     "    </div>",
     '    <div class="card" id="decrypt-section">',
@@ -411,10 +411,13 @@ export function generateBackupHtml(data: BackupData): string {
     '        <span class="meta-label">Name</span>\n' +
     `        <span class="meta-value name">${escapeHtml(data.name)}</span>\n` +
     "      </div>\n" +
-    '      <div class="meta-row with-copy">\n' +
+    // No Copy button — navigator.clipboard / execCommand fail in mobile file
+    // previews but still flip to "Copied!" (false success). The address is a
+    // tap-to-select <input readonly>: long-press → Select All copies the full
+    // value on every platform. (QA 2026-06-23)
+    '      <div class="meta-row">\n' +
     '        <span class="meta-label">Address</span>\n' +
     `        <input class="meta-value" id="meta-address" type="text" readonly value="${escapeHtml(data.address)}">\n` +
-    '        <button class="meta-copy-btn" onclick="copyText(\'meta-address\', this)">Copy</button>\n' +
     "      </div>\n" +
     '      <div class="meta-row">\n' +
     '        <span class="meta-label">Saved</span>\n' +
