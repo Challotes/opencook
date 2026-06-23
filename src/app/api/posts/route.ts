@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getBootboard, getNewPosts, getPosts, getUpdatedPosts } from "@/app/actions";
+import { getBootboard, getNewPosts, getPostCounts, getPosts, getUpdatedPosts } from "@/app/actions";
 import { rateLimit } from "@/lib/rate-limit";
 import { sweepOrphans } from "@/services/bsv/anchor-sweep";
 
@@ -26,13 +26,20 @@ export async function GET(request: NextRequest) {
     ? pendingTxParam.split(",").map(Number).filter(Number.isFinite).slice(0, 100)
     : [];
 
-  const [posts, bootboard, updated] = await Promise.all([
+  // Client sends IDs of confirmed visible posts it wants live boot counts for
+  const countsParam = request.nextUrl.searchParams.get("counts");
+  const countIds: number[] = countsParam
+    ? countsParam.split(",").map(Number).filter(Number.isFinite).slice(0, 100)
+    : [];
+
+  const [posts, bootboard, updated, counts] = await Promise.all([
     sinceId !== null && Number.isFinite(sinceId) && sinceId >= 0
       ? getNewPosts(sinceId)
       : getPosts(),
     getBootboard(),
     pendingIds.length > 0 ? getUpdatedPosts(pendingIds) : Promise.resolve([]),
+    countIds.length > 0 ? getPostCounts(countIds) : Promise.resolve([]),
   ]);
 
-  return NextResponse.json({ posts, bootboard, updated });
+  return NextResponse.json({ posts, bootboard, updated, counts });
 }

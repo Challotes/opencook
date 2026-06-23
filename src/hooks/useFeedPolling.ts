@@ -7,6 +7,10 @@ interface FeedPollingResult {
   posts: Post[];
   bootboard: BootboardData;
   updated?: Post[];
+  // Authoritative boot counts for already-confirmed visible posts, so counts
+  // update live from ANY boot source (Bootboard re-boot, other users, server
+  // wallet) — not just this client's own optimistic +1.
+  counts?: { id: number; boot_count: number }[];
 }
 
 interface UseFeedPollingOptions {
@@ -50,49 +54,59 @@ export function useFeedPolling({
         url += `${separator}pending_tx=${pendingIds.join(",")}`;
       }
 
+      // Ask the server for authoritative boot counts on confirmed visible posts,
+      // so the displayed count tracks boots from any source (not just our own).
+      const countIds = postsRef.current
+        .filter((p) => !!p.tx_id)
+        .map((p) => p.id)
+        .slice(0, 100);
+      if (countIds.length > 0) {
+        const separator = url.includes("?") ? "&" : "?";
+        url += `${separator}counts=${countIds.join(",")}`;
+      }
+
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return;
       const data: FeedPollingResult = await res.json();
 
       setBootboard(data.bootboard);
 
-      // Build the tx_id update map (posts that now have chain confirmation)
+      // tx_id confirmations (posts that just gained a chain icon)
       const updatedMap =
         data.updated && data.updated.length > 0
           ? new Map(data.updated.map((p: Post) => [p.id, p.tx_id]))
           : null;
+      // Authoritative boot counts for confirmed visible posts
+      const countsMap =
+        data.counts && data.counts.length > 0
+          ? new Map(data.counts.map((c) => [c.id, c.boot_count]))
+          : null;
 
-      if (data.posts.length === 0 && !updatedMap) {
-        // Nothing new, nothing updated — skip
+      // Patch an existing post with any tx_id confirmation and/or count change.
+      const patch = (p: Post): Post => {
+        let next = p;
+        if (updatedMap) {
+          const tx = updatedMap.get(p.id);
+          if (tx && !p.tx_id) next = { ...next, tx_id: tx };
+        }
+        if (countsMap) {
+          const c = countsMap.get(p.id);
+          if (c !== undefined && c !== p.boot_count) next = { ...next, boot_count: c };
+        }
+        return next;
+      };
+
+      if (data.posts.length === 0) {
+        if (!updatedMap && !countsMap) return; // nothing new, nothing to patch
+        setPosts((prev) => prev.map(patch));
         return;
       }
 
-      if (data.posts.length === 0 && updatedMap) {
-        // Only tx_id updates, no new posts — single atomic setPosts
-        setPosts((prev) =>
-          prev.map((p) => {
-            const newTxId = updatedMap.get(p.id);
-            return newTxId ? { ...p, tx_id: newTxId } : p;
-          })
-        );
-        return;
-      }
-
-      // New posts (and possibly tx_id updates) — combine into one setPosts
+      // New posts (+ possible tx_id / count patches) — one atomic setPosts
       if (latestId === null) {
         setPosts(data.posts);
       } else {
-        setPosts((prev) => {
-          // First apply tx_id updates to existing posts
-          const updated = updatedMap
-            ? prev.map((p) => {
-                const newTxId = updatedMap.get(p.id);
-                return newTxId ? { ...p, tx_id: newTxId } : p;
-              })
-            : prev;
-          // Then prepend new posts
-          return [...data.posts, ...updated];
-        });
+        setPosts((prev) => [...data.posts, ...prev.map(patch)]);
       }
 
       // data.posts is ordered DESC, so index 0 is the newest

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BootIcon } from "@/components/icons/BootIcon";
 import { useBootContext } from "@/contexts/BootContext";
 import { useIdentityContext } from "@/contexts/IdentityContext";
@@ -68,10 +68,20 @@ function BootButton({
   const { bootingPostId, bootStatus, throttled, consolidationWarningDismissed } = useBootContext();
   const { boot } = useBoot({ onBooted, onFundNeeded, onFreeBootUsed });
   const [optimisticBoots, setOptimisticBoots] = useState(0);
+  const prevBootCountRef = useRef(bootCount);
 
   useEffect(() => {
     setOptimisticBoots(0);
   }, []);
+
+  // When the authoritative bootCount advances (the live-count poll caught up —
+  // it already includes our own boot), clear the optimistic offset so we don't
+  // double-count (would briefly show authoritative + 1). Live counts from other
+  // sources also land here. See "Option B — live authoritative counts".
+  useEffect(() => {
+    if (bootCount > prevBootCountRef.current) setOptimisticBoots(0);
+    prevBootCountRef.current = bootCount;
+  }, [bootCount]);
 
   const isFree = freeBootsRemaining > 0;
   const canBoot = !!postPubkey;

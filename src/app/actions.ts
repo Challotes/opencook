@@ -197,6 +197,26 @@ export async function getOlderPosts(beforeId: number): Promise<Post[]> {
   return getPosts(beforeId);
 }
 
+/**
+ * Authoritative boot counts for a set of (confirmed, visible) posts. Lets the
+ * feed poll refresh counts that change from ANY boot source — Bootboard re-boot,
+ * another user, a server-funded free boost — not just this client's optimistic
+ * +1. Lightweight: returns only `id` + `boot_count`, no post bodies.
+ */
+export async function getPostCounts(ids: number[]): Promise<{ id: number; boot_count: number }[]> {
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => "?").join(",");
+  return db
+    .prepare(`
+    SELECT p.id, COALESCE(bc.boot_count, 0) as boot_count
+    FROM posts p
+    LEFT JOIN (SELECT post_id, COUNT(*) as boot_count FROM bootboard GROUP BY post_id) bc
+      ON bc.post_id = p.id
+    WHERE p.id IN (${placeholders})
+  `)
+    .all(...ids) as { id: number; boot_count: number }[];
+}
+
 export async function getBootboard(): Promise<BootboardData> {
   const current = db
     .prepare(`
