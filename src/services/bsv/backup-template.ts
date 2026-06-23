@@ -291,8 +291,8 @@ export function generateBackupHtml(data: BackupData): string {
     "      align-items: center; padding: 48px 16px 32px;\n" +
     "    }\n" +
     "    .container { width: 100%; max-width: 560px; }\n" +
-    "    .logo { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; color: #10b981; margin-bottom: 6px; text-align: center; }\n" +
-    "    .logo span { color: #f4f4f5; }\n" +
+    "    .logo { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; color: #f4f4f5; margin-bottom: 6px; text-align: center; }\n" +
+    "    .logo span { color: #f59e0b; }\n" +
     "    h1 { font-size: 17px; font-weight: 600; color: #f4f4f5; text-align: center; margin-bottom: 6px; }\n" +
     "    .subtitle { font-size: 13px; color: #71717a; text-align: center; line-height: 1.5; margin-bottom: 28px; }\n" +
     "    .offline-badge {\n" +
@@ -401,7 +401,7 @@ export function generateBackupHtml(data: BackupData): string {
     "</head>\n" +
     "<body>\n" +
     '  <div class="container">\n' +
-    '    <div class="logo"><span>BS</span>Vibes</div>\n' +
+    '    <div class="logo"><span>Open</span>Cook</div>\n' +
     "    <h1>Recovery File</h1>\n" +
     '    <p class="subtitle">Keep this file somewhere only you can find it.</p>\n' +
     '    <div class="badge-wrap"><div class="offline-badge">Works offline — no network calls</div></div>\n' +

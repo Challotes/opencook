@@ -3,11 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { useInstallContext } from "@/contexts/InstallContext";
-import {
-  type BackupData,
-  downloadBackup,
-  shareOrDownloadBackup,
-} from "@/services/bsv/backup-template";
+import { type BackupData, shareOrDownloadBackup } from "@/services/bsv/backup-template";
 import { encryptInPlace } from "@/services/bsv/identity";
 import type { Identity } from "@/types";
 
@@ -253,21 +249,16 @@ export function ProtectModal({
                       it&apos;s the only way back into your account.
                     </p>
                   </div>
-                  <div className="flex gap-2 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (doneBackup) downloadBackup(doneBackup);
-                      }}
-                      className="flex-1 bg-zinc-900 text-zinc-300 border border-amber-400/20 rounded-lg px-3 py-2 text-xs font-medium hover:bg-zinc-800 transition-colors"
-                    >
-                      Download
-                    </button>
+                  <div className="pt-3">
+                    {/* Single save path: handleSaveBackup → on desktop an <a download>,
+                        on iOS the Web Share drawer — and it marks the key saved + advances.
+                        The old separate "Download" button skipped that bookkeeping (left the
+                        key flagged unsaved). Consolidated to one button (QA, 2026-06-23). */}
                     <button
                       type="button"
                       onClick={() => void handleSaveBackup()}
                       disabled={sharing}
-                      className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {sharing ? "Saving..." : "Save recovery file"}
                     </button>

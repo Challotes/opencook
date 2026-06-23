@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { satsToDollars } from "@/hooks/useBsvPrice";
 
+// Flashes within this window after mount are treated as page-load hydration
+// (0 → existing total) and NOT flashed. A genuine earning arrives later (after a
+// ≥30s poll), so it flashes — including a brand-new user's very FIRST earning,
+// which the old `prev === 0` guard wrongly suppressed. (QA 2026-06-23)
+const HYDRATION_GRACE_MS = 4000;
+
 interface AnimatedBalanceProps {
   sats: number;
   bsvPrice?: number;
@@ -29,6 +35,7 @@ export function AnimatedBalance({
   const [label, setLabel] = useState<string | null>(null);
   const prevSatsRef = useRef(sats);
   const prevFlashRef = useRef(flashTrigger ?? 0);
+  const mountTimeRef = useRef(performance.now());
   const rafRef = useRef<number | null>(null);
   const labelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -79,7 +86,10 @@ export function AnimatedBalance({
     const next = flashTrigger;
     prevFlashRef.current = next;
 
-    if (next <= prev || prev === 0) return; // skip initial load
+    if (next <= prev) return;
+    // Skip only the page-load hydration flash; flash genuine later earnings
+    // (incl. a new user's first), unlike the old `prev === 0` guard.
+    if (performance.now() - mountTimeRef.current < HYDRATION_GRACE_MS) return;
 
     const delta = next - prev;
     const deltaDisplay = isGoat

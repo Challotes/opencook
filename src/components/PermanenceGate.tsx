@@ -29,15 +29,28 @@ export function PermanenceGate({ onConfirm, onCancel }: PermanenceGateProps) {
           <div className="h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
           <div className="px-5 py-5">
             <h2 className="text-sm font-semibold text-zinc-100">Before you post</h2>
-            <p className="mt-3 text-[13px] leading-relaxed text-zinc-300">
-              Your posts are written to a public blockchain — they are{" "}
-              <strong className="font-semibold text-zinc-100">
-                permanent and visible to anyone, forever
-              </strong>
-              , and we cannot delete them. If you lose your recovery file or passphrase, your
-              identity and any value tied to it are lost for good, with no way to recover them.
-              Please don&apos;t post your real name, contact details, or anything private — once
-              it&apos;s on-chain, it stays on-chain.
+            <ul className="mt-3 space-y-2 text-[13px] leading-snug text-zinc-100">
+              <li className="flex gap-2">
+                <span className="text-amber-400">•</span>
+                <span>
+                  <strong className="font-semibold">Your posts are permanent</strong> — they
+                  can&apos;t be edited or deleted.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-amber-400">•</span>
+                <span>
+                  <strong className="font-semibold">
+                    You&apos;re responsible for your account
+                  </strong>{" "}
+                  — keep your recovery file safe.
+                </span>
+              </li>
+            </ul>
+            <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
+              Posts are written to a public blockchain: permanent, visible to anyone, forever. If
+              you lose your recovery file or passphrase, your identity and any value tied to it are
+              gone for good. Don&apos;t post your real name, contact details, or anything private.
             </p>
             <div className="mt-5 flex gap-2">
               <button

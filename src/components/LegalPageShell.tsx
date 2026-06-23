@@ -5,7 +5,7 @@ import { LegalDoc } from "./LegalDoc";
  *  banner (the legal/*.md are not yet lawyer-final), and the rendered doc. */
 export function LegalPageShell({ markdown }: { markdown: string }) {
   return (
-    <main className="min-h-[100dvh] bg-black text-zinc-200">
+    <main className="h-[100dvh] overflow-y-auto bg-black text-zinc-200">
       <div className="mx-auto max-w-2xl px-5 py-8">
         <Link href="/" className="text-xs text-amber-400 transition-colors hover:text-amber-300">
           ← Back to OpenCook

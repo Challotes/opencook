@@ -91,7 +91,10 @@ export function FirstEarningToast({
       setVisible(false);
       return;
     }
-    setVisible(true);
+    // Delay so the chip's "+amount" flash (AnimatedBalance, ~1.2s) plays FIRST —
+    // the user should see the money land before being prompted to save. (QA 2026-06-23)
+    const t = setTimeout(() => setVisible(true), 1800);
+    return () => clearTimeout(t);
   }, [earnedSats, backedUp, sessionDismissed]);
 
   // Slide-up animation — same pattern as GoatModeToast.
@@ -129,9 +132,10 @@ export function FirstEarningToast({
       }`}
     >
       <div className="rounded-2xl border border-amber-400/40 bg-zinc-900 px-4 py-3 shadow-lg">
-        <p className="text-sm text-amber-300 font-medium">You just earned your first sats.</p>
+        <p className="text-sm text-amber-300 font-medium">You just got paid.</p>
         <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
-          Save your recovery file — if you lose this device without it, they&apos;re gone.
+          Save your recovery file — without it, you&apos;ll lose your account and earnings if this
+          device is gone.
         </p>
         <div className="flex gap-2 mt-3">
           <button

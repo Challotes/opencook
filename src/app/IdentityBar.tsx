@@ -335,10 +335,15 @@ export function IdentityChip(): React.JSX.Element | null {
   // — that race produced a visible fade-then-shift glitch on Safari.
   useEffect(() => {
     if (showManage && !manageAuthed) {
+      // Re-read the hint each time the gate opens (mirrors SignInModal). After a
+      // just-completed protect, encrypt-in-place keeps the same address/wif, so the
+      // identity-change effect never re-fires to pick up the freshly-written hint —
+      // without this, the "Need a reminder?" hint is missing until a full refresh.
+      loadStoredHint();
       const id = setTimeout(() => gateInputRef.current?.focus(), 320);
       return () => clearTimeout(id);
     }
-  }, [showManage, manageAuthed]);
+  }, [showManage, manageAuthed, loadStoredHint]);
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -1058,7 +1063,11 @@ export function IdentityChip(): React.JSX.Element | null {
             />
           )}
           <span className="text-zinc-300">{displayName}</span>
-          {balanceSats !== null && balanceSats > 0 && (
+          {balanceSats !== null && (balanceSats > 0 || (earnedSats ?? 0) > 0) && (
+            // Render when there's a confirmed balance OR any earnings — so a
+            // brand-new earner (whose payout is still 0-conf, balance 0) still has
+            // a surface for the "+amount" flash to land the moment they get paid,
+            // before the save prompt. Balance stays honest/confirmed. (QA 2026-06-23)
             <AnimatedBalance
               sats={balanceSats}
               bsvPrice={bsvPrice}
