@@ -1,6 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Shine: bright amber catching the top edge, fading down the sides -->
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fcd34d" stop-opacity="0.9"/>
+      <stop offset="45%" stop-color="#f59e0b" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.06"/>
+    </linearGradient>
+  </defs>
   <!-- Background -->
   <rect width="512" height="512" rx="96" fill="#000000"/>
+  <!-- Subtle amber shine hugging the edge (You-modal style) -->
+  <rect x="8" y="8" width="496" height="496" rx="88" fill="none" stroke="url(#shine)" stroke-width="3"/>
   <!-- "OC" — O amber (Open) + C white (Cook), matching the wordmark -->
   <text
     x="256"
