@@ -2,6 +2,15 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-24 — Phase 8 Android QA round 2 (chip / passphrase copy / recovery file)
+
+Category: device-QA fixes (display + copy correctness + recovery-file UX). 4 read-only agents diagnosed; the recovery-file edit was code-auditor-verified PASS (security-sensitive file).
+
+- **#1 Pending balance on chip (commit `0bc567c`):** the "You just got paid" toast fired while the chip read "$0.00" (the 0-conf payout isn't in the confirmed/spendable balance). Owner-chosen behavior: when spendable=0 but a payout is landing, show the muted incoming "+X pending" instead of "$0.00"; once a spendable balance confirms, show ONLY that (no pending alongside). Never summed into the spendable headline (honors "balance shows spendable", DECISIONS — showing pending as a distinct muted element is sanctioned). `pendingSats` was already fetched; this is a chip-render-only change. Toast still fires on earning (NOT gated on confirmation — BSV ~10min confirm vs ~30s save; waiting would prompt to an empty room).
+- **#2 ChangePassphrase copy was FACTUALLY FALSE + security-misleading (commit `1835dbd`):** said "your old recovery file will stop working". `changePassphrase` re-encrypts the SAME key (encrypt-in-place, no rotation), so the old file STILL works with the old passphrase and recovers the same account. The false copy would let someone who changed their passphrase because the old one leaked believe they're safe and NOT delete old copies (which still grant full access). Corrected: old file still works with the old passphrase; delete old copies if that passphrase was exposed.
+- **#3 Recovery-file preview (commit `1835dbd`, auditor PASS):** moved the "can't unlock in this preview" notice BELOW the decrypt panel (people try decrypt first, then read); renamed the button "Decrypt all" → "Decrypt" (multi-key-era leftover, both the static label and the JS reset-path label in `0bc567c`); added onfocus scrollIntoView to the file's passphrase input (was hidden behind the mobile keyboard); added an inline synchronous hide so the notice never flashes in a real browser. Inverse-noscript (visible-by-default in JS-off previews), input-readonly tap-to-select, and no-WIF-Copy-button all preserved + auditor-confirmed.
+- All UI/copy/display; tsc + biome + 150 tests + build green. NEXT: owner re-tests on Android, continues checklist (iPhone A/B remaining).
+
 ## 2026-06-24 — Phase 8 Android QA round 1 (fixes from owner device-testing)
 
 Category: device-QA fixes (mobile UX + copy + display; no money-path logic). 4 read-only agents diagnosed the 9 Android findings (validated vs DECISIONS); fixed in commit `e240e90`.
