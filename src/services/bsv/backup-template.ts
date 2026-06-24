@@ -254,7 +254,7 @@ export function generateBackupHtml(data: BackupData): string {
     "    function setLoading(on) {",
     "      const btn = document.getElementById('decrypt-btn');",
     "      const spinner = document.getElementById('spinner');",
-    "      btn.disabled = on; btn.textContent = on ? 'Decrypting…' : 'Decrypt all';",
+    "      btn.disabled = on; btn.textContent = on ? 'Decrypting…' : 'Decrypt';",
     "      spinner.style.display = on ? 'block' : 'none';",
     "    }",
     "",

@@ -1063,11 +1063,9 @@ export function IdentityChip(): React.JSX.Element | null {
             />
           )}
           <span className="text-zinc-300">{displayName}</span>
-          {balanceSats !== null && (balanceSats > 0 || (earnedSats ?? 0) > 0) && (
-            // Render when there's a confirmed balance OR any earnings — so a
-            // brand-new earner (whose payout is still 0-conf, balance 0) still has
-            // a surface for the "+amount" flash to land the moment they get paid,
-            // before the save prompt. Balance stays honest/confirmed. (QA 2026-06-23)
+          {balanceSats !== null && balanceSats > 0 ? (
+            // Confirmed/spendable balance — the honest headline. Once there's a
+            // spendable balance we show ONLY that (no pending alongside). (QA 2026-06-24)
             <AnimatedBalance
               sats={balanceSats}
               bsvPrice={bsvPrice}
@@ -1075,7 +1073,19 @@ export function IdentityChip(): React.JSX.Element | null {
               className="text-[10px]"
               flashTrigger={earnedSats ?? 0}
             />
-          )}
+          ) : pendingSats !== null && pendingSats > 0 ? (
+            // Spendable is 0 but a payout is landing (0-conf) — show the incoming
+            // amount as a muted "pending" so a first earner SEES they got paid
+            // (fixes "$0.00 when I got paid"). NEVER summed into spendable; replaced
+            // by the confirmed balance once it confirms. (QA 2026-06-24)
+            <span className="text-[9px] text-amber-400/50 tabular-nums whitespace-nowrap">
+              +
+              {isGoat
+                ? `${pendingSats.toLocaleString()} sats`
+                : satsToDollars(pendingSats, bsvPrice)}{" "}
+              pending
+            </span>
+          ) : null}
           {showWarningDot && (
             <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
