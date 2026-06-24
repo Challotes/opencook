@@ -445,7 +445,7 @@ export function ChangePassphraseModal({
                     onChange={(e) => setHint(e.target.value)}
                     className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                   />
-                  <p className="text-[10px] text-zinc-600">
+                  <p className={`text-[10px] ${hint.trim() ? "text-red-400" : "text-zinc-600"}`}>
                     Only you should know what this means &mdash; it&apos;s stored unprotected in
                     your recovery file.
                   </p>

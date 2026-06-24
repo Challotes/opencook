@@ -228,25 +228,36 @@ export function IdentityChip(): React.JSX.Element | null {
     }
   }, [isProtected, hasChosenCurrency, isGoat, setCurrencyMode]);
 
+  const fetchLiveBalance = useCallback(() => {
+    const address = identity?.address;
+    if (!address) return;
+    if (document.visibilityState !== "visible") return;
+    fetch(`/api/balance?address=${encodeURIComponent(address)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.balance === "number") {
+          setBalanceSats(data.balance);
+          if (typeof data.pending === "number") setPendingSats(data.pending);
+        }
+        // On failure: preserve last-known balance (don't flash to 0)
+      })
+      .catch(() => {});
+  }, [identity?.address]);
+
   useEffect(() => {
     if (!identity?.address) return;
-    function fetchLiveBalance() {
-      if (document.visibilityState !== "visible") return;
-      fetch(`/api/balance?address=${encodeURIComponent(identity?.address ?? "")}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data && typeof data.balance === "number") {
-            setBalanceSats(data.balance);
-            if (typeof data.pending === "number") setPendingSats(data.pending);
-          }
-          // On failure: preserve last-known balance (don't flash to 0)
-        })
-        .catch(() => {});
-    }
     fetchLiveBalance();
     const interval = setInterval(fetchLiveBalance, 30_000);
     return () => clearInterval(interval);
-  }, [identity?.address]);
+  }, [identity?.address, fetchLiveBalance]);
+
+  // When earnings land (DB row, instant) refetch the chain balance immediately so
+  // the 0-conf "+pending" shows on the chip within seconds instead of waiting up
+  // to 30s for the next poll — this is what lets the first-earning toast wait for
+  // the chip to actually update before prompting the user to save. (QA 2026-06-25)
+  useEffect(() => {
+    if (earnedSats && earnedSats > 0) fetchLiveBalance();
+  }, [earnedSats, fetchLiveBalance]);
 
   useEffect(() => {
     if (!identity?.address) return;
@@ -642,7 +653,12 @@ export function IdentityChip(): React.JSX.Element | null {
           directly (the add-a-passphrase flow that emits the encrypted recovery
           file) — no intermediate You-modal hop. Both buttons set 48h backoff.
           Once backedUp flips true, this never re-evaluates true. */}
-      <FirstEarningToast earnedSats={earnedSats} backedUp={backedUp} onSaveNow={openProtectModal} />
+      <FirstEarningToast
+        earnedSats={earnedSats}
+        pendingSats={pendingSats}
+        backedUp={backedUp}
+        onSaveNow={openProtectModal}
+      />
 
       {/* ── Manage Identity modal ── */}
       {showManage && identity && (
@@ -911,7 +927,7 @@ export function IdentityChip(): React.JSX.Element | null {
                     </svg>
                     <div className="flex-1 min-w-0">
                       <span className="text-xs font-medium text-zinc-200 block">
-                        Restore key from file
+                        Upload your saved file
                       </span>
                       <span className="text-[10px] text-zinc-500 block mt-0.5">
                         Imports posts and earnings from a saved key
@@ -1063,7 +1079,7 @@ export function IdentityChip(): React.JSX.Element | null {
             />
           )}
           <span className="text-zinc-300">{displayName}</span>
-          {balanceSats !== null && balanceSats > 0 ? (
+          {balanceSats !== null && balanceSats > 0 && (
             // Confirmed/spendable balance — the honest headline. Once there's a
             // spendable balance we show ONLY that (no pending alongside). (QA 2026-06-24)
             <AnimatedBalance
@@ -1073,19 +1089,7 @@ export function IdentityChip(): React.JSX.Element | null {
               className="text-[10px]"
               flashTrigger={earnedSats ?? 0}
             />
-          ) : pendingSats !== null && pendingSats > 0 ? (
-            // Spendable is 0 but a payout is landing (0-conf) — show the incoming
-            // amount as a muted "pending" so a first earner SEES they got paid
-            // (fixes "$0.00 when I got paid"). NEVER summed into spendable; replaced
-            // by the confirmed balance once it confirms. (QA 2026-06-24)
-            <span className="text-[9px] text-amber-400/50 tabular-nums whitespace-nowrap">
-              +
-              {isGoat
-                ? `${pendingSats.toLocaleString()} sats`
-                : satsToDollars(pendingSats, bsvPrice)}{" "}
-              pending
-            </span>
-          ) : null}
+          )}
           {showWarningDot && (
             <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
@@ -1093,6 +1097,20 @@ export function IdentityChip(): React.JSX.Element | null {
             </span>
           )}
         </button>
+
+        {/* Pending (0-conf) as a muted line BENEATH the chip — kept OUT of the
+            button so the incoming amount can't widen the chip into the centered
+            "Origin" nav button (QA 2026-06-25). Absolute so it never changes the
+            header height; pointer-events-none so taps fall through to the chip.
+            Only while spendable is 0 — replaced by the confirmed balance once it
+            confirms. Never summed into the spendable headline. */}
+        {(balanceSats === null || balanceSats === 0) && pendingSats !== null && pendingSats > 0 && (
+          <span className="pointer-events-none absolute top-full right-0 mt-0.5 text-[9px] text-amber-400/50 tabular-nums whitespace-nowrap">
+            +
+            {isGoat ? `${pendingSats.toLocaleString()} sats` : satsToDollars(pendingSats, bsvPrice)}{" "}
+            pending
+          </span>
+        )}
 
         {open && identity && (
           <div

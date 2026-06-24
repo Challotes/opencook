@@ -9,6 +9,8 @@ const BACKOFF_HOURS = 48;
 interface FirstEarningToastProps {
   /** Live earnings total from `/api/earnings` polling. Null = pre-hydration. */
   earnedSats: number | null;
+  /** Live 0-conf pending balance from `/api/balance`. Null = pre-hydration. */
+  pendingSats: number | null;
   /** Whether the user has saved their recovery file. Null = pre-hydration. */
   backedUp: boolean | null;
   /**
@@ -56,6 +58,7 @@ function writeDismissedUntil(value: number): void {
  */
 export function FirstEarningToast({
   earnedSats,
+  pendingSats,
   backedUp,
   onSaveNow,
 }: FirstEarningToastProps): React.JSX.Element | null {
@@ -91,11 +94,18 @@ export function FirstEarningToast({
       setVisible(false);
       return;
     }
-    // Delay so the chip's "+amount" flash (AnimatedBalance, ~1.2s) plays FIRST —
-    // the user should see the money land before being prompted to save. (QA 2026-06-23)
-    const t = setTimeout(() => setVisible(true), 1800);
+    // Wait until the chip has actually updated before prompting to save — the
+    // user should SEE the money land first. The 0-conf "+pending" shows within
+    // seconds (the balance is refetched the moment earnings land); once it's
+    // visible we fire ~600ms later. If pending never appears (e.g. the balance
+    // was already confirmed, so pending stays 0) an 8s fallback still fires so
+    // the prompt can't be suppressed indefinitely. Gating on PENDING (0-conf,
+    // seconds) — NOT block confirmation (~10min) — stays on the right side of
+    // "fire on earning, not confirmation". (QA 2026-06-25)
+    const pendingVisible = pendingSats !== null && pendingSats > 0;
+    const t = setTimeout(() => setVisible(true), pendingVisible ? 600 : 8000);
     return () => clearTimeout(t);
-  }, [earnedSats, backedUp, sessionDismissed]);
+  }, [earnedSats, pendingSats, backedUp, sessionDismissed]);
 
   // Slide-up animation — same pattern as GoatModeToast.
   useEffect(() => {

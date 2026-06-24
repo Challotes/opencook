@@ -378,7 +378,7 @@ export function RestoreModal({
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-amber-400/10">
             <div>
-              <p className="text-sm font-semibold text-zinc-100">Restore key from file</p>
+              <p className="text-sm font-semibold text-zinc-100">Upload your saved file</p>
               <p className="text-[11px] text-zinc-500 mt-0.5">
                 This will replace your current identity
               </p>

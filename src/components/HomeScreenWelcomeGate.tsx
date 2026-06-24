@@ -161,6 +161,9 @@ export function HomeScreenWelcomeGate({
       />
 
       <div className="w-full max-w-sm space-y-6">
+        <h2 className="text-center text-xl font-semibold tracking-tight text-white">
+          <span className="text-amber-400">Open</span>Cook
+        </h2>
         {mode === "no-file" ? (
           <>
             <div className="text-center space-y-2">
@@ -223,7 +226,7 @@ export function HomeScreenWelcomeGate({
                 disabled={busy}
                 className="w-full bg-amber-400 text-black rounded-xl px-4 py-3 text-left hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="text-sm font-semibold">Restore from your saved file</div>
+                <div className="text-sm font-semibold">Upload your saved file</div>
                 <div className="text-xs font-normal text-black/70 mt-0.5">
                   Use your most recent recovery file. Your posts and earnings come back.
                 </div>

@@ -213,7 +213,7 @@ export function SignInModal(): React.JSX.Element | null {
               onClick={() => setShowRestore(true)}
               className="block w-full text-center text-[11px] text-zinc-500 hover:text-amber-400/90 underline underline-offset-2 transition-colors pt-1"
             >
-              Can&apos;t sign in? Restore from a saved file
+              Can&apos;t sign in? Upload your saved file
             </button>
           </div>
         </div>
