@@ -2,6 +2,16 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-25 — Phase 8 iPhone QA round 1 (4 read-only agents → fixes)
+
+Category: device-QA fixes from owner iPhone testing. Dispatched 4 parallel read-only investigators (pending-chip, keyboard layout + git archaeology, identity-card merge, copy/UI), then implemented the approved subset.
+
+- **Easy batch (commit `f18de2b`):** #4 chip overlapped the centre-pinned "Origin" nav button — the inline "+pending" I added 06-24 widened it; moved pending to a muted absolute line BENEATH the chip (no header-height shift, chip's no-pending shape unchanged). #3 "You just got paid" raced the pending amount (earnings=DB/instant vs pending=chain-0-conf/seconds) — now refetch balance the moment earnings land + the toast waits until pending is visible (+600ms) with an 8s fallback; still gated on 0-conf pending NOT block confirmation. #5 memory-clue helper text turns red once the hint field is non-empty (stored unprotected). #7 OpenCook wordmark on the PWA welcome gate. #8 "Restore" → "Upload your saved file" on entry points (kept "Restore" on the final post-passphrase action button).
+- **App icon (commit `9c1c572`):** #9 subtle amber "shine" edge on the home-screen/install icon — thin 3px amber stroke, top-bright→bottom-faint gradient (reads as light catching the edge, not a frame), matching the You-modal amber. Regenerated icon.svg + icon-192 (= apple-touch-icon) + icon-512 + favicon.ico.
+- **Deferred by owner:** #1 merge the two identity-card actions — owner decided to LEAVE AS-IS (it's fine). Agent had a clean "one adaptive CTA" design on file if ever revisited.
+- **STILL OPEN — #6 keyboard pushes header/bootboard/chip out of view (the big one):** root-caused (agent `acdd0e31`): `interactiveWidget: "resizes-content"` (layout.tsx) makes `h-[100dvh]` (Feed.tsx) shrink to the keyboard, and iOS slides the top-anchored fixed shell up to surface the bottom-pinned compose box. Archaeology: introduced commit `6c56093` (2026-05-13) as an iOS URL-bar-clipping fix — NOT Android, NOT terms/privacy (owner's hunch was off). The `svh` modal decision (DECISIONS 2026-06-03) is modal-scoped, separate. Fix options: B (visualViewport-driven shell height — robust, recommended) / A (overlays-content + visualViewport offset — lighter) / avoid C (fixed/sticky refactor, regresses 6c56093) / D (svh — doesn't address keyboard axis). TO DO: implementation review + owner picks A vs B, then implement carefully + owner re-tests on iPhone. Must NOT re-break the URL-bar clipping 6c56093 fixed.
+- All shipped work: tsc + biome + 150 tests + next build green.
+
 ## 2026-06-24 — Phase 8 Android QA round 2 (chip / passphrase copy / recovery file)
 
 Category: device-QA fixes (display + copy correctness + recovery-file UX). 4 read-only agents diagnosed; the recovery-file edit was code-auditor-verified PASS (security-sensitive file).
