@@ -40,6 +40,17 @@ export function ProtectModal({
   const [working, setWorking] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Scroll target: focusing the memory-clue field (the last input) should bring
+  // the SUBMIT BUTTON — the lowest element — above the keyboard, not just the
+  // field (which is what its own scrollIntoView did, leaving the button behind
+  // the keyboard). Delayed so it fires AFTER the keyboard has opened + the
+  // viewport has resized. (QA 2026-06-25)
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const scrollSubmitIntoView = () => {
+    setTimeout(() => {
+      submitRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 300);
+  };
 
   // Suppress pagehide-driven session wipe from the moment protection starts
   // until the user dismisses "done". iOS Save-Password sheet on PWA fires
@@ -327,7 +338,7 @@ export function ProtectModal({
                     autoCapitalize="off"
                     spellCheck={false}
                     onChange={(e) => setHint(e.target.value)}
-                    onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
+                    onFocus={scrollSubmitIntoView}
                     className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                   />
                   <p className={`text-[10px] ${hint.trim() ? "text-red-400" : "text-zinc-600"}`}>
@@ -347,6 +358,7 @@ export function ProtectModal({
                     Cancel
                   </button>
                   <button
+                    ref={submitRef}
                     type="submit"
                     disabled={!canSubmit}
                     className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
