@@ -137,7 +137,6 @@ All on-chain payloads are JSON inside OP_FALSE OP_RETURN outputs:
 - `src/hooks/useBoot.ts` — Shared boot logic (free → server, paid → client trustless, consolidation); coordinates with BootContext for global single-flight + 3s throttle
 - `src/hooks/useFeedPolling.ts` — Polls /api/posts every 5s (pauses on hidden tab)
 - `src/hooks/useScrollTracker.ts` — Scroll position, unread tracking
-- `src/hooks/useViewportHeight.ts` — Pins the app shell to `window.visualViewport` (writes `--app-height` + `--app-vv-top` on `<html>`, rAF-coalesced) so the soft keyboard can't push the Header/Bootboard off-screen on iPhone. Consumed by the `page.tsx` wrapper + `Feed.tsx` shell (both `height: var(--app-height,100dvh)`; the wrapper carries the `translateY(var(--app-vv-top,0px))`). SSR-safe `100dvh` fallback. See DECISIONS.md "App shell tracks visualViewport".
 - `src/hooks/useBsvPrice.ts` — BSV/USD price (cached 5 min)
 - `src/hooks/useCurrencyMode.ts` — Noob Mode ($) / Goat Mode (sats) toggle. Default is protection-aware: protected accounts default to Goat, unprotected default to Noob. User's explicit toggle is honored forever once set (`hasUserChosen` derived from localStorage presence). `setModeProgrammatically` lets the parent drive an in-session live switch without persisting or marking the user as having chosen — used for the post-upgrade auto-flip.
 - `src/types/index.ts` — Shared types (Post, BootboardData, Identity, etc.)

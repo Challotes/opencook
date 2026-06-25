@@ -2,6 +2,12 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-25 — Phase 8 iPhone QA round 2 (Option B keyboard fix REVERTED)
+
+- Owner tested Option B (#6 keyboard fix, commit `06f6842`) on **iPhone Safari**: it DID keep the header/bootboard/chip in view, but introduced two dealbreakers — (1) **multi-second lag** opening AND collapsing the keyboard (iOS fires `visualViewport.resize` LATE, only after the keyboard animation settles, so the JS-driven height snapped sluggishly instead of following iOS's smooth native `dvh` resize); (2) the compose box sat **too high** above the keyboard (the `env(safe-area-inset-bottom)` footer padding does NOT collapse to 0 with the keyboard open on iOS, contrary to the plan's assumption).
+- **REVERTED**: `Feed.tsx` + `page.tsx` shells back to bare `h-[100dvh]`, footer back to `pb-4`, deleted `src/hooks/useViewportHeight.ts` (no dangling refs). DECISIONS #6 entry reframed — root cause + archaeology kept, marked Option B reverted, **DO NOT re-attempt the JS `visualViewport` height-override** (fighting iOS native resize is the lag source). #6 is back to OPEN.
+- **NEXT**: agent designing a CSS-only / minimal-JS approach (anchor Header + Bootboard so they stay put when the keyboard opens — no shell JS-resize, so it can't lag). Keep `interactiveWidget: "resizes-content"` (native resize is smooth) + the iOS scroll-warmup hack.
+
 ## 2026-06-25 — Phase 8 iPhone QA round 1 (4 read-only agents → fixes)
 
 Category: device-QA fixes from owner iPhone testing. Dispatched 4 parallel read-only investigators (pending-chip, keyboard layout + git archaeology, identity-card merge, copy/UI), then implemented the approved subset.

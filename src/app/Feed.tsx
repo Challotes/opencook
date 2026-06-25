@@ -11,7 +11,6 @@ import { IdentityProvider, useIdentityContext } from "@/contexts/IdentityContext
 import { InstallProvider } from "@/contexts/InstallContext";
 import { useFeedPolling } from "@/hooks/useFeedPolling";
 import { useScrollTracker } from "@/hooks/useScrollTracker";
-import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { timeAgo } from "@/lib/utils";
 import type { BootboardData, Post } from "@/types";
 import { getOlderPosts } from "./actions";
@@ -48,9 +47,6 @@ function FeedContent({
   initialPosts: Post[];
   initialBootboard: BootboardData;
 }) {
-  // Pin the shell to the visible viewport so the keyboard can't push the header /
-  // bootboard off-screen on iPhone (sets --app-height / --app-vv-top). (#6, 2026-06-25)
-  useViewportHeight();
   const { identity } = useIdentityContext();
   const { bootError } = useBootContext();
   const {
@@ -201,10 +197,7 @@ function FeedContent({
   }, [scrollToBottom]);
 
   return (
-    // Height tracks the visible viewport (--app-height), falling back to 100dvh
-    // pre-mount / where visualViewport is unavailable. The downward translate to
-    // keep the top pinned lives on the page.tsx wrapper (applied once). (#6)
-    <div className="flex flex-col" style={{ height: "var(--app-height, 100dvh)" }}>
+    <div className="flex flex-col h-[100dvh]">
       <Header
         isAtTop={isAtTop}
         genesisHydrated={genesisHydrated}
@@ -337,10 +330,7 @@ function FeedContent({
             timer-based dismissal"). */}
         <InstallPitch variant="banner" />
 
-        <div
-          className="mx-auto max-w-2xl px-4 pt-2"
-          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
-        >
+        <div className="mx-auto max-w-2xl px-4 pb-4 pt-2">
           <PostForm
             onPostCreated={handlePostCreated}
             onPostRejected={handlePostRejected}
