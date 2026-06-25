@@ -416,7 +416,7 @@ export function PostForm({
           visible after the user has saved + protected + minimised the sheet),
           the center cell collapses gracefully. Mobile (helper text hidden)
           uses a sm:hidden spacer to hold the left cell's shape. */}
-      <div className="grid grid-cols-3 items-center mt-1 ml-1 mr-1 max-h-12 overflow-hidden opacity-100 transition-all duration-200 pointer-coarse:group-focus-within:mt-0 pointer-coarse:group-focus-within:max-h-0 pointer-coarse:group-focus-within:opacity-0">
+      <div className="grid grid-cols-3 items-center mt-1 ml-1 mr-1 max-h-12 overflow-hidden opacity-100 transition-all duration-200 pointer-coarse:group-has-[textarea:focus,.relative_button:focus]:mt-0 pointer-coarse:group-has-[textarea:focus,.relative_button:focus]:max-h-0 pointer-coarse:group-has-[textarea:focus,.relative_button:focus]:opacity-0">
         <div className="hidden sm:flex items-center gap-2">
           <p className="text-[11px] text-zinc-600">Enter to post, Shift+Enter for new line</p>
           <span
