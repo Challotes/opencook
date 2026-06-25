@@ -2,6 +2,13 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-25 — Phase 8 iPhone QA round 3 (#6 keyboard — Option C, CSS-only, pending re-test)
+
+- After reverting Option B (lag), a third agent (`afd0098`) root-caused the mechanism precisely: iOS **focus-reveal scrolls the root/layout viewport** to surface the bottom-anchored text box, dragging the top-of-flow Header/Bootboard off the top — and `overflow:hidden` can't stop a viewport-layer reveal-scroll. Recommended **Option C** (CSS-only / no keyboard-event JS).
+- **IMPLEMENTED Option C (`Feed.tsx` only):** Header + Bootboard moved into a `position: fixed top-0 z-40 bg-black` stack (pinned to the layout viewport, immune to the reveal-scroll); the single posts scroller + scroll-button + in-flow compose footer live in a lower column offset by a `ResizeObserver`-measured `paddingTop`. The observer watches the stack height (Bootboard expand/collapse) NOT the keyboard, so it can't reintroduce lag. Compose stays in flow at the bottom of `100dvh` (height above keyboard unchanged; no safe-area padding). Blast-radius check all PASS (scrollRef/useScrollTracker, markJustPosted, scroll-btn, InstallPitch, modals `svh`, Android, warm-up hack). 150 tests + tsc + biome + build green.
+- **INVARIANT** recorded: no ancestor may set `transform`/`filter`/`will-change`/`contain` (would re-anchor the fixed stack). **HONEST FALLBACK:** if it JITTERS on-device during the keyboard animation, revert + LEAVE the bug (cosmetic header-scroll beats lag); do NOT revive the visualViewport JS.
+- **NEEDS: owner iPhone Safari re-test** — keyboard open → header/bootboard stay put with NO lag and NO jitter; compose bar at the same height as before; feed scroll + own-post snap still work; quick Android/desktop glance.
+
 ## 2026-06-25 — Phase 8 iPhone QA round 2 (Option B keyboard fix REVERTED)
 
 - Owner tested Option B (#6 keyboard fix, commit `06f6842`) on **iPhone Safari**: it DID keep the header/bootboard/chip in view, but introduced two dealbreakers — (1) **multi-second lag** opening AND collapsing the keyboard (iOS fires `visualViewport.resize` LATE, only after the keyboard animation settles, so the JS-driven height snapped sluggishly instead of following iOS's smooth native `dvh` resize); (2) the compose box sat **too high** above the keyboard (the `env(safe-area-inset-bottom)` footer padding does NOT collapse to 0 with the keyboard open on iOS, contrary to the plan's assumption).
