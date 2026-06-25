@@ -2,6 +2,20 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-26 — Mic working (Android) + polish; debug saga; end-of-day checkpoint
+
+- **Mic confirmed working on ANDROID** (record → Groq Whisper → text lands). The long `401 Invalid API Key` saga was NOT the code/key — it was an **UNSAVED `.env.local`** (editor buffer had the new key, disk still had the old one, app read the stale key). A temp key-metadata debug log (length/prefix/suffix, never the secret) caught it; the log has been removed. Kept a defensive `.trim()` on the key read (commit `fab9bb0`). Lesson recorded in DECISIONS + memory: if a Next env var seems wrong despite `.env.local`, confirm it's SAVED + restart.
+- **Mic polish (commit `c354630`, agent-designed):** amber idle mic (tint + ring — discoverable), red `animate-pulse` recording, amber spinner transcribing; **hands-free keyboard** — `handleTranscript` focuses the textarea ONLY on a fine pointer (desktop keep-typing), never on touch, so dictation never pops the keyboard / triggers #6. See DECISIONS "Mic: record + Groq Whisper".
+- **Owner reminder:** rotate the Groq keys pasted during debugging (fresh one in `.env.local`, revoke the rest).
+- **PENDING DEVICE TESTING (next session — owner only checked Android so far):**
+  - **Mic:** test on **iPhone (Safari + installed PWA)** + desktop (Android ✓). Watch the iOS audio path (`recorder.start(1000)` mp4 chunking) + the amber states + hands-free (no keyboard pop).
+  - **Dock-to-keyboard Ask-AI fix** (`aa36e96`): iPhone — Ask AI opens first-tap, dock works, no send flicker.
+  - **Modal keyboard-scroll** (`0809083`): Change-passphrase + Restore/Upload — focusing the lowest field lifts the action button above the keyboard (ProtectModal ✓ on device already).
+  - **App-icon amber shine** (`9c1c572`): re-add to home screen, confirm the shine.
+  - **iPhone QA batch** (`f18de2b`): pending chip, red hint, welcome logo, "Upload your saved file".
+  - **#6 keyboard (header scrolls off when keyboard opens):** WON'T FIX / accepted — no test needed.
+- ~35 commits unpushed. tsc + biome + 116 tests + build green.
+
 ## 2026-06-25 — Mic rebuilt: record + Groq Whisper (works on iPhone, finally)
 
 - Owner asked to make the voice-to-text mic work smoothly everywhere "like ChatGPT". Two agents (deep web research + code audit) confirmed: the old `webkitSpeechRecognition` (Web Speech API) is UNFIXABLE on iPhone — WebKit deferred it in home-screen PWAs indefinitely (bug #225298), blocked in non-Safari iOS browsers, absent in Firefox, needs iOS Dictation on (the `service-not-allowed` that parked it in May). ChatGPT confirmed (OpenAI docs) to use SERVER-side Whisper, not the browser API.
