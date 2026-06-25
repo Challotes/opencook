@@ -52,6 +52,17 @@ export function ChangePassphraseModal({
   const [working, setWorking] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Scroll the (mounted) submit button above the keyboard when the lowest input
+  // is focused — its own scrollIntoView only centered the field, leaving the
+  // button behind the keyboard. Delayed so it fires after the keyboard opens +
+  // the viewport resizes. One shared ref is safe: only one step renders at a
+  // time, so only one <button ref={submitRef}> is mounted. (QA 2026-06-25, matches ProtectModal)
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const scrollSubmitIntoView = () => {
+    setTimeout(() => {
+      submitRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 300);
+  };
 
   // Suppress pagehide-driven session wipe from the moment the change starts
   // until the user dismisses "done". iOS Save-Password sheet on PWA fires
@@ -346,7 +357,7 @@ export function ChangePassphraseModal({
                     setCurrentPass(e.target.value);
                     setError("");
                   }}
-                  onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
+                  onFocus={scrollSubmitIntoView}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && currentPass) void handleVerify();
                   }}
@@ -367,6 +378,7 @@ export function ChangePassphraseModal({
                     Cancel
                   </button>
                   <button
+                    ref={submitRef}
                     type="button"
                     onClick={() => void handleVerify()}
                     disabled={!currentPass || working}
@@ -443,6 +455,7 @@ export function ChangePassphraseModal({
                     autoCapitalize="off"
                     spellCheck={false}
                     onChange={(e) => setHint(e.target.value)}
+                    onFocus={scrollSubmitIntoView}
                     className="w-full bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-400/40"
                   />
                   <p className={`text-[10px] ${hint.trim() ? "text-red-400" : "text-zinc-600"}`}>
@@ -462,6 +475,7 @@ export function ChangePassphraseModal({
                     Cancel
                   </button>
                   <button
+                    ref={submitRef}
                     type="submit"
                     disabled={!canSubmitNew}
                     className="flex-1 bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 interface PassphrasePromptProps {
   context: string;
@@ -24,6 +24,16 @@ export function PassphrasePrompt({
   hint,
 }: PassphrasePromptProps): React.JSX.Element {
   const [value, setValue] = useState("");
+  // Scroll the confirm BUTTON (the lowest element) above the keyboard when the
+  // input is focused — its own scrollIntoView centered the field but left the
+  // button behind the keyboard. Delayed so it fires AFTER the keyboard opens +
+  // the viewport resizes. (QA 2026-06-25, matches ProtectModal)
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const scrollSubmitIntoView = () => {
+    setTimeout(() => {
+      submitRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 300);
+  };
 
   return (
     <div className="space-y-2">
@@ -36,7 +46,7 @@ export function PassphrasePrompt({
         onKeyDown={(e) => {
           if (e.key === "Enter" && value) onConfirm(value);
         }}
-        onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
+        onFocus={scrollSubmitIntoView}
         className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
       />
       {hint && (
@@ -54,6 +64,7 @@ export function PassphrasePrompt({
           Cancel
         </button>
         <button
+          ref={submitRef}
           type="button"
           onClick={() => {
             if (value) onConfirm(value);
