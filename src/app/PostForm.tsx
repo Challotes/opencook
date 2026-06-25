@@ -49,7 +49,11 @@ export function PostForm({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
     el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.focus();
+    // Hands-free on touch: don't auto-open the keyboard after dictation (the text
+    // appears with the send button ready). On desktop (fine pointer, no on-screen
+    // keyboard) keep the caret so the user can keep typing. Mirrors the
+    // pointer:coarse check in handleKeyDown. (mic polish 2026-06-26)
+    if (!window.matchMedia?.("(pointer: coarse)").matches) el.focus();
   }, []);
 
   // Record-and-transcribe mic (getUserMedia + MediaRecorder → /api/transcribe →
@@ -228,10 +232,10 @@ export function PostForm({
             disabled={voiceState === "transcribing"}
             className={`absolute right-3 bottom-[7px] sm:bottom-[11px] rounded-full p-2.5 transition-colors disabled:cursor-default ${
               voiceState === "recording"
-                ? "bg-red-500 text-white hover:bg-red-600"
+                ? "bg-red-500 text-white ring-1 ring-inset ring-red-400/40 hover:bg-red-600 animate-pulse"
                 : voiceState === "transcribing"
-                  ? "bg-zinc-800 text-amber-400"
-                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+                  ? "bg-amber-500/15 text-amber-400 ring-1 ring-inset ring-amber-500/25"
+                  : "bg-amber-500/15 text-amber-400 ring-1 ring-inset ring-amber-500/30 hover:bg-amber-500/25 hover:text-amber-300"
             }`}
             title={
               voiceState === "recording"
