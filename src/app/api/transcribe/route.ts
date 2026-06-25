@@ -66,7 +66,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "Slow down — too many recordings." }, { status: 429 });
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  // .trim() defends against a trailing space / newline (a classic Windows
+  // .env.local gotcha) sneaking into the Bearer header and causing a 401.
+  const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) {
     return Response.json(
       { error: "Voice input is offline — no transcription key configured." },
