@@ -49,23 +49,6 @@ function FeedContent({
 }) {
   const { identity } = useIdentityContext();
   const { bootError } = useBootContext();
-
-  // Fixed-top-stack measurement (#6 Option C — see the JSX below). A
-  // ResizeObserver (NOT a viewport/keyboard listener) keeps the scroller's top
-  // offset in sync with the Header+Bootboard height (which changes on Bootboard
-  // expand/collapse + empty↔active). It NEVER reacts to the keyboard, so it
-  // cannot reintroduce the reverted visualViewport approach's lag.
-  const topStackRef = useRef<HTMLDivElement>(null);
-  const [topStackHeight, setTopStackHeight] = useState(0);
-  useEffect(() => {
-    const el = topStackRef.current;
-    if (!el) return;
-    const measure = () => setTopStackHeight(el.offsetHeight);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
   const {
     posts: serverPosts,
     bootboard,
@@ -215,172 +198,156 @@ function FeedContent({
 
   return (
     <div className="flex flex-col h-[100dvh]">
-      {/* FIXED top stack — Header + Bootboard pinned to the layout viewport so
-          iOS's focus-reveal scroll (it surfaces the focused text box above the
-          keyboard by scrolling the whole page up) can't drag them off the top.
-          position:fixed anchors to the viewport, immune to that scroll — native,
-          zero keyboard-event JS, so no lag (cf. the reverted visualViewport fix).
-          bg-black hides posts scrolling underneath. INVARIANT: no ancestor
-          (page.tsx wrapper / this shell) may set transform/filter/will-change/
-          contain, or `fixed` anchors to it and silently breaks this. (#6, 2026-06-25) */}
-      <div ref={topStackRef} className="fixed top-0 left-0 right-0 z-40 bg-black">
-        <Header
-          isAtTop={isAtTop}
-          genesisHydrated={genesisHydrated}
-          genesisVisited={genesisVisited}
-          onScrollToGenesis={scrollToGenesis}
-        />
+      <Header
+        isAtTop={isAtTop}
+        genesisHydrated={genesisHydrated}
+        genesisVisited={genesisVisited}
+        onScrollToGenesis={scrollToGenesis}
+      />
 
-        {/* Pinned bootboard */}
-        <div className="shrink-0 relative">
-          <div className="mx-auto max-w-2xl px-4 pt-2 pb-3">
-            <Bootboard
-              data={bootboard}
-              onBooted={refresh}
-              bootPrice={bootPrice}
-              onFundNeeded={(address, balance, fee) => {
-                setUserAddress(address);
-                setUserBalance(balance);
-                setFundFee(fee);
-                setShowFundModal(true);
-              }}
-            />
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-b from-transparent to-black pointer-events-none" />
-        </div>
-      </div>
-
-      {/* Lower column — offset below the fixed top stack; holds the single
-          scroller + scroll-to-bottom button + the in-flow compose footer (it
-          stays at the bottom of the dvh column, tracking the keyboard via iOS's
-          native resize, exactly as before). */}
-      <div className="flex min-h-0 flex-1 flex-col" style={{ paddingTop: topStackHeight }}>
-        {/* Scrollable posts area */}
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto overscroll-y-contain relative scrollbar-hide"
-          style={{ scrollbarWidth: "none" }}
-        >
-          <PostList
-            posts={chronological}
-            genesisRef={genesisRef}
-            bottomRef={bottomRef}
-            observerRef={observerRef}
-            hasMore={hasMore}
-            isLoadingMore={isLoadingMore}
-            onLoadEarlier={handleLoadEarlier}
+      {/* Pinned bootboard */}
+      <div className="shrink-0 relative">
+        <div className="mx-auto max-w-2xl px-4 pt-2 pb-3">
+          <Bootboard
+            data={bootboard}
             onBooted={refresh}
-            onAskAgent={handleAskAgent}
+            bootPrice={bootPrice}
             onFundNeeded={(address, balance, fee) => {
               setUserAddress(address);
               setUserBalance(balance);
               setFundFee(fee);
               setShowFundModal(true);
             }}
-            onFreeBootUsed={handleFreeBootUsed}
-            bootPrice={bootPrice}
-            freeBootsRemaining={freeBootsRemaining}
           />
-
-          {/* Optimistic posts — appear at the bottom (newest), full opacity since server confirms in ~50ms */}
-          {pendingOptimistic.length > 0 && (
-            <div className="mx-auto max-w-2xl px-4 pb-2 divide-y divide-zinc-800/60">
-              {pendingOptimistic.map((op) => (
-                <article key={op.id} className={`py-3.5 ${op.failed ? "opacity-50" : ""}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 text-xs text-zinc-500">
-                        <span className="font-medium text-zinc-300">{op.author_name}</span>
-                        <span>·</span>
-                        <time>{timeAgo(op.created_at)}</time>
-                        {op.failed && (
-                          <span className="text-red-400 text-[10px]">
-                            {op.failReason === "rate_limited"
-                              ? "Too fast — try again"
-                              : op.failReason === "daily_limit"
-                                ? "Daily post limit reached"
-                                : op.failReason === "paused"
-                                  ? "Posting briefly paused"
-                                  : op.failReason === "rejected_content"
-                                    ? "Can't be posted"
-                                    : "Failed to post"}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1.5 text-[15px] leading-relaxed text-zinc-200 whitespace-pre-wrap break-words">
-                        {op.content}
-                      </p>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
         </div>
+        <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-b from-transparent to-black pointer-events-none" />
+      </div>
 
-        {/* Scroll-to-bottom button */}
-        {!isAtBottom && (
-          <div className="shrink-0 flex justify-end mx-auto max-w-2xl px-4">
-            <button
-              type="button"
-              onClick={scrollToBottom}
-              aria-label="Scroll to bottom"
-              className="relative -mb-5 z-30 w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 border border-zinc-700 shadow-lg hover:bg-zinc-700 transition-colors mr-2"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 16 16"
-                fill="none"
-                aria-hidden="true"
-                className="text-zinc-300"
-              >
-                <path
-                  d="M8 3v10m0 0l-4-4m4 4l4-4"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {unreadCount > 0 && (
-                <span className="absolute -top-2 -right-1 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-amber-500 text-black text-[11px] font-bold px-1.5">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
+      {/* Scrollable posts area */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto overscroll-y-contain relative scrollbar-hide"
+        style={{ scrollbarWidth: "none" }}
+      >
+        <PostList
+          posts={chronological}
+          genesisRef={genesisRef}
+          bottomRef={bottomRef}
+          observerRef={observerRef}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          onLoadEarlier={handleLoadEarlier}
+          onBooted={refresh}
+          onAskAgent={handleAskAgent}
+          onFundNeeded={(address, balance, fee) => {
+            setUserAddress(address);
+            setUserBalance(balance);
+            setFundFee(fee);
+            setShowFundModal(true);
+          }}
+          onFreeBootUsed={handleFreeBootUsed}
+          bootPrice={bootPrice}
+          freeBootsRemaining={freeBootsRemaining}
+        />
+
+        {/* Optimistic posts — appear at the bottom (newest), full opacity since server confirms in ~50ms */}
+        {pendingOptimistic.length > 0 && (
+          <div className="mx-auto max-w-2xl px-4 pb-2 divide-y divide-zinc-800/60">
+            {pendingOptimistic.map((op) => (
+              <article key={op.id} className={`py-3.5 ${op.failed ? "opacity-50" : ""}`}>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <span className="font-medium text-zinc-300">{op.author_name}</span>
+                      <span>·</span>
+                      <time>{timeAgo(op.created_at)}</time>
+                      {op.failed && (
+                        <span className="text-red-400 text-[10px]">
+                          {op.failReason === "rate_limited"
+                            ? "Too fast — try again"
+                            : op.failReason === "daily_limit"
+                              ? "Daily post limit reached"
+                              : op.failReason === "paused"
+                                ? "Posting briefly paused"
+                                : op.failReason === "rejected_content"
+                                  ? "Can't be posted"
+                                  : "Failed to post"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-[15px] leading-relaxed text-zinc-200 whitespace-pre-wrap break-words">
+                      {op.content}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         )}
+      </div>
 
-        {/* Pinned bottom — compose area */}
-        <div className="shrink-0">
-          {/* Install pitch banner — full-width slide-up sheet above the compose.
+      {/* Scroll-to-bottom button */}
+      {!isAtBottom && (
+        <div className="shrink-0 flex justify-end mx-auto max-w-2xl px-4">
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            aria-label="Scroll to bottom"
+            className="relative -mb-5 z-30 w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 border border-zinc-700 shadow-lg hover:bg-zinc-700 transition-colors mr-2"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+              className="text-zinc-300"
+            >
+              <path
+                d="M8 3v10m0 0l-4-4m4 4l4-4"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-2 -right-1 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-amber-500 text-black text-[11px] font-bold px-1.5">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Pinned bottom — compose area */}
+      <div className="shrink-0">
+        {/* Install pitch banner — full-width slide-up sheet above the compose.
             Self-gates via the 5-condition `shouldShowInstallPitch`: backed up,
             protected, not standalone, supported platform, not engaged. The
             chevron-tap minimises to the bookmark in PostForm (no timer-based
             suppression — see DECISIONS.md "Install pitch surfaces — no
             timer-based dismissal"). */}
-          <InstallPitch variant="banner" />
+        <InstallPitch variant="banner" />
 
-          <div className="mx-auto max-w-2xl px-4 pb-4 pt-2">
-            <PostForm
-              onPostCreated={handlePostCreated}
-              onPostRejected={handlePostRejected}
-              agentHighlight={agentHighlight}
-            />
-            {/* Attribution — centered. Install bookmark moved to PostForm row
+        <div className="mx-auto max-w-2xl px-4 pb-4 pt-2">
+          <PostForm
+            onPostCreated={handlePostCreated}
+            onPostRejected={handlePostRejected}
+            agentHighlight={agentHighlight}
+          />
+          {/* Attribution — centered. Install bookmark moved to PostForm row
               next to the Ask AI button (2026-06-03), so this row is just the
               bopen.ai link now. */}
-            <div className="flex justify-center mt-1">
-              <a
-                href="https://bopen.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] text-zinc-700 hover:text-zinc-500 transition-colors"
-              >
-                created with bopen.ai
-              </a>
-            </div>
+          <div className="flex justify-center mt-1">
+            <a
+              href="https://bopen.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-zinc-700 hover:text-zinc-500 transition-colors"
+            >
+              created with bopen.ai
+            </a>
           </div>
         </div>
       </div>
