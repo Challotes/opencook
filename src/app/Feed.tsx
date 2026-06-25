@@ -330,7 +330,13 @@ function FeedContent({
             timer-based dismissal"). */}
         <InstallPitch variant="banner" />
 
-        <div className="mx-auto max-w-2xl px-4 pb-4 pt-2">
+        {/* `group` + pointer-coarse:group-focus-within drives the dock-to-keyboard
+            collapse: on touch devices, focusing the textarea (= keyboard open)
+            collapses the rows BELOW the input (the Ask-AI/bookmark grid in
+            PostForm + this attribution) so the text box drops onto the keyboard.
+            Pure CSS (:focus-within), no JS/visualViewport — so no lag. Desktop
+            (fine pointer) is unaffected. (#6-adjacent compose UX, 2026-06-25) */}
+        <div className="group mx-auto max-w-2xl px-4 pb-4 pt-2 transition-all duration-200 pointer-coarse:group-focus-within:pb-2">
           <PostForm
             onPostCreated={handlePostCreated}
             onPostRejected={handlePostRejected}
@@ -338,8 +344,8 @@ function FeedContent({
           />
           {/* Attribution — centered. Install bookmark moved to PostForm row
               next to the Ask AI button (2026-06-03), so this row is just the
-              bopen.ai link now. */}
-          <div className="flex justify-center mt-1">
+              bopen.ai link now. Collapses with the keyboard (see group above). */}
+          <div className="flex justify-center mt-1 max-h-6 overflow-hidden opacity-100 transition-all duration-200 pointer-coarse:group-focus-within:mt-0 pointer-coarse:group-focus-within:max-h-0 pointer-coarse:group-focus-within:opacity-0">
             <a
               href="https://bopen.ai"
               target="_blank"
