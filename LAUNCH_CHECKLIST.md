@@ -12,6 +12,7 @@
 
 - [ ] `BSV_SERVER_WIF` — server wallet private key (WIF). Required for on-chain post logging + server-funded free boosts. Without it, posts save to DB only (no on-chain fingerprint).
 - [ ] `ANTHROPIC_API_KEY` — required for the "Ask AI" agent chat.
+- [ ] `GROQ_API_KEY` — *(optional but recommended)* powers the compose-box voice-to-text mic (`/api/transcribe` → Groq Whisper). Free key, no card, from https://console.groq.com/keys (free tier 2,000 transcriptions/day). Unset = the mic shows "voice input offline" on tap; everything else works. *(optional)* `TRANSCRIBE_DAILY_LIMIT` caps daily transcription calls (default 2000).
 - [ ] `CONTENT_DENYLIST` — illegal-floor pre-publish filter (Phase 3). **MUST be set before public launch** (unset = permissive/no filtering). Patterns one-per-line or comma-separated; `/regex/` or substring. Scope to ILLEGAL content only. NOT committed.
 - [ ] `HEALTH_TOKEN` — bearer token gating `GET /api/health` (Phase 5). Set a long random string; you'll put it in the UptimeRobot URL.
 - [ ] `DATABASE_PATH=/data/local.db` — points SQLite at the mounted volume (see §2).

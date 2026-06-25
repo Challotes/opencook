@@ -2,6 +2,12 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-25 — Mic rebuilt: record + Groq Whisper (works on iPhone, finally)
+
+- Owner asked to make the voice-to-text mic work smoothly everywhere "like ChatGPT". Two agents (deep web research + code audit) confirmed: the old `webkitSpeechRecognition` (Web Speech API) is UNFIXABLE on iPhone — WebKit deferred it in home-screen PWAs indefinitely (bug #225298), blocked in non-Safari iOS browsers, absent in Firefox, needs iOS Dictation on (the `service-not-allowed` that parked it in May). ChatGPT confirmed (OpenAI docs) to use SERVER-side Whisper, not the browser API.
+- **Rebuilt the "ChatGPT way":** NEW `src/hooks/useVoiceToText.ts` (records via `getUserMedia` + `MediaRecorder`, POSTs audio) + NEW `src/app/api/transcribe/route.ts` (forwards to **Groq Whisper Large v3 Turbo**, cost guards mirror `/api/agent`: per-IP rate limit + concurrency + `TRANSCRIBE_DAILY_LIMIT`) + rewired `PostForm.tsx` (removed ~160 lines of Web Speech engine + its iOS workarounds; KEPT the mic button, recording/transcribing states, error toast, and the critical `dispatchEvent('input')` trick). iOS must-dos baked in: `getUserMedia` in the tap handler, runtime MIME detection (iOS = `audio/mp4`), `recorder.start(1000)` (1s chunking so Safari's mp4 doesn't garble Whisper), empty-chunk filtering.
+- **Cost/setup:** Groq free tier 2,000/day (no card) covers launch, ~$0.04/hr after — negligible. Env `GROQ_API_KEY` (+ optional `TRANSCRIBE_DAILY_LIMIT`); 503 → "voice input offline" toast if unset, nothing else breaks. Added to `.env.example` + `LAUNCH_CHECKLIST`. Unit test for the MIME helpers (+4). DECISIONS + CLAUDE updated; memory `project_mic_parked` flipped to resolved. tsc + biome + 116 unit tests + build green. **NEEDS owner Groq key + device test on iPhone/Android/desktop.**
+
 ## 2026-06-25 — Phase 8 iPhone QA round 4 (architecture reassessment + dock-to-keyboard fixed)
 
 - Owner asked the strategic question: keep patching the keyboard behaviour, or RE-ARCHITECT the shell? Dispatched 4 agents (architecture-reviewer + 3 general-purpose).

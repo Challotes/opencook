@@ -34,6 +34,7 @@ This project is built using the **bOpen.ai toolkit** (agents, skills, plugins). 
 - `src/app/api/boot-status/route.ts` — Free boots remaining + boot price for a user
 - `src/app/api/earnings/route.ts` — Total earned, activity feed, earnings history for chart
 - `src/app/api/agent/route.ts` — Streaming agent chat (SSE, rate-limited)
+- `src/app/api/transcribe/route.ts` — Voice-to-text proxy: receives recorded audio (multipart `audio`) from the compose-box mic, forwards to Groq Whisper (OpenAI-compatible), returns `{ text }`. Cost guards mirror `/api/agent` (per-IP rate limit + concurrency cap + `TRANSCRIBE_DAILY_LIMIT` daily circuit-breaker); 503 if `GROQ_API_KEY` unset. The "record + server STT" mic — see DECISIONS "Mic: record + Groq Whisper".
 - `src/app/api/tx-hex/route.ts` — WhatsOnChain raw-tx proxy (cached, retries, stale fallback)
 - `src/app/api/balance/route.ts` — WhatsOnChain balance proxy (10s cache, 120/min, graceful fallback on 429). Splits UTXOs by `height`: returns `balance`=`confirmed` (spendable, what the UI shows as the headline) + `pending` (0-conf change/earnings). NOT a confirmed+unconfirmed sum — that overstated spendable funds (see DECISIONS.md "Balance shows spendable (confirmed)").
 - `src/app/api/unspent/route.ts` — WhatsOnChain UTXO proxy (3s cache, 180/min, retries with stale fallback)
@@ -137,6 +138,7 @@ All on-chain payloads are JSON inside OP_FALSE OP_RETURN outputs:
 - `src/hooks/useBoot.ts` — Shared boot logic (free → server, paid → client trustless, consolidation); coordinates with BootContext for global single-flight + 3s throttle
 - `src/hooks/useFeedPolling.ts` — Polls /api/posts every 5s (pauses on hidden tab)
 - `src/hooks/useScrollTracker.ts` — Scroll position, unread tracking
+- `src/hooks/useVoiceToText.ts` — Record-and-transcribe mic engine (`getUserMedia` + `MediaRecorder` → POST `/api/transcribe` → Groq Whisper). Returns `{ state: "idle"|"recording"|"transcribing", error, supported, toggle, dismissError }`; the host (`PostForm`) supplies `onTranscript(text)` to insert into the box. Replaced the Web Speech API (unfixable on iOS PWAs — see DECISIONS "Mic: record + Groq Whisper"). iOS-critical: `getUserMedia` in the tap handler, runtime MIME detection (iOS = `audio/mp4`), `recorder.start(1000)`. Pure helpers `pickAudioMimeType`/`extForMime` unit-tested in `useVoiceToText.test.ts`.
 - `src/hooks/useBsvPrice.ts` — BSV/USD price (cached 5 min)
 - `src/hooks/useCurrencyMode.ts` — Noob Mode ($) / Goat Mode (sats) toggle. Default is protection-aware: protected accounts default to Goat, unprotected default to Noob. User's explicit toggle is honored forever once set (`hasUserChosen` derived from localStorage presence). `setModeProgrammatically` lets the parent drive an in-session live switch without persisting or marking the user as having chosen — used for the post-upgrade auto-flip.
 - `src/types/index.ts` — Shared types (Post, BootboardData, Identity, etc.)
