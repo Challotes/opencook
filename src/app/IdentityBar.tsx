@@ -5,7 +5,6 @@ import { AnimatedBalance } from "@/components/AnimatedBalance";
 import { ChangePassphraseModal } from "@/components/ChangePassphraseModal";
 import { EarningsSparkline } from "@/components/EarningsSparkline";
 import { FirstEarningToast } from "@/components/FirstEarningToast";
-import { GoatModeToast } from "@/components/GoatModeToast";
 import { InstallPitch } from "@/components/InstallPitch";
 import { ProtectModal } from "@/components/ProtectModal";
 import { RestoreModal } from "@/components/RestoreModal";
@@ -25,7 +24,6 @@ import { getStoredAnonName, isEffectivelyProtected, unlockIdentity } from "@/ser
 import { FundAddress } from "./FundAddress";
 
 const BACKED_UP_KEY = "opencook_identity_backed_up";
-const GOAT_WELCOME_SHOWN_KEY = "opencook_goat_welcome_shown";
 const PASSPHRASE_NUDGE_DISMISSED_UNTIL_KEY = "opencook_passphrase_nudge_dismissed_until";
 const PASSPHRASE_NUDGE_BACKOFF_DAYS = 30;
 
@@ -104,13 +102,7 @@ export function IdentityChip(): React.JSX.Element | null {
     []
   );
   const bsvPrice = useBsvPrice();
-  const {
-    toggle: toggleCurrency,
-    isGoat,
-    hasUserChosen: hasChosenCurrency,
-    setModeProgrammatically: setCurrencyMode,
-  } = useCurrencyMode();
-  const [showGoatToast, setShowGoatToast] = useState(false);
+  const { toggle: toggleCurrency, isGoat } = useCurrencyMode();
 
   // Save recovery file state
   const [downloading, setDownloading] = useState(false);
@@ -215,21 +207,6 @@ export function IdentityChip(): React.JSX.Element | null {
     setIsProtected(isEffectivelyProtected());
     loadStoredHint();
   }, [identity?.address, identity?.wif, identity, loadStoredHint]);
-
-  // Auto-flip currency display to Goat (sats) the first time a user becomes
-  // protected, IF they have not explicitly toggled. Their explicit choice (if
-  // they later flip back to Noob) is honored permanently. The welcome toast
-  // shows once ever, gated by GOAT_WELCOME_SHOWN_KEY.
-  useEffect(() => {
-    if (!isProtected) return;
-    if (hasChosenCurrency) return;
-    if (isGoat) return;
-    setCurrencyMode("goat");
-    if (localStorage.getItem(GOAT_WELCOME_SHOWN_KEY) !== "1") {
-      setShowGoatToast(true);
-      localStorage.setItem(GOAT_WELCOME_SHOWN_KEY, "1");
-    }
-  }, [isProtected, hasChosenCurrency, isGoat, setCurrencyMode]);
 
   const fetchLiveBalance = useCallback(() => {
     const address = identity?.address;
@@ -650,8 +627,6 @@ export function IdentityChip(): React.JSX.Element | null {
           reAuthPassphrase={reAuthPassphraseRef.current}
         />
       )}
-
-      <GoatModeToast visible={showGoatToast} onDismiss={() => setShowGoatToast(false)} />
 
       {/* First-earning save prompt — fires once per device when earnedSats > 0
           and recovery file hasn't been saved. "Save now" opens ProtectModal
