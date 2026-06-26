@@ -290,7 +290,10 @@ export function generateBackupHtml(data: BackupData): string {
     "    body {\n" +
     "      background: #09090b; color: #f4f4f5;\n" +
     "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
-    "      min-height: 100vh; display: flex; flex-direction: column;\n" +
+    // `100svh` (URL-bar-stable) with a `100vh` fallback: plain `100vh` flickered
+    // with Android's collapsing URL bar on scroll, jittering the page / jumping it
+    // to the top (owner-reported 2026-06-26). svh is fixed → no reflow on scroll.
+    "      min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column;\n" +
     "      align-items: center; padding: 48px 16px 32px;\n" +
     "    }\n" +
     "    .container { width: 100%; max-width: 560px; }\n" +
