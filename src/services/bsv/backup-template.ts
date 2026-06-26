@@ -327,6 +327,11 @@ export function generateBackupHtml(data: BackupData): string {
     "      font-size: 13px; color: #fbbf24; line-height: 1.55;\n" +
     "    }\n" +
     "    .noscript-banner strong { color: #fde68a; font-weight: 600; }\n" +
+    // Hide the Quick Look notice via CSS the instant JS runs (the <script> in <head>
+    // adds `.js` to <html> BEFORE the body paints), so the amber notice never
+    // shows-then-collapses on Android — that ~150px collapse reflow was the residual
+    // scroll-jitter. Quick Look runs no JS → no `.js` class → the notice stays visible.
+    "    html.js #quicklook-notice { display: none; }\n" +
     "    .context-block {\n" +
     "      background: #18181b; border: 1px solid #27272a; border-radius: 10px;\n" +
     "      padding: 13px 16px; margin-bottom: 14px;\n" +
@@ -415,6 +420,10 @@ export function generateBackupHtml(data: BackupData): string {
     "    footer a:hover { color: #a1a1aa; }\n" +
     "    .footer-stamp { color: #3f3f46; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; letter-spacing: 0.02em; margin-bottom: 4px; }\n" +
     "  </style>\n" +
+    // Runs during <head> parse, before the body paints → `.js` on <html> makes the
+    // CSS above hide #quicklook-notice from the very first layout (no reflow). See
+    // DECISIONS "recovery flicker = scroll-anchoring + notice reflow".
+    "  <script>document.documentElement.classList.add('js')</script>\n" +
     "</head>\n" +
     "<body>\n" +
     '  <div class="container">\n' +
