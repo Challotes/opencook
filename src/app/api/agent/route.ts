@@ -95,7 +95,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 800,
+        max_tokens: 400,
         system: buildAgentPrompt(apiMessages[apiMessages.length - 1]?.content ?? ""),
         messages: apiMessages,
         stream: true,

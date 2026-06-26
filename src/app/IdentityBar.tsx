@@ -163,6 +163,9 @@ export function IdentityChip(): React.JSX.Element | null {
   // manage gate's cached passphrase is stale after a change) or just dismiss.
   const protectCompletedRef = useRef(false);
   const changeCompletedRef = useRef(false);
+  // Same pattern for restore: only close the You modal when a restore COMPLETED
+  // (its state is stale under the imported identity). On Cancel, return to it.
+  const restoreCompletedRef = useRef(false);
 
   // ── Helpers defined early for use in effects ──────────────────────────────
 
@@ -622,17 +625,19 @@ export function IdentityChip(): React.JSX.Element | null {
           onClose={() => {
             // Dismissals happen here, not in onSuccess. Keeping the modal
             // mounted after onSuccess lets it render its own "done" state
-            // (the amber confirmation card + Got it button). Parent used to
-            // call setShowRestoreModal(false) here in onSuccess which
-            // unmounted the modal before the done state was ever visible.
+            // (the amber confirmation card + Got it button).
+            const completed = restoreCompletedRef.current;
+            restoreCompletedRef.current = false;
             setShowRestoreModal(false);
-            // Close the You modal too — the modal is showing the previous
-            // identity's state, which is stale under the imported identity.
-            // closeManageModal handles all gate state teardown including
-            // reAuthPassphraseRef.
-            closeManageModal();
+            // Only close the You modal when a restore actually COMPLETED — it's
+            // then showing the previous identity's stale state under the imported
+            // identity. On Cancel/X/backdrop, return to the You modal (matching
+            // the passphrase flow). closeManageModal handles all gate-state
+            // teardown including reAuthPassphraseRef.
+            if (completed) closeManageModal();
           }}
           onSuccess={(imported) => {
+            restoreCompletedRef.current = true;
             updateIdentity(imported);
             // The file the user just restored IS their backup — mark
             // backedUp so the dropdown banner doesn't reappear and prompt

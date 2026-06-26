@@ -287,13 +287,17 @@ export function generateBackupHtml(data: BackupData): string {
     '" />\n' +
     "  <style>\n" +
     "    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }\n" +
+    // NO viewport units (vh/svh/dvh) anywhere: even `svh` didn't reliably kill the
+    // Android scroll-jitter (the file viewer can fall back to `100vh`, which tracks
+    // the collapsing URL bar and jumps the page to the top). Final fix: drop the
+    // body min-height entirely and put the dark bg on `html`, so a short page still
+    // shows no white area and there is NO viewport unit for the URL bar to reflow
+    // against. min-height was only doing bg-coverage on short content, not layout.
+    "    html { background: #09090b; }\n" +
     "    body {\n" +
     "      background: #09090b; color: #f4f4f5;\n" +
     "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
-    // `100svh` (URL-bar-stable) with a `100vh` fallback: plain `100vh` flickered
-    // with Android's collapsing URL bar on scroll, jittering the page / jumping it
-    // to the top (owner-reported 2026-06-26). svh is fixed → no reflow on scroll.
-    "      min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column;\n" +
+    "      display: flex; flex-direction: column;\n" +
     "      align-items: center; padding: 48px 16px 32px;\n" +
     "    }\n" +
     "    .container { width: 100%; max-width: 560px; }\n" +
