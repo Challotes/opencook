@@ -2,6 +2,18 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-26 — Phase 8 QA batch (7 items, 5 agents → 4 commits)
+
+Owner reported a 7-item batch from Android testing; dispatched 5 parallel read-only agents to investigate/design, validated against DECISIONS, implemented + gated each. All Android-context; **iPhone still untested**.
+
+- **Mic hands-free + no longer triggers the keyboard-collapse** (`129c9a8`, earlier): the dock-collapse selector fired on ANY `.relative button:focus`, so tapping the hands-free mic collapsed the compose area as if the keyboard opened. Narrowed the selector to a `compose-send` marker on the send button only. Also gated the post-send refocus on `pointer:coarse` (touch = no keyboard re-pop after posting).
+- **Ask-AI shorter** (`3ca20f1`): tightened the agent PERSONALITY prompt to brief-by-default (lead with the answer, 2-4 sentences / 3 bullets, expand only if asked) + `max_tokens` 800→400.
+- **Recovery-file flicker — FINAL fix** (`3ca20f1`): even `svh` didn't hold (viewer falls back to `100vh`). Removed ALL viewport units from the recovery HTML — dropped the body `min-height`, moved the dark bg to `html`. No `vh/svh/dvh` = nothing for the Android URL bar to reflow against. (Only newly-saved files get it.)
+- **Restore-cancel** (`3ca20f1`): "Upload your saved file" Cancel wrongly closed the whole You modal — added `restoreCompletedRef` (set only on success), so Cancel now returns to the You modal (matches the passphrase flow).
+- **PWA welcome screen** (`a65ede6`): removed "we couldn't find your identity", big OpenCook wordmark (~2/3 width, font-driven clamp), CTA → "Upload your saved file to access".
+- **Icon + bookmark** (`d96ecd2`): replaced the thin 3px gradient "shine" (downscaled to a hairline / clipped by Android masking — "looked like an error line") with a THICK solid amber band + enlarged centered OC, inside the Android safe-zone, + a `maskable` manifest entry. `generate-icons.mjs` now also emits `favicon.ico`. Synced the recovery file's embedded `ICON_SVG`. Install bookmark: removed the zinc box (bare icon), amber flash → drop-shadow glow; footer grid `overflow-visible` at rest so the glow isn't clipped.
+- **PENDING:** owner re-tests on **Android** (incl. saving a FRESH recovery file for the flicker, and **uninstall/reinstall the PWA** to see the new icon), then the full **iPhone** pass. ~42 commits unpushed.
+
 ## 2026-06-26 — Mic working (Android) + polish; debug saga; end-of-day checkpoint
 
 - **Mic confirmed working on ANDROID** (record → Groq Whisper → text lands). The long `401 Invalid API Key` saga was NOT the code/key — it was an **UNSAVED `.env.local`** (editor buffer had the new key, disk still had the old one, app read the stale key). A temp key-metadata debug log (length/prefix/suffix, never the secret) caught it; the log has been removed. Kept a defensive `.trim()` on the key read (commit `fab9bb0`). Lesson recorded in DECISIONS + memory: if a Next env var seems wrong despite `.env.local`, confirm it's SAVED + restart.
