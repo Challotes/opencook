@@ -70,7 +70,11 @@ export function PostForm({
   const wasPendingRef = useRef(false);
   useEffect(() => {
     if (wasPendingRef.current && !isPending) {
-      textareaRef.current?.focus();
+      // Hands-free on touch (see performSubmit) — don't re-pop the keyboard when a
+      // post completes. Desktop refocuses for the next post.
+      if (!window.matchMedia?.("(pointer: coarse)").matches) {
+        textareaRef.current?.focus();
+      }
     }
     wasPendingRef.current = isPending;
   }, [isPending]);
@@ -90,7 +94,13 @@ export function PostForm({
       setTimeout(() => setJustPosted(false), 1500);
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
-        textareaRef.current.focus();
+        // Hands-free on touch: don't re-pop the keyboard after posting (you post
+        // via the send button there, and reopening drags the header/bootboard
+        // off-screen — #6). Desktop keeps the caret for continuous posting.
+        // (mic fix 2026-06-26, mirrors handleTranscript + handleKeyDown)
+        if (!window.matchMedia?.("(pointer: coarse)").matches) {
+          textareaRef.current.focus();
+        }
       }
 
       startTransition(async () => {
@@ -208,7 +218,7 @@ export function PostForm({
           <button
             type="button"
             onClick={submitForm}
-            className="absolute right-3 bottom-[7px] sm:bottom-[11px] bg-amber-500 text-black rounded-full p-2.5 transition-colors hover:bg-amber-400"
+            className="compose-send absolute right-3 bottom-[7px] sm:bottom-[11px] bg-amber-500 text-black rounded-full p-2.5 transition-colors hover:bg-amber-400"
             title="Post"
           >
             <svg
@@ -305,7 +315,7 @@ export function PostForm({
           visible after the user has saved + protected + minimised the sheet),
           the center cell collapses gracefully. Mobile (helper text hidden)
           uses a sm:hidden spacer to hold the left cell's shape. */}
-      <div className="grid grid-cols-3 items-center mt-1 ml-1 mr-1 max-h-12 overflow-hidden opacity-100 transition-all duration-200 pointer-coarse:group-has-[textarea:focus,.relative_button:focus]:mt-0 pointer-coarse:group-has-[textarea:focus,.relative_button:focus]:max-h-0 pointer-coarse:group-has-[textarea:focus,.relative_button:focus]:opacity-0">
+      <div className="grid grid-cols-3 items-center mt-1 ml-1 mr-1 max-h-12 overflow-hidden opacity-100 transition-all duration-200 pointer-coarse:group-has-[textarea:focus,.compose-send:focus]:mt-0 pointer-coarse:group-has-[textarea:focus,.compose-send:focus]:max-h-0 pointer-coarse:group-has-[textarea:focus,.compose-send:focus]:opacity-0">
         <div className="hidden sm:flex items-center gap-2">
           <p className="text-[11px] text-zinc-600">Enter to post, Shift+Enter for new line</p>
           <span
