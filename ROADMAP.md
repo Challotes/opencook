@@ -335,4 +335,4 @@ Right-sized after an owner free-speech discussion (see DECISIONS.md "Thin-core c
 - [x] Clean up repo for public release
 - [x] Ensure AI context files are comprehensive
 - [x] Choose license — MIT
-- [ ] GitHub public release
+- [x] GitHub public release — `github.com/Challotes/opencook` confirmed PUBLIC (2026-06-26)
