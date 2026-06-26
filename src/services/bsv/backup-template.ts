@@ -432,7 +432,7 @@ export function generateBackupHtml(data: BackupData): string {
     '    <div class="logo"><span>Open</span>Cook</div>\n' +
     "    <h1>Recovery File</h1>\n" +
     '    <p class="subtitle">Keep this file somewhere only you can find it.</p>\n' +
-    '    <div class="badge-wrap"><div class="offline-badge">Works offline — no network calls · b6</div></div>\n' +
+    '    <div class="badge-wrap"><div class="offline-badge">Works offline — no network calls</div></div>\n' +
     "\n" +
     '    <div class="card">\n' +
     '      <div class="meta-row">\n' +
