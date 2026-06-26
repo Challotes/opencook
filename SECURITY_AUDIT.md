@@ -152,6 +152,9 @@ Read-only feed polling was historically unrate-limited by design (every client h
 ### OBS-S4: E30 stale-key detection in `/api/posts` — SUPERSEDED (2026-06-14)
 Already documented in L7; noted here for cross-reference. Polling sent `x-opencook-pubkey`; server returned `key_status: { stale: true }` gated by `E30_STALE_KEY_ENABLED`. **Superseded 2026-06-14:** key rotation removed; stale keys cannot exist when the address never changes. The header, the `key_status` response field, and the `E30_STALE_KEY_ENABLED` env flag have all been removed. `StaleKeyModal` deleted.
 
+### OBS-S5: `/api/transcribe` (Phase 8 mic rebuild) joined the cost-guarded proxy fleet — logged 2026-06-26
+The voice-to-text mic was rebuilt (2026-06-25) as record + Groq Whisper: the browser POSTs audio to `/api/transcribe`, which forwards to Groq's Whisper endpoint. Like the paid `/api/agent` route, it is guarded against cost-abuse — **per-IP rate limit** (30/min, same `x-forwarded-for`→`x-real-ip` extraction as the other proxies), **concurrency cap** (`MAX_CONCURRENT = 4`), a **global daily circuit-breaker** (`TRANSCRIBE_DAILY_LIMIT`, default 2000, checked just before the paid upstream call), a 25 MB upload cap, and a 503 when `GROQ_API_KEY` is unset. No new attack surface beyond the existing proxy fleet; logged here for record-completeness (the guards live in `src/app/api/transcribe/route.ts` and are also described in CLAUDE.md). Not a regression.
+
 ### OBS-N1: `/api/agent` rate-limit header parsing inconsistency — FIXED 2026-06-05
 **Severity:** LOW — minor rate-limit bypass vector.
 **File:** `src/app/api/agent/route.ts:28`.
