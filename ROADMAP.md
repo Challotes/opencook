@@ -26,7 +26,7 @@
 - [x] Genesis section (founding conversation, collapsible, persisted visited state)
 - [x] Identity chip in header (replaces full identity bar)
 - [x] Enter-to-post with auto-refocus after posting
-- [x] Voice-to-text microphone button (Web Speech API)
+- [x] Voice-to-text microphone button (record + Groq Whisper — rebuilt 2026-06 from the unfixable Web Speech API)
 - [x] Agent chat (Claude Haiku API, full project context, modal overlay)
 - [x] Telegram-style post button (mic when empty, send arrow when typing)
 - [x] Hidden scrollbars, word-break for long content

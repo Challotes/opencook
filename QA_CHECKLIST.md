@@ -11,7 +11,7 @@
   tunnel — `npm run build && npm run start`, then `cloudflared tunnel --url http://localhost:3000`.
   **Use the production build, NOT `npm run dev`** — dev's React StrictMode double-fires
   effects and breaks the one-time flows you most need to test (PermanenceGate,
-  IosStorageToast, GoatModeToast, first-earning toast). The tunnel's HTTPS URL is what
+  IosStorageToast, first-earning toast). The tunnel's HTTPS URL is what
   enables PWA install + iOS Quick Look/ITP testing without a full deploy.
 - **The tunnel URL changes each run, and an installed PWA caches that origin** — so install
   and finish a device's PWA section (A/B or C/D) within one tunnel session before restarting.
@@ -34,7 +34,7 @@
 - **H4 — iOS Quick Look recovery file.** Self-contained `.html`; inverse-noscript notice + static field render when JS is off. (E25, 2026-05-18.)
 - **H5 — iCloud Keychain on passphrase.** Passphrase inputs use `autocomplete="off"` so iOS doesn't offer to save (and can't silently autofill a wrong value).
 - **H6 — Session lockout.** Locked chip shows the cached name; tapping it must open `SignInModal`, NOT the You modal; boot/post must gate. (E30 → current.)
-- **H7 — iPhone mic (parked).** Web Speech `service-not-allowed`; the test is graceful failure, not function. (2026-05-17.)
+- **H7 — Mic (rebuilt, record + Groq Whisper).** `useVoiceToText` records → POSTs `/api/transcribe` → Groq Whisper. WORKING on Android; iPhone (Safari + PWA) still untested. Test ACTUAL transcription; "Voice input is offline" only when `GROQ_API_KEY` is unset. (Rebuilt 2026-06-25.)
 - **H8 — Optimistic post UI.** Posts appear optimistically; resolve on re-poll; failed (rate-limit / rejected) show a reason then auto-remove ~3s. `daily_limit`/`paused` messages added 2026-06-16.
 - **H9 — First-earning toast.** Fires when `/api/earnings` first returns total>0 (key `opencook_first_earning_save_dismissed_until`, 48h backoff). "Save now" → ProtectModal directly (no You-modal hop). (Fixed 2026-06-15.)
 - **H10 — Android Chrome modal clipping.** `vh` clipped by the collapsing address bar → site-wide `vh`→`svh` sweep. (2026-06-03.)
@@ -65,7 +65,7 @@
 |---|-----|------|----------|-----|
 | A1 | P0 | Fresh visit → auto-generate | Anon chip appears, no prompts, feed loads | |
 | A2 | P0 | 2-click onboarding (type → Post) | PermanenceGate (first post), optimistic post, resolves to confirmed + green chain icon ≤5s | |
-| A3 | P0 | Protect (passphrase ≥8) | Same address; recovery file offered; amber dot clears after save; GoatModeToast (first time) | |
+| A3 | P0 | Protect (passphrase ≥8) | Same address; recovery file offered; amber dot clears after save | |
 | A4 | P0 | Recovery save → iOS share drawer (H4) | Native share sheet (not full-page popup); file `opencook-*.html` | |
 | A5 | P0 | Recovery file content (RB8/9) | "OpenCook" title, OC favicon, opencook.fun footer, `opencook-` name; NO "BSVibes" | |
 | A6 | P0 | Recovery file iOS Quick Look (H4/RB10) | "OpenCook" header, OC favicon; encrypted notice shows; Name/Address render statically | |
@@ -82,10 +82,10 @@
 | A17 | P1 | Wordmark (RB1) | "Open" amber + "Cook" white; not "BSVibes" | |
 | A18 | P1 | iOS amber top band removed (RB3) | Black behind the top; no amber stripe | |
 | A19 | P1 | Permanence gate fires once | Fires first post; not on subsequent posts | |
-| A20 | P1 | Mic button graceful fail (H7) | Does nothing or minimal error; no crash | |
+| A20 | P1 | Mic button — record + transcribe (H7) | Tap → records → words appear (Groq Whisper); "Voice input is offline" only if key unset | |
 | A21 | P2 | Optimistic failed → auto-remove (H8) | Failed post shows reason, auto-removes ~3s | |
 | A22 | P2 | Legal pages (RB12) | "OpenCook" throughout; DRAFT banner; `[TODO]` shows; `[LAWYER]` does NOT | |
-| A23 | P2 | Currency toggle | $↔sats; newly-protected defaults Goat; choice persists | |
+| A23 | P2 | Currency toggle | $↔sats; default is ALWAYS $ (no auto-flip); sats opt-in; choice persists | |
 | A24 | P2 | Pull-to-refresh blocked | No iOS pull-to-refresh on the feed | |
 
 ## Section B — iPhone PWA (standalone, home-screen icon)
@@ -96,7 +96,7 @@
 | B3 | P0 | iOS top band — standalone (RB3/15) | Black behind status bar (white clock on black); no amber | |
 | B4 | P0 | IosStorageToast once | Fires after welcome gate; "Got it" dismisses; no re-fire | |
 | B5 | P0 | WelcomeGate restore (H1, BLOCKER-3) | Clear data→reopen→gate→restore encrypted file→identity imported WITH passphrase (not plaintext) | |
-| B6 | P0 | WelcomeGate start fresh | New anon name; no error | |
+| B6 | P0 | WelcomeGate "I don't have a recovery file" | Shows "set up in Safari first" instructions; NO identity generated (restore-only) | |
 | B7 | P0 | WelcomeGate legacy file rejected (BLOCKER-6) | Plaintext/pre-v1 file → `unsupported_version`; gate stays open | |
 | B8 | P0 | Recovery save in PWA — share drawer (H4) | Native share sheet, not full-page popup | |
 | B9 | P0 | Free boot in PWA | Processes; Bootboard updates; no blank screen | |
@@ -142,7 +142,7 @@
 | E7 | P1 | Install pitch (one-tap) | Native Chrome install prompt fires | |
 | E8 | P1 | Rebrand scan (RB1/6/11/12/14) | No "BSVibes" in tab title, header, /terms, /privacy, AI chat | |
 | E9 | P1 | OG meta (RB7) | Share preview shows "OpenCook" copy | |
-| E10 | P2 | Currency toggle | Works; newly-protected default Goat; persists | |
+| E10 | P2 | Currency toggle | Works; default is ALWAYS $ (no auto-flip); persists | |
 | E11 | P2 | Earnings sparkline | Renders (SVG), step shape matches payouts | |
 
 ## Section F — Desktop Firefox

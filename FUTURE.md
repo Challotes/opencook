@@ -80,7 +80,7 @@ The codebase has started doing things we didn't fully plan. Most of these are al
 
 **Wallet health as a background concern** *(act-half shipped, explain-half future)*. UTXOs fragment. Fees creep up. The wallet quietly monitors and consolidates. That kind of low-level maintenance could report upward — cost trends, fragmentation alerts, fee anomalies. Right now it just acts. It could also explain.
 
-**Scoring without a committee** *(shipped in-app — Phase 6 / `src/services/fairness/weights.ts`; standalone primitive future)*. Contribution weight is calculated from behavior: post frequency, engagement, recency, chain depth. No one votes. No one decides. It just runs. That model applies anywhere you're trying to fairly compensate a group without central control — open source projects, co-ops, DAOs.
+**Scoring without a committee** *(shipped in-app — Phase 6 / `src/services/fairness/weights.ts`; standalone primitive future)*. Contribution weight is calculated from behavior: post frequency, engagement, and recency. No one votes. No one decides. It just runs. That model applies anywhere you're trying to fairly compensate a group without central control — open source projects, co-ops, DAOs.
 
 **The chain as the audit log** *(data substrate shipped — posts + payouts all have on-chain fingerprints; verifier future)*. Every post has an on-chain fingerprint. In theory you can cross-reference the database against the chain and find discrepancies. Nobody's built that check yet. It's just waiting there.
 

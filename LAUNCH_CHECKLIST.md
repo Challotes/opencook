@@ -5,8 +5,8 @@
 > ROADMAP.md / `.env.example`); it's a do-list for deploy day. **`git rm` this at
 > launch-close** (same lifecycle as LAUNCH_PLAN.md). Work it top to bottom at Phase 9.
 >
-> Build status: Phases 1–5 COMPLETE. Remaining build phases: 6 (e2e tests), 7 (rebrand
-> → OpenCook), 8 (cross-device QA), 9 (deploy). This list is executed during 8–9.
+> Build status: Phases 1–7 COMPLETE. Remaining: 8 (cross-device QA — in progress), 9 (deploy).
+> This list is executed during 8–9.
 
 ## 1. Environment variables (Railway → service → Variables)
 

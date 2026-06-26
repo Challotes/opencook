@@ -2,6 +2,14 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-26 — Recovery-flicker closure + save-flow + full MD accuracy audit (7 agents)
+
+- **Recovery-file scroll-jitter → WON'T-FIX.** Chased it through removing viewport units → scroll-anchoring (`overflow-anchor`) → pre-paint notice hide → `overscroll-behavior-y` (the page is ~one viewport tall, so Android Chrome overscroll-re-clamps to the top). A temporary `b6` marker confirmed the owner WAS testing the latest code and it still jittered → it's inherent Android Chrome (web-confirmed; iPhone fine). Accepted as won't-fix in DECISIONS; the CSS hardening stays (one bit — the pre-paint notice hide — genuinely removes a load-flash). Comments cleaned of over-claiming.
+- **Save-to-Drive flash → NOT a bug.** Android correctly uses `navigator.share` (the `<a download>` desktop path is gated off via `isTouchPrimary`); the "flash" is the OS share→Drive activity transition and the "auto-save to root" is Google Drive's share-target behavior. No change.
+- **`GoatModeToast.tsx` deleted** (owner-approved) — orphaned by the Goat-flip removal.
+- **Full MD accuracy audit (6 parallel audit agents)** vs the actual code. Verdict: SECURITY_AUDIT clean (no regressions), DIRECTION clean, most of CLAUDE/DECISIONS already current. Fixed the real drift: DECISIONS old currency entry (marked superseded — it still described the removed auto-flip/`GoatModeToast`/`setModeProgrammatically`), CLAUDE + QA_CHECKLIST + LAUNCH_PLAN "Start fresh (auto-generate)" welcome-gate path that doesn't exist (it's restore-only), ROADMAP mic "Web Speech API" → Groq rebuild, QA_CHECKLIST 5 stale checks (Goat ×3, welcome-gate, mic), FUTURE "chain depth" scoring input (removed mechanism), FAIRNESS free-boot subsidy clarification (~1,046 = floor + network fee) + stale line refs + ≥3-post pricing note, CLAUDE/DECISIONS bookmark dims + block-aware install reveal, LAUNCH_CHECKLIST status banner. **Caught 2 wrong agent findings** (ICON_SVG "missing circle" — it has it; CLAUDE "still has Goat auto-flip" — it doesn't) by verifying against code before editing.
+- **Owner to confirm:** is the GitHub repo public yet? (ROADMAP "GitHub public release" still unchecked, but the `opencook` origin remote exists.)
+
 ## 2026-06-26 — Phase 8 QA batch #2 (Goat/install/icon/flicker, 4 agents)
 
 - **Goat Mode removed** (`4d68f6f`): currency now ALWAYS defaults to `$` (Noob); sats is opt-in via the toggle only. Killed the protection-aware auto-flip (fired on every load + on protect — "looked terrible") + the `GoatModeToast` usage. `GoatModeToast.tsx` is now dead code — **left in place pending owner's delete confirmation**.

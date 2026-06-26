@@ -38,7 +38,7 @@ User's share = their weight / total weight of all contributors
 | Minimum payout | 1 sat | Every non-zero share is paid in the same tx — no accumulation, no IOUs | N/A |
 | Boot price cache TTL | 1 hour | How often the dynamic-price recompute runs | tunable |
 | Weights cache TTL | 30 seconds | How often the contributor-weight recompute runs | tunable |
-| Active window | 30 days | "Active contributor" = distinct pubkey with a post in the last 30 days (used by dynamic pricing) | tunable |
+| Active window | 30 days | "Active contributor" = distinct pubkey with **≥3 posts** in the last 30 days (`minPostsForPricing: 3`; used by dynamic pricing) | tunable |
 | Free boots per user | 15 | Each new account gets 15 floor-priced boots before self-funding kicks in | tunable |
 
 All parameters are exposed for the fairness agent to adjust in later phases. They are the governance surface — the agent tunes knobs, it doesn't rewrite the formula.
@@ -61,7 +61,7 @@ Free boots and paid boots run through the same split mechanism, but at different
 
 **Paid boot:** user pays the current dynamic price (`max(1000, min(250000, contributors × 156))`). The 156-sats-per-contributor formula ensures each contributor's pool share lands around ~125 sats regardless of how many contributors are active. Real money, real payouts.
 
-**Free boot:** server wallet pays the floor price (1,000 sats), regardless of the current dynamic price. This keeps the platform's per-user subsidy cost bounded at ~15,690 sats (15 free boots × ~1,046) forever, independent of contributor count or platform scale.
+**Free boot:** server wallet pays the floor price (1,000 sats), regardless of the current dynamic price. This keeps the platform's per-user subsidy cost bounded at ~15,690 sats (15 free boots × ~1,046 each — the 1,000-sat floor price **plus** the ~46-sat network fee for the multi-output split tx) forever, independent of contributor count or platform scale.
 
 On a 1,000 sat free boot:
 
@@ -236,9 +236,9 @@ Do you get it, anon?
 
 ### Settled in code (resolved 2026-06-03 audit)
 
-- **Boot price**: **Dynamic.** `pricing.ts` recomputes from `max(1000, min(250000, active_contributors × 156))` with a 1-hour cache. Floor 1,000 sats, ceiling 250,000 sats. Active = distinct pubkey with a post in the last 30 days.
+- **Boot price**: **Dynamic.** `pricing.ts` recomputes from `max(1000, min(250000, active_contributors × 156))` with a 1-hour cache. Floor 1,000 sats, ceiling 250,000 sats. Active = distinct pubkey with **≥3 posts** in the last 30 days (`minPostsForPricing: 3`).
 - **Multiple boots in quick succession**: **Separate tx per boot, no batching.** The trustless split model requires per-boot finality on-chain — batching would require the server (or another party) to hold sats between events, which contradicts the no-custody rule. The 3-second UI throttle (`BootContext`) prevents accidental rapid-fire double-clicks; deliberate concurrent boots from different users each get their own split tx.
-- **Unsigned posts**: **No weight, no boot eligibility.** `weights.ts:125` filters `WHERE p.pubkey IS NOT NULL`; `boot-orchestrator.ts:43-50` rejects boots on unsigned posts. An unsigned post is visible in the feed but contributes nothing to its author's weight and cannot be spotlighted via boot.
+- **Unsigned posts**: **No weight, no boot eligibility.** `weights.ts` filters `WHERE p.pubkey IS NOT NULL`; `boot-orchestrator.ts` rejects boots on unsigned posts. An unsigned post is visible in the feed but contributes nothing to its author's weight and cannot be spotlighted via boot.
 - **When to start**: **Day one.** Phase 6 shipped with payments live — real BSV moving, fairness payments accruing on every boot.
 
 ### Still open
