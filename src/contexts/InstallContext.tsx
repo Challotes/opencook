@@ -275,10 +275,21 @@ export function InstallProvider({ children }: { children: ReactNode }): React.JS
       // 800ms timer — user gets the sheet, no flag persisted. Slightly worse
       // than ideal but no crash.
     }
-    sheetTimerRef.current = setTimeout(() => {
+    // The 800ms reveal must re-check the modal-block at FIRE time, not just when it
+    // was armed: the unblock that armed this timer (e.g. ProtectModal unmounting)
+    // can race the You-modal's own close, so a modal / just-saved flow may still be
+    // on screen 800ms later. If still blocked, wait another beat and re-check — so
+    // the sheet never slides up over the passphrase create+save flow (owner-reported
+    // "add-to-home-screen popup shows at the same time the user saves").
+    const fire = (): void => {
+      if (installPitchBlockRef.current > 0) {
+        sheetTimerRef.current = setTimeout(fire, SHEET_DELAY_MS);
+        return;
+      }
       setInstallSheetMode("sheet");
       sheetTimerRef.current = null;
-    }, SHEET_DELAY_MS);
+    };
+    sheetTimerRef.current = setTimeout(fire, SHEET_DELAY_MS);
   }, []);
 
   const minimiseToBookmark = useCallback((): void => {
