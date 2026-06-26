@@ -12,16 +12,14 @@ import { shouldShowInstallPitch } from "@/lib/install-pitch";
  * the Ask AI pill on the right). Tap to re-open the slide-up sheet
  * (`<InstallPitch variant="banner" />`).
  *
- * Design (settled 2026-06-03):
- * - 30×30 OpenCook app icon inside a 34×34 container (border-zinc-800 +
- *   1px padding ring) — fills the chip while keeping the container shape
- *   readable. Geometry matches the Ask AI pill exactly (34×34 outer,
- *   `border` not `ring`, `mt-1` baseline offset) so tops and bottoms
- *   align in the PostForm grid.
- * - Ask-AI-style highlight flash on collapse from sheet → bookmark
- *   (border-amber-500 + bg + scale-110 + glow shadow, 2000ms). No
- *   pinging dot — flash treatment alone reads as a strong attention signal
- *   without the extra noise.
+ * Design (border removed 2026-06-26):
+ * - 30×30 OpenCook app icon as a BARE button — no zinc box (an app icon inside
+ *   a zinc container looked odd). 34×34 tap target, `mt-1` baseline offset, so it
+ *   still aligns with the Ask AI pill in the PostForm grid.
+ * - Highlight flash on collapse from sheet → bookmark: an amber `drop-shadow`
+ *   glow (follows the icon's rounded alpha, so it hugs the icon, not a square
+ *   box) + scale-110, 2000ms. No pinging dot — the flash alone is a strong,
+ *   quiet attention signal.
  *
  * Visibility = the 5-condition `shouldShowInstallPitch` gate PLUS
  * `installSheetMode === "bookmark"`. While the sheet is open or hidden,
@@ -65,10 +63,10 @@ export function InstallBookmark(): React.JSX.Element | null {
       type="button"
       onClick={openSheetFromBookmark}
       aria-label="Open install prompt"
-      className={`h-[34px] w-[34px] flex items-center justify-center rounded-sm border transition-all mt-1 ${
+      className={`h-[34px] w-[34px] flex items-center justify-center rounded-lg transition-all duration-200 mt-1 ${
         highlight
-          ? "border-amber-500 bg-amber-500/10 scale-110 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
-          : "border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
+          ? "scale-110 drop-shadow-[0_0_10px_rgba(245,158,11,0.65)]"
+          : "opacity-90 hover:opacity-100 hover:scale-105"
       }`}
     >
       {/* biome-ignore lint/performance/noImgElement: PWA icon path, no resize/CDN needed */}
@@ -78,7 +76,7 @@ export function InstallBookmark(): React.JSX.Element | null {
         aria-hidden="true"
         width={30}
         height={30}
-        className="rounded-sm"
+        className="rounded-lg"
       />
     </button>
   );

@@ -1,25 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <!-- Shine: bright amber catching the top edge, fading down the sides -->
-    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fcd34d" stop-opacity="0.9"/>
-      <stop offset="45%" stop-color="#f59e0b" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.06"/>
-    </linearGradient>
-  </defs>
-  <!-- Background -->
-  <rect width="512" height="512" rx="96" fill="#000000"/>
-  <!-- Subtle amber shine hugging the edge (You-modal style) -->
-  <rect x="8" y="8" width="496" height="496" rx="88" fill="none" stroke="url(#shine)" stroke-width="3"/>
-  <!-- "OC" — O amber (Open) + C white (Cook), matching the wordmark -->
-  <text
-    x="256"
-    y="300"
+  <!-- Outer black field. Full-bleed: Android adaptive masking crops this to a
+       circle/squircle, iOS to a squircle, desktop shows it whole. -->
+  <rect width="512" height="512" rx="112" fill="#000000"/>
+  <!-- Thick solid amber ring, inset 40px — well inside the Android adaptive
+       safe-zone (central ~80%), so the band survives the circle/squircle crop
+       on Android and reads as an intentional border on every shape (not the
+       old thin hairline that looked like an error line). -->
+  <rect x="40" y="40" width="432" height="432" rx="84" fill="#f59e0b"/>
+  <!-- Inner black panel, inset a further 18px — leaves a solid ~18px amber band
+       visible all the way around. -->
+  <rect x="58" y="58" width="396" height="396" rx="68" fill="#000000"/>
+  <!-- "OC" — O amber (Open) + C white (Cook), enlarged + centered on the canvas. -->
+  <text x="256" y="256"
     font-family="ui-monospace, 'SF Mono', 'Cascadia Code', monospace"
-    font-weight="800"
-    font-size="220"
-    text-anchor="middle"
-    dominant-baseline="middle"
-    letter-spacing="-10"
+    font-weight="800" font-size="248" text-anchor="middle"
+    dominant-baseline="central" letter-spacing="-12"
   ><tspan fill="#f59e0b">O</tspan><tspan fill="#ffffff">C</tspan></text>
 </svg>

@@ -8,10 +8,12 @@
 // Source: public/icon.svg
 const ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">' +
-  '<rect width="512" height="512" rx="96" fill="#000000"/>' +
-  '<text x="256" y="300" font-family="ui-monospace,\'SF Mono\',\'Cascadia Code\',monospace"' +
-  ' font-weight="800" font-size="220" text-anchor="middle"' +
-  ' dominant-baseline="middle" letter-spacing="-10">' +
+  '<rect width="512" height="512" rx="112" fill="#000000"/>' +
+  '<rect x="40" y="40" width="432" height="432" rx="84" fill="#f59e0b"/>' +
+  '<rect x="58" y="58" width="396" height="396" rx="68" fill="#000000"/>' +
+  '<text x="256" y="256" font-family="ui-monospace,\'SF Mono\',\'Cascadia Code\',monospace"' +
+  ' font-weight="800" font-size="248" text-anchor="middle"' +
+  ' dominant-baseline="central" letter-spacing="-12">' +
   '<tspan fill="#f59e0b">O</tspan><tspan fill="#ffffff">C</tspan></text>' +
   "</svg>";
 
