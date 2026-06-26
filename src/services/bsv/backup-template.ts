@@ -294,18 +294,20 @@ export function generateBackupHtml(data: BackupData): string {
     // body min-height entirely and put the dark bg on `html`, so a short page still
     // shows no white area and there is NO viewport unit for the URL bar to reflow
     // against. min-height was only doing bg-coverage on short content, not layout.
-    "    html { background: #09090b; }\n" +
+    "    html { background: #09090b; overflow-anchor: none; overscroll-behavior-y: none; }\n" +
     "    body {\n" +
     "      background: #09090b; color: #f4f4f5;\n" +
     "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
     "      display: flex; flex-direction: column;\n" +
     "      align-items: center; padding: 48px 16px 32px;\n" +
-    // overflow-anchor:none stops Android Chrome's scroll-anchoring from shifting the
-    // scroll to compensate for the one-time #quicklook-notice collapse — that
-    // anchoring fight (re-fired as the URL bar animates) was the residual Android
-    // scroll-jitter after the viewport units were removed. iOS Safari doesn't
-    // scroll-anchor this way → iPhone was always fine. THE actual root cause.
-    "      overflow-anchor: none;\n" +
+    // THE actual root cause: this page is only ~one phone-viewport tall, so on Android
+    // Chrome the only scrollable distance is the URL-bar-collapse zone — dragging it
+    // triggers overscroll + dynamic-viewport re-clamping that snaps the page back to the
+    // top, repeatedly (the jitter). `overscroll-behavior-y: none` kills that bounce/snap
+    // on the ROOT scroller (it's set on `html` above — on `body` alone it was a no-op,
+    // since `html` is the document scroller; `overflow-anchor` likewise belongs on html).
+    // iOS rubber-bands instead of re-clamping → iPhone was always fine; both no-op there.
+    "      overflow-anchor: none; overscroll-behavior-y: none;\n" +
     "    }\n" +
     "    .container { width: 100%; max-width: 560px; }\n" +
     "    .logo { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; color: #f4f4f5; margin-bottom: 6px; text-align: center; }\n" +
