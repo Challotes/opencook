@@ -2,6 +2,14 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-26 — Phase 8 QA batch #2 (Goat/install/icon/flicker, 4 agents)
+
+- **Goat Mode removed** (`4d68f6f`): currency now ALWAYS defaults to `$` (Noob); sats is opt-in via the toggle only. Killed the protection-aware auto-flip (fired on every load + on protect — "looked terrible") + the `GoatModeToast` usage. `GoatModeToast.tsx` is now dead code — **left in place pending owner's delete confirmation**.
+- **Icon — full-bleed amber (3rd pass)** (`31e76c9`): the inset band still clipped on Android + the amber was too orange. Now FULL-BLEED amber-400 `#fbbf24` (matches the wordmark) + a black center medallion holding a bigger OC (font-size 228). Amber bleeds to every edge → any mask crops solid amber, nothing thin to clip. Synced recovery `ICON_SVG` + `.logo` amber. Regenerated PNGs + favicon. **Owner approved the design; OC enlarged on request.**
+- **Recovery flicker — REAL cause found** (`31e76c9`): owner confirmed a FRESH file still glitched, so NOT viewport units. It's **CSS scroll-anchoring** — the `#quicklook-notice` renders then JS hides ~150px, and Android Chrome scroll-anchors against it (re-fired by the URL-bar animation). Fix = `overflow-anchor: none` on the recovery body. iOS doesn't scroll-anchor this way → iPhone always fine.
+- **Install pitch timing** (`3b83271`): the home-screen sheet fired "at the same time" as the passphrase save. The 800ms reveal timer checked the modal-block only when armed, not at fire time (the arming unblock races the You-modal close). Now re-checks at fire time + waits if still blocked.
+- **PENDING:** owner re-tests on Android (FRESH recovery file for the flicker; reinstall PWA for the icon). GoatModeToast.tsx deletion awaiting OK. iPhone pass still outstanding. ~47 commits unpushed.
+
 ## 2026-06-26 — Phase 8 QA batch (7 items, 5 agents → 4 commits)
 
 Owner reported a 7-item batch from Android testing; dispatched 5 parallel read-only agents to investigate/design, validated against DECISIONS, implemented + gated each. All Android-context; **iPhone still untested**.
