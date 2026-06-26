@@ -107,7 +107,7 @@ export function FirstEarningToast({
     return () => clearTimeout(t);
   }, [earnedSats, pendingSats, backedUp, sessionDismissed]);
 
-  // Slide-up animation — same pattern as GoatModeToast.
+  // Slide-up animation — same pattern as the other transient toasts.
   useEffect(() => {
     if (!visible) {
       setAnimateIn(false);

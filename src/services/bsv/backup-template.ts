@@ -288,26 +288,19 @@ export function generateBackupHtml(data: BackupData): string {
     '" />\n' +
     "  <style>\n" +
     "    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }\n" +
-    // NO viewport units (vh/svh/dvh) anywhere: even `svh` didn't reliably kill the
-    // Android scroll-jitter (the file viewer can fall back to `100vh`, which tracks
-    // the collapsing URL bar and jumps the page to the top). Final fix: drop the
-    // body min-height entirely and put the dark bg on `html`, so a short page still
-    // shows no white area and there is NO viewport unit for the URL bar to reflow
-    // against. min-height was only doing bg-coverage on short content, not layout.
+    // Hardening tried against an Android Chrome scroll-jitter (the page is ~one viewport
+    // tall, so the URL-bar-collapse zone is the only scrollable region and Chrome
+    // overscroll-re-clamps to the top). NONE of it fully fixed the jitter — it is inherent
+    // Android Chrome behavior (WON'T-FIX, see DECISIONS); iPhone is fine. These rules are
+    // correct + harmless and stay: no viewport units (dark bg on `html`, not a
+    // `min-height:100vh` the URL bar would track) + `overflow-anchor:none` +
+    // `overscroll-behavior-y:none` on `html` (the document scroller — no-ops on `body`).
     "    html { background: #09090b; overflow-anchor: none; overscroll-behavior-y: none; }\n" +
     "    body {\n" +
     "      background: #09090b; color: #f4f4f5;\n" +
     "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
     "      display: flex; flex-direction: column;\n" +
     "      align-items: center; padding: 48px 16px 32px;\n" +
-    // THE actual root cause: this page is only ~one phone-viewport tall, so on Android
-    // Chrome the only scrollable distance is the URL-bar-collapse zone — dragging it
-    // triggers overscroll + dynamic-viewport re-clamping that snaps the page back to the
-    // top, repeatedly (the jitter). `overscroll-behavior-y: none` kills that bounce/snap
-    // on the ROOT scroller (it's set on `html` above — on `body` alone it was a no-op,
-    // since `html` is the document scroller; `overflow-anchor` likewise belongs on html).
-    // iOS rubber-bands instead of re-clamping → iPhone was always fine; both no-op there.
-    "      overflow-anchor: none; overscroll-behavior-y: none;\n" +
     "    }\n" +
     "    .container { width: 100%; max-width: 560px; }\n" +
     "    .logo { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; color: #f4f4f5; margin-bottom: 6px; text-align: center; }\n" +
@@ -331,8 +324,9 @@ export function generateBackupHtml(data: BackupData): string {
     "    .noscript-banner strong { color: #fde68a; font-weight: 600; }\n" +
     // Hide the Quick Look notice via CSS the instant JS runs (the <script> in <head>
     // adds `.js` to <html> BEFORE the body paints), so the amber notice never
-    // shows-then-collapses on Android — that ~150px collapse reflow was the residual
-    // scroll-jitter. Quick Look runs no JS → no `.js` class → the notice stays visible.
+    // shows-then-collapses on load — this removes a genuine ~150px load-time FLASH (a
+    // real improvement). It was NOT the cause of the scroll-jitter (that's inherent
+    // Android Chrome). Quick Look runs no JS → no `.js` class → the notice stays visible.
     "    html.js #quicklook-notice { display: none; }\n" +
     "    .context-block {\n" +
     "      background: #18181b; border: 1px solid #27272a; border-radius: 10px;\n" +
