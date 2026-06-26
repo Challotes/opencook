@@ -8,13 +8,12 @@
 // Source: public/icon.svg
 const ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">' +
-  '<rect width="512" height="512" rx="112" fill="#000000"/>' +
-  '<rect x="40" y="40" width="432" height="432" rx="84" fill="#f59e0b"/>' +
-  '<rect x="58" y="58" width="396" height="396" rx="68" fill="#000000"/>' +
+  '<rect width="512" height="512" rx="112" fill="#fbbf24"/>' +
+  '<circle cx="256" cy="256" r="196" fill="#000000"/>' +
   '<text x="256" y="256" font-family="ui-monospace,\'SF Mono\',\'Cascadia Code\',monospace"' +
-  ' font-weight="800" font-size="248" text-anchor="middle"' +
+  ' font-weight="800" font-size="228" text-anchor="middle"' +
   ' dominant-baseline="central" letter-spacing="-12">' +
-  '<tspan fill="#f59e0b">O</tspan><tspan fill="#ffffff">C</tspan></text>' +
+  '<tspan fill="#fbbf24">O</tspan><tspan fill="#ffffff">C</tspan></text>' +
   "</svg>";
 
 function svgToBase64(svg: string): string {
@@ -301,10 +300,16 @@ export function generateBackupHtml(data: BackupData): string {
     "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
     "      display: flex; flex-direction: column;\n" +
     "      align-items: center; padding: 48px 16px 32px;\n" +
+    // overflow-anchor:none stops Android Chrome's scroll-anchoring from shifting the
+    // scroll to compensate for the one-time #quicklook-notice collapse — that
+    // anchoring fight (re-fired as the URL bar animates) was the residual Android
+    // scroll-jitter after the viewport units were removed. iOS Safari doesn't
+    // scroll-anchor this way → iPhone was always fine. THE actual root cause.
+    "      overflow-anchor: none;\n" +
     "    }\n" +
     "    .container { width: 100%; max-width: 560px; }\n" +
     "    .logo { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; color: #f4f4f5; margin-bottom: 6px; text-align: center; }\n" +
-    "    .logo span { color: #f59e0b; }\n" +
+    "    .logo span { color: #fbbf24; }\n" +
     "    h1 { font-size: 17px; font-weight: 600; color: #f4f4f5; text-align: center; margin-bottom: 6px; }\n" +
     "    .subtitle { font-size: 13px; color: #71717a; text-align: center; line-height: 1.5; margin-bottom: 28px; }\n" +
     "    .offline-badge {\n" +
