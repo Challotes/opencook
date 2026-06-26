@@ -161,9 +161,11 @@ export function HomeScreenWelcomeGate({
       />
 
       <div className="w-full max-w-sm space-y-6">
-        <h2 className="text-center text-xl font-semibold tracking-tight text-white">
-          <span className="text-amber-400">Open</span>Cook
-        </h2>
+        {mode !== "buttons" && (
+          <h2 className="text-center text-xl font-semibold tracking-tight text-white">
+            <span className="text-amber-400">Open</span>Cook
+          </h2>
+        )}
         {mode === "no-file" ? (
           <>
             <div className="text-center space-y-2">
@@ -209,14 +211,15 @@ export function HomeScreenWelcomeGate({
           </>
         ) : (
           <>
-            <div className="text-center space-y-2">
-              <h1 id="welcome-gate-headline" className="text-lg font-semibold text-zinc-100">
-                Welcome back
-              </h1>
-              <p className="text-sm text-zinc-400">
-                We couldn&apos;t find your identity on this device.
-              </p>
-            </div>
+            {/* Big brand lockup — fills ~2/3 of the screen width (font-driven, so it
+                scales with the viewport). Replaces the small header in this state
+                (the header is hidden when mode === "buttons") so it isn't duplicated. */}
+            <h1
+              id="welcome-gate-headline"
+              className="text-center font-bold tracking-tight text-white text-[clamp(2.5rem,16vw,4.5rem)] leading-none"
+            >
+              <span className="text-amber-400">Open</span>Cook
+            </h1>
 
             <div className="space-y-3">
               <button
@@ -226,7 +229,7 @@ export function HomeScreenWelcomeGate({
                 disabled={busy}
                 className="w-full bg-amber-400 text-black rounded-xl px-4 py-3 text-left hover:bg-amber-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="text-sm font-semibold">Upload your saved file</div>
+                <div className="text-sm font-semibold">Upload your saved file to access</div>
                 <div className="text-xs font-normal text-black/70 mt-0.5">
                   Use your most recent recovery file. Your posts and earnings come back.
                 </div>
