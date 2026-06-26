@@ -2,6 +2,10 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-26 — iPhone QA pass (the last untested surface)
+
+- **Owner tested iPhone (Safari + installed PWA) — "looks right."** This was the entire untested device gap (everything prior was Android), and it's where the iOS-specific risks lived (keyboard, the mic's mp4/`getUserMedia` audio path, PWA install, the welcome gate). No issues reported. Flipped the "iPhone untested" notes → tested in DECISIONS (mic entry), QA_CHECKLIST (H7), and the mic memory. NOT a formal 73-check pass — a general run-through — so the structured QA_CHECKLIST remains available if a rigorous sweep is wanted before deploy. Desktop is the only profile still unconfirmed (low risk).
+
 ## 2026-06-26 — Recovery-flicker closure + save-flow + full MD accuracy audit (7 agents)
 
 - **Recovery-file scroll-jitter → WON'T-FIX.** Chased it through removing viewport units → scroll-anchoring (`overflow-anchor`) → pre-paint notice hide → `overscroll-behavior-y` (the page is ~one viewport tall, so Android Chrome overscroll-re-clamps to the top). A temporary `b6` marker confirmed the owner WAS testing the latest code and it still jittered → it's inherent Android Chrome (web-confirmed; iPhone fine). Accepted as won't-fix in DECISIONS; the CSS hardening stays (one bit — the pre-paint notice hide — genuinely removes a load-flash). Comments cleaned of over-claiming.

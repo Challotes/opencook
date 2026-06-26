@@ -34,7 +34,7 @@
 - **H4 — iOS Quick Look recovery file.** Self-contained `.html`; inverse-noscript notice + static field render when JS is off. (E25, 2026-05-18.)
 - **H5 — iCloud Keychain on passphrase.** Passphrase inputs use `autocomplete="off"` so iOS doesn't offer to save (and can't silently autofill a wrong value).
 - **H6 — Session lockout.** Locked chip shows the cached name; tapping it must open `SignInModal`, NOT the You modal; boot/post must gate. (E30 → current.)
-- **H7 — Mic (rebuilt, record + Groq Whisper).** `useVoiceToText` records → POSTs `/api/transcribe` → Groq Whisper. WORKING on Android; iPhone (Safari + PWA) still untested. Test ACTUAL transcription; "Voice input is offline" only when `GROQ_API_KEY` is unset. (Rebuilt 2026-06-25.)
+- **H7 — Mic (rebuilt, record + Groq Whisper).** `useVoiceToText` records → POSTs `/api/transcribe` → Groq Whisper. WORKING on Android + iPhone (Safari + PWA), tested 2026-06-26 (owner: looks right). Test ACTUAL transcription; "Voice input is offline" only when `GROQ_API_KEY` is unset. (Rebuilt 2026-06-25.)
 - **H8 — Optimistic post UI.** Posts appear optimistically; resolve on re-poll; failed (rate-limit / rejected) show a reason then auto-remove ~3s. `daily_limit`/`paused` messages added 2026-06-16.
 - **H9 — First-earning toast.** Fires when `/api/earnings` first returns total>0 (key `opencook_first_earning_save_dismissed_until`, 48h backoff). "Save now" → ProtectModal directly (no You-modal hop). (Fixed 2026-06-15.)
 - **H10 — Android Chrome modal clipping.** `vh` clipped by the collapsing address bar → site-wide `vh`→`svh` sweep. (2026-06-03.)
