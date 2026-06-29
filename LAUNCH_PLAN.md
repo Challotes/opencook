@@ -16,7 +16,7 @@
 | Bucket | Status | Evidence |
 |---|---|---|
 | 1 — Mobile polish | ✅ DONE | Commits `6ee6441` → `ff7a193` (5 modals → bottom-sheet), `6c56093` (Batch 1 tap-targets). Verified by agent audit 2026-06-01. |
-| 2 — In-app browser splash | ⏸ NOT STARTED | No in-app-browser detection in `src/`. Decision is in DECISIONS.md, code not written. |
+| 2 — In-app browser splash | 🔨 BUILDING (2026-06-29) | **REVISED to a content-first "splash with a window"** (static feed preview + open-in-browser CTA), NOT a hard block — see DECISIONS.md D2. Funds-safe by construction (splash renders in `page.tsx` before `IdentityProvider`, so no key is minted in-app). |
 | 3a — Welcome gate + identity flow | ✅ DONE | Components shipped: `useStandaloneMode`, `useInstallPlatform`, `InstallContext`, `InstallPitch`, `HomeScreenWelcomeGate`, `IosStorageToast`. Commit `111c0e2` is the landing point. |
 | 3b — Notifications | ⏸ NOT STARTED | Blocked behind Bucket 4 (`publishPayout()` helper). No service worker exists. |
 | 4 — Server resilience | ⏸ NOT STARTED | No `/api/broadcast` proxy. No `publishPayout()` helper. `tx.broadcast()` still direct. |

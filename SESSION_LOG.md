@@ -2,6 +2,15 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-29 — In-app browser "splash with a window" (built, auditor-blessed)
+
+- **Decided + built the in-app social-browser handling.** Telegram/X/Instagram WebViews have isolated/wiped storage, so the app's eager key-mint on first load was creating phantom identities that strand funds (a LIVE exposure — neither the planned hard block nor anything else existed). A 6-agent exploration (marketer / architecture / security ×2 rounds + researcher + copy) compared a hard block vs full content-first vs a **middle path**, and converged on the middle path: a **content-first "splash with a window."**
+- **What it does:** when `page.tsx` detects an in-app WebView (server-side, via the `user-agent` header), it renders `InAppBrowserSplash` (server component) INSTEAD of `<Feed>` — brand + a static read-only preview of the top posts + an "open in your browser" CTA + a `?continue=1` misdetect escape. Because `<Feed>` is the only thing that mounts `IdentityProvider`, **no key is ever minted in-app — funds-safe by construction** (not a runtime check). Crawlers fall through (OG previews intact). CTA: Android "Open in Chrome" intent (which can land an installed PWA via WebAPK); iOS copy-link + paste (no programmatic redirect on iOS). Added `launch_handler: focus-existing` to the manifest (the one free "open installed app" win). Copy is jargon-free ("account"/"earnings").
+- **Files:** new `src/lib/in-app-browser.ts` (+ 20 tests), `src/components/InAppBrowserSplash.tsx`, `src/components/InAppBrowserCta.tsx`; touched `src/app/page.tsx` (now dynamic — reads UA), `public/manifest.json`. Identity core untouched.
+- **Decision recorded:** DECISIONS D2 revised (hard block → splash-with-a-window) + LAUNCH_PLAN Bucket 2 updated.
+- **Auditor verdict: "funds-safe by construction — CONFIRMED, safe to commit."** Traced the full mint chain, proved it unreachable from the splash. 3 low-severity notes, all "no fix needed" (e.g. desktop Slack/Discord Electron apps also get the splash — arguably correct; `?continue=1` covers it). tsc + biome + 136 tests + build green.
+- **Net:** this was the last pre-share blocker — the closed-alpha Telegram link is now safe to send. Deep-linking to a specific shared post is a deliberate LATER enhancement (scoped out).
+
 ## 2026-06-26 — iPhone QA pass (the last untested surface)
 
 - **Owner tested iPhone (Safari + installed PWA) — "looks right."** This was the entire untested device gap (everything prior was Android), and it's where the iOS-specific risks lived (keyboard, the mic's mp4/`getUserMedia` audio path, PWA install, the welcome gate). No issues reported. Flipped the "iPhone untested" notes → tested in DECISIONS (mic entry), QA_CHECKLIST (H7), and the mic memory. NOT a formal 73-check pass — a general run-through — so the structured QA_CHECKLIST remains available if a rigorous sweep is wanted before deploy. Desktop is the only profile still unconfirmed (low risk).
