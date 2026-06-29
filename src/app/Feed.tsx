@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { BootToast } from "@/components/BootToast";
 import { HomeScreenWelcomeGate } from "@/components/HomeScreenWelcomeGate";
+import { InAppPromptModal } from "@/components/InAppPromptModal";
 import { InstallPitch } from "@/components/InstallPitch";
 import { IosStorageToast } from "@/components/IosStorageToast";
 import { SignInModal } from "@/components/SignInModal";
@@ -418,6 +419,7 @@ export function Feed({
       <IdentityProvider>
         <InstallProvider>
           <SignInModal />
+          <InAppPromptModal />
           <FeedOrWelcomeGate initialPosts={initialPosts} initialBootboard={initialBootboard} />
         </InstallProvider>
       </IdentityProvider>

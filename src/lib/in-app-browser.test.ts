@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { classifyInAppBrowser, detectMobileOS, isInAppBrowser } from "./in-app-browser";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  classifyInAppBrowser,
+  detectMobileOS,
+  isInAppBrowser,
+  isInAppBrowserClient,
+} from "./in-app-browser";
 
 // Derived from the fail-safe detector spec (2026-06-29): real browsers MUST pass
 // through, in-app WebViews (incl. Telegram's bare iOS WKWebView) MUST splash,
@@ -166,5 +171,41 @@ describe("in-app-browser detection", () => {
     expect(detectMobileOS("iPhone; CPU iPhone OS 17_5")).toBe("ios");
     expect(detectMobileOS("Linux; Android 14; Pixel 8")).toBe("android");
     expect(detectMobileOS("Windows NT 10.0; Win64")).toBe("other");
+  });
+});
+
+describe("isInAppBrowserClient (client-side, reads window)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function setEnv(win: unknown, ua: string): void {
+    vi.stubGlobal("window", win);
+    vi.stubGlobal("navigator", { userAgent: ua });
+  }
+
+  // The real device fact: Telegram-iOS sends a UA byte-identical to Safari.
+  const SAFARI_IOS_UA =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
+
+  it("detects Telegram-iOS via window.TelegramWebviewProxy even with a Safari UA", () => {
+    setEnv({ TelegramWebviewProxy: {} }, SAFARI_IOS_UA);
+    expect(isInAppBrowserClient()).toBe(true);
+  });
+
+  it("falls back to the UA classifier for self-tagging apps (Instagram)", () => {
+    setEnv(
+      {},
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300.0.0.0"
+    );
+    expect(isInAppBrowserClient()).toBe(true);
+  });
+
+  it("returns false for real iOS Safari (no proxy, Safari UA)", () => {
+    setEnv({}, SAFARI_IOS_UA);
+    expect(isInAppBrowserClient()).toBe(false);
+  });
+
+  it("returns false when window is undefined (SSR)", () => {
+    vi.stubGlobal("window", undefined);
+    expect(isInAppBrowserClient()).toBe(false);
   });
 });

@@ -2,6 +2,7 @@
 
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
+import { useInstallContext } from "@/contexts/InstallContext";
 
 interface FundAddressProps {
   address: string;
@@ -11,10 +12,25 @@ interface FundAddressProps {
    * Optional — the plain deposit view (no boot in flight) omits it. */
   fee?: number;
   onClose: () => void;
+  /** Opens the save-recovery flow. Shown when the user isn't backed up yet —
+   * the value-gate hides the deposit address until then (see body). */
+  onSecure?: () => void;
 }
 
-export function FundAddress({ address, bootPrice, balance, fee, onClose }: FundAddressProps) {
+export function FundAddress({
+  address,
+  bootPrice,
+  balance,
+  fee,
+  onClose,
+  onSecure,
+}: FundAddressProps) {
   const [copied, setCopied] = useState(false);
+  // Value-gate (detection-INDEPENDENT funds floor): don't reveal the deposit
+  // address until the account is backed up, so real money can't land on a key
+  // the user can't recover (an in-app throwaway, or a normal browser whose
+  // storage later clears). See DECISIONS "value-gate".
+  const { backedUp } = useInstallContext();
 
   function handleCopy() {
     navigator.clipboard.writeText(address);
@@ -75,68 +91,89 @@ export function FundAddress({ address, bootPrice, balance, fee, onClose }: FundA
             </button>
           </div>
 
-          {/* Body */}
-          <div className="px-5 py-5 space-y-3">
-            {/* QR hero — high-contrast white square scans reliably across all wallets */}
-            <div className="flex justify-center">
-              <div className="bg-white rounded-lg p-2">
-                <QRCodeSVG value={address} size={180} bgColor="#ffffff" fgColor="#000000" />
-              </div>
-            </div>
-
-            {/* Balance + boot cost breakdown (only when boot context exists) */}
-            {bootPrice ? (
-              balance !== undefined ? (
-                <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5 text-xs space-y-1">
-                  <div className="flex justify-between text-zinc-400">
-                    <span>Your balance</span>
-                    <span className="font-mono text-zinc-200">{balance.toLocaleString()} sats</span>
-                  </div>
-                  <div className="flex justify-between text-zinc-400">
-                    <span>Boot costs</span>
-                    <span className="font-mono text-zinc-200">
-                      {bootPrice.toLocaleString()} sats
-                    </span>
-                  </div>
-                  {fee !== undefined && fee > 0 && (
-                    <div className="flex justify-between text-zinc-400">
-                      <span>Network fee</span>
-                      <span className="font-mono text-zinc-200">{fee.toLocaleString()} sats</span>
-                    </div>
-                  )}
-                  {shortfall !== null && (
-                    <div className="flex justify-between text-amber-400 pt-1 border-t border-zinc-700/60">
-                      <span>Top up needed</span>
-                      <span className="font-mono">{shortfall.toLocaleString()} sats</span>
-                    </div>
-                  )}
+          {/* Body — value-gate: deposit address stays hidden until backed up. */}
+          {backedUp ? (
+            <div className="px-5 py-5 space-y-3">
+              {/* QR hero — high-contrast white square scans reliably across all wallets */}
+              <div className="flex justify-center">
+                <div className="bg-white rounded-lg p-2">
+                  <QRCodeSVG value={address} size={180} bgColor="#ffffff" fgColor="#000000" />
                 </div>
+              </div>
+
+              {/* Balance + boot cost breakdown (only when boot context exists) */}
+              {bootPrice ? (
+                balance !== undefined ? (
+                  <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5 text-xs space-y-1">
+                    <div className="flex justify-between text-zinc-400">
+                      <span>Your balance</span>
+                      <span className="font-mono text-zinc-200">
+                        {balance.toLocaleString()} sats
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-zinc-400">
+                      <span>Boot costs</span>
+                      <span className="font-mono text-zinc-200">
+                        {bootPrice.toLocaleString()} sats
+                      </span>
+                    </div>
+                    {fee !== undefined && fee > 0 && (
+                      <div className="flex justify-between text-zinc-400">
+                        <span>Network fee</span>
+                        <span className="font-mono text-zinc-200">{fee.toLocaleString()} sats</span>
+                      </div>
+                    )}
+                    {shortfall !== null && (
+                      <div className="flex justify-between text-amber-400 pt-1 border-t border-zinc-700/60">
+                        <span>Top up needed</span>
+                        <span className="font-mono">{shortfall.toLocaleString()} sats</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-400">
+                    Send BSV to this address to keep booting posts.
+                  </p>
+                )
               ) : (
-                <p className="text-xs text-zinc-400">
-                  Send BSV to this address to keep booting posts.
-                </p>
-              )
-            ) : (
-              <p className="text-xs text-zinc-400">Send BSV to your address below.</p>
-            )}
+                <p className="text-xs text-zinc-400">Send BSV to your address below.</p>
+              )}
 
-            {/* Address (click-to-copy) */}
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="w-full text-left bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-3 font-mono text-xs text-zinc-200 break-all cursor-pointer hover:bg-zinc-800 transition-colors"
-            >
-              {address}
-            </button>
+              {/* Address (click-to-copy) */}
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="w-full text-left bg-zinc-900 border border-amber-400/15 rounded-lg px-3 py-3 font-mono text-xs text-zinc-200 break-all cursor-pointer hover:bg-zinc-800 transition-colors"
+              >
+                {address}
+              </button>
 
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="w-full bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors"
-            >
-              {copied ? "Copied!" : "Copy Address"}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="w-full bg-amber-400 text-black rounded-lg px-3 py-2 text-xs font-medium hover:bg-amber-300 transition-colors"
+              >
+                {copied ? "Copied!" : "Copy Address"}
+              </button>
+            </div>
+          ) : (
+            <div className="px-5 py-6 space-y-4">
+              <p className="text-sm leading-relaxed text-zinc-300">
+                Save your account first. Once you add money, losing this device without a recovery
+                file means losing those funds — it only takes a moment.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  onSecure?.();
+                  onClose();
+                }}
+                className="w-full bg-amber-400 text-black rounded-lg px-4 py-2.5 text-sm font-medium hover:bg-amber-300 transition-colors"
+              >
+                Save my account
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>

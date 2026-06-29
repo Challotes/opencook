@@ -57,6 +57,8 @@ export function IdentityChip(): React.JSX.Element | null {
     needsUnlock,
     updateIdentity,
     openSignIn,
+    isReadOnly,
+    openInAppPrompt,
     isSessionClearBlocked,
     blockSessionClear,
     unblockSessionClear,
@@ -593,6 +595,7 @@ export function IdentityChip(): React.JSX.Element | null {
           address={identity.address}
           balance={balanceSats ?? undefined}
           onClose={() => setShowDeposit(false)}
+          onSecure={openProtectModal}
         />
       )}
 
@@ -1041,6 +1044,11 @@ export function IdentityChip(): React.JSX.Element | null {
         <button
           type="button"
           onClick={() => {
+            // Read-only (in-app browser) → route to the open-in-browser prompt.
+            if (isReadOnly) {
+              openInAppPrompt();
+              return;
+            }
             if (needsUnlock && !identity) {
               openSignIn();
               return;
@@ -1556,6 +1564,10 @@ export function IdentityChip(): React.JSX.Element | null {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (isReadOnly) {
+                        openInAppPrompt();
+                        return;
+                      }
                       closeDropdown();
                       setShowDeposit(true);
                     }}

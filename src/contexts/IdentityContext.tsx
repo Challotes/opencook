@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useIdentity } from "@/hooks/useIdentity";
 import { detectStandalone } from "@/hooks/useStandaloneMode";
+import { isInAppBrowserClient } from "@/lib/in-app-browser";
 import { clearSessionCaches, getIdentity, importEncryptedIdentity } from "@/services/bsv/identity";
 import type { Identity } from "@/types";
 
@@ -83,6 +84,26 @@ interface IdentityContextValue {
    * from a UI handler without this gate. See CLAUDE.md "Universal pattern".
    */
   requireIdentity: () => boolean;
+  /**
+   * True when running inside an in-app WebView (Telegram via
+   * `window.TelegramWebviewProxy`; Instagram/X/Facebook/TikTok/… via UA) and
+   * NOT an installed standalone PWA. Read SYNCHRONOUSLY on first client render
+   * so the read-only gate is in place before any interaction. When true the
+   * feed is READ-ONLY: every write action (post/boost/deposit/You-modal) routes
+   * to <InAppPromptModal> ("open in your browser") instead of proceeding.
+   *
+   * The `!detectStandalone()` term is load-bearing: installed iOS PWAs drop
+   * `Safari/` from their UA (identical to a bare WebView), so without it every
+   * installed-PWA user would be wrongly locked read-only. See DECISIONS.md
+   * "In-app browsers ... read-only live feed".
+   */
+  isReadOnly: boolean;
+  /** The in-app "open in your browser" prompt shown on a read-only write attempt. */
+  inAppPromptOpen: boolean;
+  openInAppPrompt: () => void;
+  closeInAppPrompt: () => void;
+  /** Misdetect escape — a wrongly-flagged real browser dismisses read-only for the session. */
+  dismissReadOnly: () => void;
 }
 
 const IdentityContext = createContext<IdentityContextValue | null>(null);
@@ -93,6 +114,36 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   const openSignIn = useCallback(() => setSignInOpen(true), []);
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
+
+  // Read-only mode: in-app WebView (NOT an installed PWA). Read once,
+  // synchronously, on the first client render (lazy initializer) so the gate is
+  // already in place before any tap — an in-app session has a freshly-minted
+  // (harmless) identity that would otherwise pass requireIdentity(). The value
+  // never changes within a session (a WebView doesn't become Safari mid-visit).
+  const [isReadOnly, setIsReadOnly] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false; // SSR → false; first client commit sets it
+    try {
+      // Misdetect escape: a wrongly-flagged real browser tapped "continue anyway".
+      if (sessionStorage.getItem("opencook_inapp_continue") === "1") return false;
+    } catch {
+      /* sessionStorage unavailable — fall through to detection */
+    }
+    return isInAppBrowserClient() && !detectStandalone();
+  });
+  const [inAppPromptOpen, setInAppPromptOpen] = useState(false);
+  const openInAppPrompt = useCallback(() => setInAppPromptOpen(true), []);
+  const closeInAppPrompt = useCallback(() => setInAppPromptOpen(false), []);
+  // Misdetect escape hatch — a wrongly-flagged real browser disables read-only
+  // for the rest of the session (persisted so a reload stays dismissed).
+  const dismissReadOnly = useCallback(() => {
+    try {
+      sessionStorage.setItem("opencook_inapp_continue", "1");
+    } catch {
+      /* non-fatal */
+    }
+    setIsReadOnly(false);
+    setInAppPromptOpen(false);
+  }, []);
 
   // Ref-counted suppression of pagehide-driven session clearing. Ref (not
   // state) so the pagehide handler reads the live value without re-binding
@@ -107,10 +158,16 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const isSessionClearBlocked = useCallback(() => sessionClearBlockedRef.current > 0, []);
 
   const requireIdentity = useCallback((): boolean => {
+    // Read-only FIRST: an in-app user has a (harmless) minted identity, so the
+    // identity check below would otherwise pass and let the write proceed.
+    if (isReadOnly) {
+      setInAppPromptOpen(true);
+      return false;
+    }
     if (identityValue.identity) return true;
     setSignInOpen(true);
     return false;
-  }, [identityValue.identity]);
+  }, [identityValue.identity, isReadOnly]);
 
   const acceptRestoredIdentity = useCallback(
     async (wif: string, name?: string, passphrase?: string, hint?: string): Promise<Identity> => {
@@ -193,6 +250,11 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     openSignIn,
     closeSignIn,
     requireIdentity,
+    isReadOnly,
+    inAppPromptOpen,
+    openInAppPrompt,
+    closeInAppPrompt,
+    dismissReadOnly,
     blockSessionClear,
     unblockSessionClear,
     isSessionClearBlocked,
