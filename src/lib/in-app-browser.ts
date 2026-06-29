@@ -52,6 +52,9 @@ const IN_APP_UA: Array<[string, string]> = [
   ["kakaotalk", "KakaoTalk"],
   ["discord", "Discord"],
   ["telegram", "Telegram"],
+  // Generic Electron desktop apps not already named above (Teams, etc.). Slack
+  // and Discord match their own tokens first, so this only catches the rest.
+  ["electron", "Unknown"],
 ];
 
 export interface InAppBrowserInfo {
@@ -61,17 +64,60 @@ export interface InAppBrowserInfo {
   app: string | null;
 }
 
+// Real-browser tokens — if an iOS UA carries any of these it's a legitimate
+// browser, not a bare WebView. NOTE: an installed iOS home-screen PWA ALSO drops
+// `Safari/` (its UA is identical to a bare in-app WebView), so the splash does a
+// client-side `navigator.standalone` re-check (`InAppStandaloneGuard`) and lets
+// installed PWAs straight through. Telegram's iOS WebView carries none of these
+// → it's correctly caught by the (C) fail-safe below.
+const IOS_REAL_BROWSER_TOKENS = [
+  "safari/", // native Safari + most third-party iOS browsers keep this suffix
+  "crios/", // Chrome iOS
+  "fxios/", // Firefox iOS
+  "edgios/", // Edge iOS
+  "opios/", // Opera Mini iOS
+  "opt/", // Opera Touch iOS — the one real iOS browser WITHOUT Safari/
+  "duckduckgo/", // DuckDuckGo iOS
+  "brave", // Brave iOS (bare token, no slash)
+  "yabrowser/", // Yandex iOS
+];
+
 export function classifyInAppBrowser(ua: string): InAppBrowserInfo {
-  if (!ua) return { inApp: false, app: null };
+  // Empty/missing UA never comes from a real browser → fail SAFE to the splash.
+  if (!ua) return { inApp: true, app: "Unknown" };
   const s = ua.toLowerCase();
-  // Crawlers bypass first — so "twitterbot"/"telegrambot"/"discordbot" don't
-  // trip the "twitter"/"telegram"/"discord" in-app tokens below.
+
+  // (A) Crawlers / link-preview bots bypass FIRST — they must see the real app
+  // for OG previews, and they legitimately lack a real-browser token (so the
+  // fail-safe rules below must not catch them).
   for (const c of CRAWLER_UA) {
     if (s.includes(c)) return { inApp: false, app: null };
   }
+
+  // (B) Apps that self-identify in the UA (Instagram/X/Facebook/Telegram-newer/…).
   for (const [token, name] of IN_APP_UA) {
     if (s.includes(token)) return { inApp: true, app: name };
   }
+
+  // (C) iOS fail-safe — the Telegram-iOS catch. An iPhone/iPod UA with NO
+  // recognizable real-browser token is a bare WKWebView. (Not iPad: iPadOS
+  // desktop-mode reports as "Macintosh", so an `ipad` rule would misfire on
+  // real iPad Safari.) Installed PWAs share this bare UA but are rescued
+  // client-side by InAppStandaloneGuard.
+  if (s.includes("iphone") || s.includes("ipod")) {
+    for (const token of IOS_REAL_BROWSER_TOKENS) {
+      if (s.includes(token)) return { inApp: false, app: null };
+    }
+    return { inApp: true, app: "Unknown" };
+  }
+
+  // (D) Android fail-safe — the `; wv)` WebView marker (or the legacy
+  // `Version/4.0 Chrome/` pattern) flags an in-app WebView not named in (B).
+  if (s.includes("android") && (s.includes("; wv)") || s.includes("version/4.0 chrome/"))) {
+    return { inApp: true, app: "Unknown" };
+  }
+
+  // (E) Default: real browser / desktop → allow.
   return { inApp: false, app: null };
 }
 

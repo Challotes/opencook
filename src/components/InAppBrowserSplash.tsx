@@ -2,6 +2,7 @@ import type { MobileOS } from "@/lib/in-app-browser";
 import { timeAgo } from "@/lib/utils";
 import type { Post } from "@/types";
 import { InAppBrowserCta } from "./InAppBrowserCta";
+import { InAppStandaloneGuard } from "./InAppStandaloneGuard";
 
 /**
  * Content-first splash for in-app social WebViews (Telegram/X/Instagram/…).
@@ -11,8 +12,10 @@ import { InAppBrowserCta } from "./InAppBrowserCta";
  * in a throwaway in-app storage partition (funds-safe by construction). It
  * shows a static, read-only preview of the top posts so a visitor sees value
  * before the ask, then the only action is to open in a real browser. It
- * deliberately imports NO identity / boost / deposit surfaces. See DECISIONS
- * "In-app browsers ... splash with a window" (revised 2026-06-29).
+ * deliberately imports NO identity / boost / deposit surfaces. The lone client
+ * children are the CTA and the standalone-guard (which rescues installed PWAs
+ * that share a bare in-app UA). See DECISIONS "In-app browsers ... splash with a
+ * window" (revised 2026-06-29).
  */
 export function InAppBrowserSplash({
   posts,
@@ -23,11 +26,15 @@ export function InAppBrowserSplash({
   app: string | null;
   os: MobileOS;
 }) {
-  const appName = app ?? "this app";
+  // `app` is "Unknown" for fail-safe catches (bare WKWebView, Electron, empty UA)
+  // — show generic copy rather than "Unknown's built-in browser".
+  const named = app && app !== "Unknown" ? app : null;
   const preview = posts.slice(0, 5);
 
   return (
     <div className="min-h-[100dvh] overflow-y-auto bg-black text-white">
+      {/* Installed PWAs share a bare in-app UA on iOS → redirect them to the app. */}
+      <InAppStandaloneGuard />
       <div className="mx-auto max-w-md px-5 pt-10 pb-16">
         {/* Brand + one-liner (no crypto jargon on the splash — see DECISIONS). */}
         <h1 className="text-center text-3xl font-bold tracking-tight">
@@ -40,10 +47,15 @@ export function InAppBrowserSplash({
         {/* Why switch + the CTA */}
         <div className="mt-6 rounded-2xl border border-amber-400/20 bg-[#0f0f0f] p-4">
           <p className="text-sm leading-relaxed text-zinc-300">
-            You&apos;re viewing this inside <span className="text-zinc-100">{appName}</span>&apos;s
-            built-in browser. It can&apos;t keep your account between sessions — and any earnings
-            you make here won&apos;t travel with you. Open OpenCook in your real browser and your
-            account is yours to keep. Takes about 10 seconds.
+            You&apos;re viewing this inside{" "}
+            {named ? (
+              <span className="text-zinc-100">{named}&apos;s built-in browser</span>
+            ) : (
+              "an in-app browser"
+            )}
+            . It can&apos;t keep your account between sessions — and any earnings you make here
+            won&apos;t travel with you. Open OpenCook in your real browser and your account is yours
+            to keep. Takes about 10 seconds.
           </p>
           <div className="mt-4">
             <InAppBrowserCta os={os} />

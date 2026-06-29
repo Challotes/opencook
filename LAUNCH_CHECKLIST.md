@@ -36,6 +36,7 @@
 - **DB backups are thin on Railway** — set up a simple periodic copy of `/data/local.db` off-box (it holds posts + earnings).
 - **`x-forwarded-for`** — verify on the first real deploy that requests carry a genuine client IP (the cloudflared-tunnel testing masked this); every per-IP cap depends on it.
 - **In-memory caps** (daily spend, rate-limit windows) reset on every redeploy — documented + acceptable; just don't be surprised by a burst of redeploys near launch.
+- **`user-agent` must reach the app** — the in-app-browser gate fails SAFE on a missing UA (empty UA → splash). So if a proxy ever strips the `user-agent` header, *everyone* gets the in-app splash. Not unsafe (installed PWAs self-rescue via the standalone guard; everyone else has the one-tap `?continue=1`), but if "every visitor suddenly sees the open-in-browser splash," check the proxy is forwarding `user-agent`.
 
 ## 1. Environment variables (Railway → service → Variables)
 
