@@ -59,6 +59,7 @@ export function IdentityChip(): React.JSX.Element | null {
     openSignIn,
     isReadOnly,
     openInAppPrompt,
+    saveRecoveryNonce,
     isSessionClearBlocked,
     blockSessionClear,
     unblockSessionClear,
@@ -513,6 +514,13 @@ export function IdentityChip(): React.JSX.Element | null {
   function openProtectModal(): void {
     setShowProtectModal(true);
   }
+
+  // Surfaces that can't reach ProtectModal directly (e.g. the Feed-site deposit
+  // value-gate's "Save my account") open the save-recovery flow by bumping the
+  // context's `saveRecoveryNonce`. Guard the initial 0.
+  useEffect(() => {
+    if (saveRecoveryNonce > 0) setShowProtectModal(true);
+  }, [saveRecoveryNonce]);
 
   function openChangePassModal(): void {
     setShowChangePassModal(true);

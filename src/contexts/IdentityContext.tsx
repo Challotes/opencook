@@ -104,6 +104,11 @@ interface IdentityContextValue {
   closeInAppPrompt: () => void;
   /** Misdetect escape — a wrongly-flagged real browser dismisses read-only for the session. */
   dismissReadOnly: () => void;
+  /** Cross-component signal to open the save-recovery flow (ProtectModal). The
+   *  nonce changes on each call; IdentityBar watches it. For surfaces that don't
+   *  own the modal (e.g. the Feed-site deposit value-gate's "Save my account"). */
+  saveRecoveryNonce: number;
+  requestSaveRecovery: () => void;
 }
 
 const IdentityContext = createContext<IdentityContextValue | null>(null);
@@ -133,6 +138,11 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const [inAppPromptOpen, setInAppPromptOpen] = useState(false);
   const openInAppPrompt = useCallback(() => setInAppPromptOpen(true), []);
   const closeInAppPrompt = useCallback(() => setInAppPromptOpen(false), []);
+  // Cross-component "open the save-recovery flow" signal — lets surfaces that
+  // DON'T own the ProtectModal (e.g. the Feed-site deposit value-gate) trigger
+  // it. IdentityBar watches the nonce and opens ProtectModal on each change.
+  const [saveRecoveryNonce, setSaveRecoveryNonce] = useState(0);
+  const requestSaveRecovery = useCallback(() => setSaveRecoveryNonce((n) => n + 1), []);
   // Misdetect escape hatch — a wrongly-flagged real browser disables read-only
   // for the rest of the session (persisted so a reload stays dismissed).
   const dismissReadOnly = useCallback(() => {
@@ -255,6 +265,8 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     openInAppPrompt,
     closeInAppPrompt,
     dismissReadOnly,
+    saveRecoveryNonce,
+    requestSaveRecovery,
     blockSessionClear,
     unblockSessionClear,
     isSessionClearBlocked,

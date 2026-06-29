@@ -48,7 +48,7 @@ function FeedContent({
   initialPosts: Post[];
   initialBootboard: BootboardData;
 }) {
-  const { identity } = useIdentityContext();
+  const { identity, requestSaveRecovery } = useIdentityContext();
   const { bootError } = useBootContext();
   const {
     posts: serverPosts,
@@ -371,6 +371,7 @@ function FeedContent({
             setUserBalance(undefined);
             setFundFee(undefined);
           }}
+          onSecure={requestSaveRecovery}
         />
       )}
 
