@@ -16,7 +16,7 @@
 | Bucket | Status | Evidence |
 |---|---|---|
 | 1 — Mobile polish | ✅ DONE | Commits `6ee6441` → `ff7a193` (5 modals → bottom-sheet), `6c56093` (Batch 1 tap-targets). Verified by agent audit 2026-06-01. |
-| 2 — In-app browser splash | 🔨 BUILDING (2026-06-29) | **REVISED to a content-first "splash with a window"** (static feed preview + open-in-browser CTA), NOT a hard block — see DECISIONS.md D2. Funds-safe by construction (splash renders in `page.tsx` before `IdentityProvider`, so no key is minted in-app). |
+| 2 — In-app browser handling | ✅ DONE (2026-06-30) | **Final form: client-side read-only live feed + detection-independent value-gate** (NOT a splash, NOT a hard block — both earlier designs superseded). In-app WebViews detected in `IdentityContext` (`isInAppBrowserClient()` = `window.TelegramWebviewProxy` + UA, paired with `!detectStandalone()`); any WRITE opens `InAppPromptModal`. Funds floor = `FundAddress` hides the deposit address until `backedUp`. `page.tsx` reverted to static/ISR; `InAppBrowserSplash` + `InAppStandaloneGuard` DELETED. See DECISIONS.md "In-app browsers … read-only live feed". |
 | 3a — Welcome gate + identity flow | ✅ DONE | Components shipped: `useStandaloneMode`, `useInstallPlatform`, `InstallContext`, `InstallPitch`, `HomeScreenWelcomeGate`, `IosStorageToast`. Commit `111c0e2` is the landing point. |
 | 3b — Notifications | ⏸ NOT STARTED | Blocked behind Bucket 4 (`publishPayout()` helper). No service worker exists. |
 | 4 — Server resilience | ⏸ NOT STARTED | No `/api/broadcast` proxy. No `publishPayout()` helper. `tx.broadcast()` still direct. |
@@ -24,7 +24,7 @@
 
 **Decisions promoted to DECISIONS.md 2026-06-01** as part of partial-promotion checkpoint: D4 ordering flow, D5 welcome-gate copy discipline, D6 SW scope discipline, Status #4 first-earning wiring, Status #6 notification copy, Status #10 install pitch dismissal calibration, Status #12 iOS ITP sequencing, C4 standalone-mode detection, C5 SW + Next.js 16 integration. The original sections in this file remain for working context but the binding decisions live in DECISIONS.md.
 
-**Earlier decisions already promoted:** D1 (PWA over App Store), D2 (in-app browser hard block), D3 (mobile bottom-sheet), D7 (QR sync post-launch), Welcome gate four-causes note, TAAL deferral / miner-agnostic guardrail.
+**Earlier decisions already promoted:** D1 (PWA over App Store), D2 (in-app browser handling — SUPERSEDED: now a read-only feed + value-gate, not a hard block), D3 (mobile bottom-sheet), D7 (QR sync post-launch), Welcome gate four-causes note, TAAL deferral / miner-agnostic guardrail.
 
 **Buckets 2, 3b, 4, 5 remain the live working surface of this file.** When all five are shipped, this file gets `git rm`'d per memory `project_launch_plan_lifecycle.md`.
 
@@ -37,7 +37,7 @@ OpenCook is feature-complete for launch — Phase 6 is shipped, real BSV is movi
 This plan captures the strategic decisions reached during the 2026-05-09 brainstorming session and sequences the work into **five buckets**:
 
 1. **Mobile modal restructure** — adopt the existing AgentChat bottom-sheet pattern across the other six modals (in-house Tailwind, no library).
-2. **In-app browser splash** — block X/Instagram/etc. webviews at the door with an "Open in Safari/Chrome" gateway page; protects from sandboxed-storage identity loss.
+2. **In-app browser handling** — put in-app webviews into a read-only live feed; any write opens an "open in your browser" prompt; a detection-independent value-gate hides the deposit address until the account is backed up (protects from sandboxed-storage fund loss). *(Shipped 2026-06-30 — replaced the original "splash at the door" plan.)*
 3. **Install + notifications flow** — gate the install pitch behind "user has saved a recovery file"; detect platform for one-tap (Android) vs visual instructions (iOS Safari) vs "open in Safari first" (iOS non-Safari); register a service worker so notifications are possible.
 4. **Server-side resilience** (Phase 6.5 first item, already in ROADMAP) — `/api/broadcast` proxy with GorillaPool→TAAL ARC failover, server wallet sharing the client's resilience stack. This is the single biggest "won't get pulled back in by ARC outages" win.
 5. **QR device sync** (future layer) — encrypted-blob handoff via short-lived server record + decryption key in the QR; plaintext WIF never leaves source device. **Not blocking launch.**
@@ -59,7 +59,7 @@ This plan captures the strategic decisions reached during the 2026-05-09 brainst
 | Service worker | **Does not exist.** Required before push notifications. Bucket 3b. |
 | `beforeinstallprompt` capture | **SHIPPED (Bucket 3a):** captured in `InstallContext`, consumed by `promptInstall()`. Android Chrome single-tap install works via `<InstallPitch>`. |
 | `display-mode: standalone` detection | **SHIPPED (Bucket 3a):** `useStandaloneMode` hook. Install pitch hides automatically when already installed. |
-| In-app browser detection | **Not implemented anywhere.** X/Instagram/Discord webview users hit the live app and create sandboxed identities they will lose. Bucket 2. |
+| In-app browser detection | **SHIPPED (2026-06-30):** client-side in `IdentityContext` (`isReadOnly = isInAppBrowserClient() && !detectStandalone()`). In-app users get a read-only feed; any write → "open in your browser" prompt; the value-gate blocks deposits to an un-backed-up key. |
 | QR sync | Not implemented. Manifest of recovery file (`backup-template.ts`) is the only cross-device bridge today. Bucket 6 (post-launch). |
 
 **The pattern is in-house.** AgentChat proves the responsive bottom-sheet works in this codebase. We don't need vaul or any other library — adopting the same Tailwind classes across the other modals is the work.
@@ -71,7 +71,7 @@ This plan captures the strategic decisions reached during the 2026-05-09 brainst
 Reached when:
 
 1. iPhone Safari users get a coherent mobile experience: no oversized modals, taps land, downloads work, the recovery file flow is bullet-proof.
-2. Users arriving from in-app browsers (X, Instagram, Discord, etc.) are redirected out before they create a sandboxed identity that will get wiped.
+2. Users arriving from in-app browsers (X, Instagram, Telegram, etc.) get a read-only feed (no redirect) and are prompted to open in their real browser on any write; the value-gate prevents real funds reaching an un-backed-up in-app identity. *(Shipped — see DECISIONS "In-app browsers … read-only live feed".)*
 3. Users who save a recovery file get a clear path to install OpenCook to their home screen with notifications enabled.
 4. The server-side broadcast path has the same resilience the client path got in April 2026 (no ARC outage = no platform freeze).
 5. Deployed to Railway with custom domain.
@@ -94,15 +94,11 @@ Stay web-first. Do not pursue iOS App Store or Google Play. The PWA install flow
 
 **Revisit when:** all three are simultaneously true — major traction (>5k WAU), iOS PWA notifications still painful enough to lose users, and a clear App Store policy path opens. Until then, treat the question as settled.
 
-### D2. In-app browsers are blocked, not supported
+### D2. In-app browsers — read-only feed + value-gate (SUPERSEDED the original hard-block)
 
-Detect known in-app browsers (Facebook, Instagram, X/Twitter, TikTok, LinkedIn, WeChat, Line, Discord, Snapchat, Pinterest, Reddit, Slack, Telegram, KakaoTalk) at the root layout and serve a splash page with logo + "Open in Safari/Chrome" button + visual instructions. Search-engine crawlers (Googlebot, Twitterbot link-preview fetchers, etc.) bypass the splash so SEO/OG previews still work.
+**Shipped 2026-06-30. The shipped form is a client-side read-only live feed + a detection-independent value-gate — NOT the hard-block splash originally planned below.** In-app WebViews are detected client-side (`window.TelegramWebviewProxy` + UA, paired with `!detectStandalone()`); they get the live feed read-only, and any write opens an "open in your browser" prompt. The funds floor is `FundAddress` hiding the deposit address until the account is backed up — so a detection miss is UX-only, never a funds loss. `page.tsx` stays static/ISR (crawlable). Full rationale + the reversal trail are in DECISIONS.md "In-app browsers … read-only live feed".
 
-**Why:** in-app browsers have isolated localStorage that diverges from the user's real browser, sometimes wipes between sessions, and never supports notifications. Letting users in creates a phantom identity that gets lost. Blocking at the door is more honest framing ("open in Safari so your account stays with you") and protects the user from creating an account they cannot recover.
-
-**Hard block, not soft.** No partial read-only mode. The whole pitch is "join the platform that builds itself" — half-joining isn't a thing, and the read-only path adds confusion when they try to post.
-
-**Anti-patterns to avoid:** allow-listing only known-good browsers (false positives on niche-but-legit browsers); soft warning banner that lets them through (creates phantom identities anyway); attempting JavaScript redirects to Safari (Apple killed every reliable trick years ago — only the user-tap "Open in Safari" link is reliable on iOS).
+~~Original plan: detect known in-app browsers at the root layout and serve a splash page with an "Open in Safari/Chrome" button; hard block, no partial read-only mode.~~ **Reversed because:** read-only is funds-safe via the value-gate (no need to block), it keeps the page crawlable/cacheable for a share-driven launch, it avoids false-positive lockouts of niche browsers — and, decisively, **Telegram-iOS's UA is byte-identical to Safari, so a server-side splash could never detect it anyway** (the catch is the client-side `window.TelegramWebviewProxy`).
 
 ### D3. Mobile modals adopt the AgentChat bottom-sheet pattern (no library)
 
@@ -225,21 +221,11 @@ Goal: iPhone feels like a real mobile app, not a desktop-modal-shrunk-to-fit.
 
 **Anti-patterns reminder:** preserve the locked-state You modal pattern (one container, two states, body cross-fade) per DECISIONS.md 2026-05-01.
 
-### Bucket 2 — In-app browser splash (~half day)
+### Bucket 2 — In-app browser handling (✅ DONE — read-only feed + value-gate, NOT a splash)
 
-Goal: protect users arriving from social app webviews from creating phantom identities.
+Goal: protect users arriving from social app webviews from losing funds/identity.
 
-| Task | File(s) | Effort |
-|------|---------|--------|
-| Detection helper (UA parse + crawler bypass) | new: `src/lib/in-app-browser.ts` | 1 h |
-| Splash page component (logo + "Open in Safari/Chrome" button + iOS-specific visual instructions) | new: `src/components/InAppBrowserSplash.tsx` | 2 h |
-| Wire splash check into `src/app/layout.tsx` (or middleware) — render splash instead of children when detected | `src/app/layout.tsx` or `middleware.ts` | 30 min |
-| Android intent-link: `intent://opencook.fun#Intent;scheme=https;…` for Chrome | `src/components/InAppBrowserSplash.tsx` | 30 min |
-| iOS animated arrow pointing at share-menu icon | `src/components/InAppBrowserSplash.tsx` (asset + CSS) | 1 h |
-| "Wrong instructions? Tap here" manual-fallback link for the 2–5% misdetection edge | same | 15 min |
-| Manual test from inside X / Instagram / Discord webviews on iPhone | — | 1 h |
-
-**Detection list (initial):** `FBAN`/`FBAV` (Facebook), `Instagram`, `Twitter`/`X`, `TikTok`/`musical_ly`, `LinkedInApp`, `MicroMessenger` (WeChat), `Line`, `Discord`, `Snapchat`, `Pinterest`, `RedditApp`, `Slack`, `KAKAOTALK`. Exempt: `Googlebot`, `bingbot`, `Twitterbot`, `facebookexternalhit`, `LinkedInBot`, `Slackbot-LinkExpanding`, `WhatsApp` (link previews), `TelegramBot`.
+**✅ DONE (2026-06-30) — the shipped form is NOT the server-side splash this section originally planned.** It's a client-side read-only feed + value-gate (see the Bucket-2 status row at the top + DECISIONS.md "In-app browsers … read-only live feed"). What shipped: detection in `src/lib/in-app-browser.ts` (`isInAppBrowserClient()` = `window.TelegramWebviewProxy` + UA) → `IdentityContext.isReadOnly` → a read-only live feed; `src/components/InAppPromptModal.tsx` (reuses `InAppBrowserCta`) opens on any write; the `FundAddress` value-gate hides the deposit address until backed up. `page.tsx` stays static/ISR. The originally-planned `InAppBrowserSplash` + the `layout`/`middleware` gate were built (round 1) then **DELETED** — server-side detection can't see Telegram-iOS (its UA is byte-identical to Safari). The original splash-build task table + detection-token list are removed here as superseded; the live token/crawler lists are in `src/lib/in-app-browser.ts`.
 
 ### Bucket 3 — Save → Install → Notifications flow (~2 days)
 
@@ -374,7 +360,7 @@ Edge case: user generates QR, then on source device rotates passphrase BEFORE de
 
 ### Q6. ~~Should the in-app browser splash allow read-only access?~~ — RESOLVED (Status #7, deferred-to-Bucket-2)
 
-Resolved as **hard block** per Status #7. When Bucket 2 ships, X/Instagram/Discord webviews will get a full-page "Open in Safari/Chrome" splash with no read-only fallback — passive viewing is incompatible with the "join the platform that builds itself" pitch, and read-only adds confusion when the user taps to post. Implementation pending Bucket 2.
+**RE-RESOLVED 2026-06-30: read-only access IS allowed (shipped).** In-app webviews get a read-only live feed; any write opens an "open in your browser" prompt; the value-gate blocks deposits to an un-backed-up key. The earlier "hard block, no read-only fallback" resolution was reversed — read-only is funds-safe via the value-gate, keeps the page crawlable, avoids false-positive lockouts, and a server-side splash couldn't detect Telegram-iOS anyway (UA == Safari; the catch is the client-side `window.TelegramWebviewProxy`). See DECISIONS.md "In-app browsers … read-only live feed".
 
 ---
 
@@ -457,7 +443,7 @@ After review synthesis, this document becomes the canonical launch reference and
 | 4 | First earning event toast | Trigger: first earning > 0 sats, fires once ever per device. Copy: *"You just earned your first sats. Save your recovery file — if you lose this device without it, they're gone."* Buttons: **Save now** (primary) / **Later** (secondary, 48h suppression). |
 | 5 | Welcome gate copy + body | Header: *"Welcome back or starting fresh?"* + body sentence: *"We couldn't find your identity on this device."* Then two buttons with sub-text (button order in #9). |
 | 6 | Notification copy (both surfaces) | *"Get notified when you earn."* Used identically for permission prompt AND install pitch. No roadmap hedging. Broaden when new triggers ship. |
-| 7 | In-app browser splash | Headline: *"Open OpenCook in your browser"*. Body: *"You're inside [X/Instagram]'s built-in browser. OpenCook uses your browser's secure storage. Open in your browser instead — your account stays with you."* **Android:** real button `[ Open in browser ]` fires intent link. **iOS:** NO button — static inline tip *"Tap Share, then 'Open in Browser'"* with share icon. Differentiate the surface, not the words. |
+| 7 | In-app browser prompt | **⚠️ Copy SUPERSEDED — the live prompt copy is in `InAppPromptModal` ("This works best in your real browser…"); the Android-real-button / iOS-static-tip surface split survived into `InAppBrowserCta`.** Original (historical) spec: headline *"Open OpenCook in your browser"* + a built-in-browser-storage body + Android intent button / iOS share-tip. |
 | 8 | Bucket order | **Mobile polish (Bucket 1) first**, **in-app browser splash (Bucket 2) second**. Per user's call (nothing ships until both done; risk-ordering during build doesn't change launch state). |
 | 9 | Welcome gate primary button | *"Restore from your saved file"* primary (sub-text: *"Use your most recent recovery file. Your posts and earnings come back."*). *"Start with a new identity"* secondary (sub-text: *"Begin fresh on this device. You can save and restore later."*). Most welcome-gate visitors are returning users (gate fires only after recovery file save → install). |
 | 10 | Install pitch surfaces | **Inline pitch in You modal done-state** (primary, fires on "Got it" tap after recovery file save) **+ gentle bottom banner** (secondary; designer's calibrated dismissal: max once per session, vanishes on next page load, 30-day suppression on X tap, permanent suppression on engagement with either surface). Both visible at launch (Designer's option). |
@@ -508,7 +494,9 @@ We couldn't find your identity on this device.
 
 Marketer's push-back: don't expand the install pitch into multiple lines about future activity types. The pitch should lead with present value, not roadmap. *"Get notified when you earn."* is honest for today and broadens naturally as new notification types ship.
 
-### #7 In-app browser splash — surface differentiation rationale
+### #7 In-app browser — CTA surface-differentiation rationale
+
+*(The "splash" framing is superseded — it's now `InAppPromptModal`, a write-triggered prompt, not a door splash — but this surface-split rationale SURVIVED into `InAppBrowserCta`: Android renders a real "Open in Chrome" button, iOS renders a static copy-link/paste tip.)*
 
 Designer caught a subtle UX bug: a button that just scrolls to an instruction is a **broken affordance** — iOS users tap, see nothing happen, assume it failed. Don't fake-button it. Render the iOS path as a static inline tip from the start, render the Android path as a real button. Same headline + body across both.
 

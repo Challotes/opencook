@@ -2,6 +2,13 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-06-30 — MD accuracy audit (post in-app rewrite, 3 agents)
+
+- **Full doc-truth pass** after the in-app-browser rewrite — make sure no MD lies about the current code. 3 read-only agents cross-checked every MD against `src/`; I validated each finding against the code before fixing.
+- **Fixed:** CLAUDE.md (FundAddress entry claimed `backedUp` could be `null` — it's a `boolean` defaulting `false`; corrected). `InAppBrowserCta.tsx` docstring still called it "the splash" → now "the in-app prompt (`InAppPromptModal`)". **LAUNCH_PLAN.md** was the heavy offender — the Bucket-2 status, the D2 decision block ("hard block, no read-only" = the OPPOSITE of shipped), the gap table ("not implemented anywhere"), the definition-of-launch, the exec summary, the build table (referenced the deleted `InAppBrowserSplash`), Q6 ("no read-only fallback"), and the #7 splash-copy/headings all still described the deleted hard-block splash → rewritten / marked SUPERSEDED, pointing to the read-only model. **QA_CHECKLIST.md** — dropped "in-app-browser splash" from the "not built" list + added 4 in-app device-QA rows (iPhone read-only ✓, deposit value-gate, Android→Chrome ✓, misdetect escape). **ROADMAP.md** — Phase 8 milestone now records the in-app rewrite + bumped last-updated to 2026-06-30.
+- **Verified ACCURATE (no fix needed):** DECISIONS.md (FINAL in-app entry + superseded-history framing correct), the SESSION_LOG round-3 entry, SECURITY_AUDIT.md (identity core untouched — no FIXED control weakened), FAIRNESS.md + DIRECTION.md (no-custody intact — the value-gate only HIDES the deposit address client-side, holds no funds), FUTURE.md, LAUNCH_CHECKLIST.md.
+- **Net:** every MD now matches the shipped code; remaining "splash" references are only in explicitly-superseded-history blocks. No code behavior changed (one stale code comment fixed). All local/unpushed.
+
 ## 2026-06-29 — In-app browser FINAL: client-side read-only live feed + value-gate (round 3)
 
 - **Settled the in-app-browser saga.** The server-splash (round 1) + fail-safe-allowlist (round 2) both proved unable to detect Telegram-iOS (its UA is **byte-identical to Safari** — confirmed on the owner's device). A researcher + real-device test found the key: Telegram's iOS WebView injects **`window.TelegramWebviewProxy`**, detectable CLIENT-SIDE (confirmed via inappdebugger.com on the owner's iPhone). So detection moved client-side.

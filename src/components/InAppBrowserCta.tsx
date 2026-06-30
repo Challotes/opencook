@@ -4,8 +4,8 @@ import { useState } from "react";
 import type { MobileOS } from "@/lib/in-app-browser";
 
 /**
- * The one interactive piece of the in-app-browser splash. Kept as a tiny client
- * child so the splash shell itself stays a server component.
+ * The one interactive piece of the in-app prompt. Kept as a tiny client child,
+ * reused by `InAppPromptModal` (the read-only "open in your browser" modal).
  *
  * - Android: an "Open in Chrome" button that navigates to a Chrome `intent://`
  *   URL — routing the user OUT of the in-app WebView into Chrome. If they've

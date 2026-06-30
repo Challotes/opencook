@@ -177,7 +177,13 @@
 
 ---
 
+## In-app browsers (read-only feed + value-gate, 2026-06-29→30)
+- [x] **iPhone Telegram → read-only feed** — shared opencook link in Telegram (iOS): feed renders + scrolls; tapping Post / Boost / the chip / "Add funds" opens the "Open in your browser" prompt (`InAppPromptModal`); reading + scrolling never prompt. *(Owner-verified on-device.)*
+- [ ] **Deposit while not backed up → address hidden (P0, money)** — `FundAddress` shows "Save your account first" instead of the QR/address until backed up; after saving the recovery file, the address/QR appears. (Detection-independent funds floor — holds even if detection misses.)
+- [x] **Android Telegram → opens real Chrome** — tapping a shared link in Telegram (Android) lands in a real Chrome Custom Tab (persistent storage), so the feed is correctly NOT read-only — full post/boost works. *(Owner-verified on-device.)*
+- [ ] **Misdetect escape** — the "Not in an in-app browser? Continue anyway." link in the prompt dismisses read-only for the session (`dismissReadOnly`).
+
 ## What Phase 8 does NOT cover
-Phase 6's 150 automated tests already verify server money conservation, all 7 createPost refuse-gates, the boot-confirm rejection paths, the durable sweep, and `/api/health`. Phase 8 is the real-device/UX layer only. Not covered (not built / deferred): in-app-browser splash, push notifications, QR device sync, ARC broadcast failover (Build D).
+Phase 6's 150 automated tests already verify server money conservation, all 7 createPost refuse-gates, the boot-confirm rejection paths, the durable sweep, and `/api/health`. Phase 8 is the real-device/UX layer only. Not covered (not built / deferred): push notifications, QR device sync, ARC broadcast failover (Build D). (In-app-browser handling WAS built 2026-06-29→30 and real-device QA'd — see the in-app rows above + SESSION_LOG.)
 
 *Remove this file (`git rm QA_CHECKLIST.md`) at launch-close.*
