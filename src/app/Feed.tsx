@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BootToast } from "@/components/BootToast";
+import { FairnessModal } from "@/components/FairnessModal";
 import { HomeScreenWelcomeGate } from "@/components/HomeScreenWelcomeGate";
 import { InAppPromptModal } from "@/components/InAppPromptModal";
 import { InstallPitch } from "@/components/InstallPitch";
@@ -79,6 +80,7 @@ function FeedContent({
   const [bootPrice, setBootPrice] = useState(1000);
   const [freeBootsRemaining, setFreeBootsRemaining] = useState(0);
   const [showFundModal, setShowFundModal] = useState(false);
+  const [showFairness, setShowFairness] = useState(false);
   const [userAddress, setUserAddress] = useState("");
   const [userBalance, setUserBalance] = useState<number | undefined>(undefined);
   // Network fee the boot tx needs on top of bootPrice (from the tx builder on an
@@ -465,6 +467,7 @@ function FeedContent({
         genesisHydrated={genesisHydrated}
         genesisVisited={genesisVisited}
         onScrollToGenesis={handleGoOrigin}
+        onOpenFairness={() => setShowFairness(true)}
       />
 
       {/* Pinned bootboard */}
@@ -644,6 +647,9 @@ function FeedContent({
           onSecure={requestSaveRecovery}
         />
       )}
+
+      {/* Contribution shares modal */}
+      {showFairness && <FairnessModal onClose={() => setShowFairness(false)} />}
 
       {/* Boot failure toast */}
       <BootToast message={bootError} />

@@ -330,11 +330,21 @@ Lets a partner airdrop 1Sat Ordinals / BSV-21 tokens to contributors, and lets u
 
 - [x] `ord-derivation.ts` (+ test, 4/4, known-answer fixture) — server & client paths produce byte-identical address
 - [x] `/api/ordinals` cached GorillaPool proxy (empty-vs-outage distinguished)
-- [x] `gen-airdrop-list.mts` recipient-address generator (safety rails; imports the derivation constant)
+- [x] `gen-contribution-list.mts` recipient-address generator (safety rails; imports the derivation constant)
 - [x] `Collectibles.tsx` read-only grid + IdentityBar dropdown mount + CSP `img-src` widen
 - [ ] Owner browser QA (render, image load, empty state) on the running app
 - [ ] OPTIONAL: `value>1` backstop in `selectUtxos` (money-path; address-segregation is the real guard)
 - [ ] DEFERRED: native send / key-export, on-chain address registry, full locked-state visibility
+
+## Agentic Fairness panel + contribution list — BUILT 2026-08-16
+
+Clicking "Agentic Fairness" opens a live contribution-share panel (your-share hero → top contributors → "and N more", "You" highlighted) with a "Download data" CSV. Methodology-silent UI. See DECISIONS "Agentic Fairness = live contribution-share panel".
+
+- [x] `src/lib/contribution-list.ts` shared core (`buildContributionList`/`sharePct`/`toContributionCsv`) + unit test — single source shared by the route AND `gen-contribution-list.mts` so numbers can't drift
+- [x] `GET /api/fairness` — one 30s snapshot serves the panel JSON + `?format=csv` download; rate-limited, read-only, no secret
+- [x] `FairnessModal` + re-pointed subtitle (Genesis nav button untouched), methodology-silent + jargon-free copy
+- [ ] Owner browser QA (click "Agentic Fairness")
+- [ ] Follow-up: gate the CSV download to signed-in users (currently fully public)
 
 ## Phase 7: The Recursive Model — PLANNED
 

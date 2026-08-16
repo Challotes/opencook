@@ -4,19 +4,19 @@
  * Derives a user's "ordinals receive address" from their existing BSV identity
  * key using BRC-42 / Type-42 key derivation with an "anyone" counterparty
  * (`new PrivateKey(1)`) and a fixed, PUBLIC invoice string. This is the address
- * partner-airdropped tokens/collectibles are sent to — it is DISPLAY / RECEIVE
- * only.
+ * tokens/collectibles sent to the user land at — it is DISPLAY / RECEIVE only.
  *
  * Security / correctness notes:
  * - The invoice string (`ORD_RECEIVE_INVOICE`) is PUBLIC and PERMANENT. It is
  *   not a secret — anyone can compute a user's ord address from their public
- *   pubkey (that is the whole point: the airdrop generator does exactly this).
+ *   pubkey (that is the whole point: the contribution-list generator does
+ *   exactly this).
  * - Funds/tokens landing at the derived address are spendable ONLY with the
  *   user's base key (the derivation is deterministic from that key). No new key
  *   material is created or stored.
  * - The server/anyone path (`ordAddressFromPubkey`) and the holder path
  *   (`ordAddressFromWif`) MUST produce the byte-identical address — the unit
- *   test pins this. If they ever diverge, airdrops go to an address the holder
+ *   test pins this. If they ever diverge, tokens land at an address the holder
  *   cannot derive-and-spend from.
  *
  * Import convention: static top-level `@bsv/sdk` import, mirroring the sibling
@@ -29,15 +29,15 @@ import { PrivateKey, PublicKey } from "@bsv/sdk";
 
 /**
  * PUBLIC, PERMANENT constant. A single trailing space changes every derived
- * address. Both the airdrop-list generator (server) AND the Collectibles UI
- * (client) MUST import THIS constant — never re-type the literal. Changing it
- * strands every prior airdrop. Do not "v2" it.
+ * address. Both the contribution-list generator (server) AND the Collectibles
+ * UI (client) MUST import THIS constant — never re-type the literal. Changing it
+ * strands tokens already sent to the old address. Do not "v2" it.
  */
 export const ORD_RECEIVE_INVOICE = "opencook ord receive 1";
 
 /**
  * Server / "anyone" path: compute the RECEIVE ADDRESS from a user's PUBLIC
- * pubkey hex. Used by the airdrop-list generator to address token outputs.
+ * pubkey hex. Used by the contribution-list generator to address token outputs.
  */
 export function ordAddressFromPubkey(pubkeyHex: string): string {
   const userPub = PublicKey.fromString(pubkeyHex);

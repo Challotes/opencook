@@ -7,6 +7,7 @@ interface HeaderProps {
   genesisHydrated: boolean;
   genesisVisited: boolean;
   onScrollToGenesis: () => void;
+  onOpenFairness: () => void;
 }
 
 export function Header({
@@ -14,6 +15,7 @@ export function Header({
   genesisHydrated,
   genesisVisited,
   onScrollToGenesis,
+  onOpenFairness,
 }: HeaderProps) {
   return (
     <header className="shrink-0 border-b border-zinc-800 bg-black">
@@ -29,7 +31,7 @@ export function Header({
           </h1>
           <button
             type="button"
-            onClick={onScrollToGenesis}
+            onClick={onOpenFairness}
             className="text-[11px] text-zinc-500 tracking-wide hover:text-amber-400 transition-colors duration-150"
           >
             Agentic Fairness

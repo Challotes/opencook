@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 // Single const so the indexer host can be swapped later; env-override optional.
 const INDEXER_BASE = process.env.ORDINALS_INDEXER_BASE ?? "https://ordinals.gorillapool.io/api";
-// Airdrop holdings are near-static and the client fetches once on panel-open
+// Collectible holdings are near-static and the client fetches once on panel-open
 // (not a poll), so a longer TTL than the balance route's 10s is safe.
 const CACHE_TTL_MS = 45_000;
 const CACHE_MAX = 1000;

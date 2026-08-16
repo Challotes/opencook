@@ -121,3 +121,27 @@ export interface TokenBalance {
   amount: string;
   dec?: number;
 }
+
+// ── Agentic Fairness (live contribution shares) ─────────────────────────────
+//
+// `GET /api/fairness` returns each contributor's share of total attributed
+// posts. Consumed by <FairnessModal>. The share basis is intentionally NOT
+// surfaced in UI copy (methodology-silent); these are just the numbers.
+
+/** One contributor row in the fairness panel. */
+export interface FairnessContributor {
+  // Latest display name (anon_XXXX) seen for this pubkey.
+  name: string;
+  // Signing pubkey (hex) — the stable contributor identity.
+  pubkey: string;
+  // Number of attributed posts by this pubkey.
+  postCount: number;
+  // Share of total attributed posts, as a percentage (e.g. 47.2).
+  sharePct: number;
+}
+
+/** Shape of the `/api/fairness` JSON response (contributors sorted desc). */
+export interface FairnessResponse {
+  totalPosts: number;
+  contributors: FairnessContributor[];
+}

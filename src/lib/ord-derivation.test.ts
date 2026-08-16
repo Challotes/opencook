@@ -3,11 +3,10 @@ import { describe, expect, it } from "vitest";
 import { ORD_RECEIVE_INVOICE, ordAddressFromPubkey, ordAddressFromWif } from "./ord-derivation";
 
 // Known-answer fixture, verified against @bsv/sdk 2.0.7. If any of these change,
-// real partner-airdropped tokens would land at a different address — treat a
+// real tokens sent to the user would land at a different address — treat a
 // mismatch as a hard failure, never "adjust the expected value to match".
 const FIXTURE_WIF = "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFUWdoAJVPCU";
-const FIXTURE_PUBKEY_HEX =
-  "023ef30130654689a64c864d6dd38760481c55fc525e2c6c7084e2d2d3d4d51be9";
+const FIXTURE_PUBKEY_HEX = "023ef30130654689a64c864d6dd38760481c55fc525e2c6c7084e2d2d3d4d51be9";
 // Base payment address (NOT produced by this module) — used only to prove the
 // ord address is a DISTINCT output.
 const FIXTURE_PAYMENT_ADDRESS = "1KvP21twgz7RTnDbAztPGTjx3YCAk3Evpu";
@@ -36,7 +35,7 @@ describe("ord-derivation", () => {
   });
 
   it('pins ORD_RECEIVE_INVOICE to exactly "opencook ord receive 1" (guards silent drift)', () => {
-    // A single character or trailing space here strands every prior airdrop.
+    // A single character or trailing space here strands tokens already sent.
     expect(ORD_RECEIVE_INVOICE).toBe("opencook ord receive 1");
   });
 });
