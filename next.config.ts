@@ -36,7 +36,7 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              "img-src 'self' data: blob: https://ordfs.network https://ordinals.gorillapool.io",
               "connect-src 'self' https://api.whatsonchain.com https://arc.taal.com https://arc.gorillapool.io",
               "font-src 'self'",
               "frame-ancestors 'none'",

@@ -2,6 +2,13 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-08-16 — Display-only Collectibles + airdrop-address foundation
+
+- **Feature (new):** a partner wants to airdrop 1Sat Ordinals / BSV-21 tokens to contributors. Built a **display-only** path (see, not send) + a recipient-address generator, WITHOUT touching the single-key identity model or the recovery file. Each user's receive address is DERIVED from their existing key via BRC-42/Type-42 ("anyone" counterparty, no server secret) — decided after an agent walkthrough of the two crypto choices (invoice-string permanence, "anyone" vs a secret key). See DECISIONS "Display-only Collectibles + derived ordinals-receive address".
+- **Built + verified (agents built, then verified directly):** `ord-derivation.ts` (+ test, **4/4**, known-answer fixture cross-checked against the live SDK so the permanent constant can't be wrong); `api/ordinals/route.ts` (cached GorillaPool proxy cloning `unspent`/`balance` — fresh-address 404 → empty `200`, genuine outage → stale/`503`, so "you have nothing" ≠ "indexer down"); `gen-airdrop-list.mts` (imports the derivation module — never retypes the invoice literal; skips null/malformed pubkeys, dedupes by derived address, validates output; recipient CSV git-ignored; added `tsx` devDep so a script can import the TS module); `Collectibles.tsx` (read-only grid, derives address in-effect, fetch-once, jargon-free copy) + `types/index.ts` + `IdentityBar.tsx` dropdown section after Balance (wired into `closeDropdown`) + `next.config.ts` CSP `img-src` widen.
+- **Verification:** full unit suite **165/165**, `tsc --noEmit` clean, biome clean, own jargon scan clean (no banned words in visible strings). Two pre-build adversarial agent reviews (money-path + codebase-integration) drove the design: address segregation (not the `value>1` guard) is the real burn protection; the "see collectibles while locked" goal was **descoped** (a locked user can't reach the dropdown and the pubkey isn't in plaintext) — collectibles show once signed in.
+- **Still open:** owner browser QA; optional `value>1` boost-selector backstop (money path — left for explicit go-ahead). Recipient-list generation awaits owner go-ahead (allocation details kept off-repo).
+
 ## 2026-08-12 — Quiet launch READY: custom domain + monitoring live
 
 - **Domain live on `opencook.fun`.** At the registrar: `www` CNAME → the Railway-provided target + Railway's verify TXT → Railway verified + auto Let's Encrypt SSL. Bare `opencook.fun` → registrar Domain Forwarding (301, forward-only, no masking) → `https://www.opencook.fun`. Both domains serve the genesis feed over HTTPS. (Exact record values stay in the dashboards, not the repo.)

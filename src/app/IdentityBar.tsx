@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatedBalance } from "@/components/AnimatedBalance";
 import { ChangePassphraseModal } from "@/components/ChangePassphraseModal";
+import { Collectibles } from "@/components/Collectibles";
 import { EarningsSparkline } from "@/components/EarningsSparkline";
 import { FirstEarningToast } from "@/components/FirstEarningToast";
 import { InstallPitch } from "@/components/InstallPitch";
@@ -127,6 +128,8 @@ export function IdentityChip(): React.JSX.Element | null {
   // Activity / chart expand
   const [activityExpanded, setActivityExpanded] = useState(false);
   const [chartExpanded, setChartExpanded] = useState(true);
+  // Collectibles section — lazy-mounted so its fetch only fires on expand.
+  const [collectiblesExpanded, setCollectiblesExpanded] = useState(false);
 
   // Deposit modal
   const [showDeposit, setShowDeposit] = useState(false);
@@ -170,6 +173,7 @@ export function IdentityChip(): React.JSX.Element | null {
     setKeyRevealed(false);
     setCopied(false);
     setActivityExpanded(false);
+    setCollectiblesExpanded(false);
     setJustBackedUp(false);
   }, []);
 
@@ -1597,6 +1601,39 @@ export function IdentityChip(): React.JSX.Element | null {
                   pending
                 </div>
               )}
+            </div>
+
+            {/* ── Collectibles (display-only holdings at the receive address) ── */}
+            <div className="px-3 py-2.5 border-b border-amber-400/10 space-y-2">
+              <button
+                type="button"
+                onClick={() => setCollectiblesExpanded((v) => !v)}
+                className="w-full flex items-center justify-between group"
+              >
+                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">
+                  Collectibles
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="text-[10px] text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                    {collectiblesExpanded ? "Hide" : "Show"}
+                  </span>
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className={`text-zinc-500 group-hover:text-zinc-300 transition-transform ${collectiblesExpanded ? "rotate-180" : ""}`}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </span>
+              </button>
+              {collectiblesExpanded && <Collectibles />}
             </div>
 
             {/* ── Transient banners ── */}

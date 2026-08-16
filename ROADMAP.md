@@ -324,6 +324,18 @@ Right-sized after an owner free-speech discussion (see DECISIONS.md "Thin-core c
 - [x] **Disclaimer surfacing — DONE 2026-06-16.** `/terms` + `/privacy` static pages (render the drafts behind a DRAFT banner via a small no-dependency markdown renderer; internal `[LAWYER]` notes stripped, `[TODO]` placeholders kept; build-time file read → both pages prerender static). "Terms · Privacy" links in the You modal + the Ask-AI modal footer. One-time pre-first-post **permanence acknowledgement gate** (`PermanenceGate`, localStorage `opencook_permanence_ack`) — affirmative consent at the legally-meaningful first-post moment, preserves 2-click onboarding (one tap, once).
 - [ ] **OWNER, before public launch (not a build blocker):** (a) set `CONTENT_DENYLIST`; (b) ~1hr lawyer on the 3 hard risks — GDPR-erasure-vs-immutable-chain wording, CSAM/operator-as-broadcaster exposure, money-transmitter characterization; (c) register a DMCA agent + fill the doc `[TODO]` placeholders.
 
+## Collectibles (display-only ordinals/tokens) — FOUNDATION BUILT 2026-08-16
+
+Lets a partner airdrop 1Sat Ordinals / BSV-21 tokens to contributors, and lets users SEE them. Derived receive address off the single identity key (BRC-42, "anyone" counterparty) — no new key, recovery file untouched. See DECISIONS "Display-only Collectibles + derived ordinals-receive address".
+
+- [x] `ord-derivation.ts` (+ test, 4/4, known-answer fixture) — server & client paths produce byte-identical address
+- [x] `/api/ordinals` cached GorillaPool proxy (empty-vs-outage distinguished)
+- [x] `gen-airdrop-list.mts` recipient-address generator (safety rails; imports the derivation constant)
+- [x] `Collectibles.tsx` read-only grid + IdentityBar dropdown mount + CSP `img-src` widen
+- [ ] Owner browser QA (render, image load, empty state) on the running app
+- [ ] OPTIONAL: `value>1` backstop in `selectUtxos` (money-path; address-segregation is the real guard)
+- [ ] DEFERRED: native send / key-export, on-chain address registry, full locked-state visibility
+
 ## Phase 7: The Recursive Model — PLANNED
 
 - [ ] Post-to-project spawning
