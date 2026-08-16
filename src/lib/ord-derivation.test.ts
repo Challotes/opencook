@@ -5,6 +5,11 @@ import { ORD_RECEIVE_INVOICE, ordAddressFromPubkey, ordAddressFromWif } from "./
 // Known-answer fixture, verified against @bsv/sdk 2.0.7. If any of these change,
 // real tokens sent to the user would land at a different address — treat a
 // mismatch as a hard failure, never "adjust the expected value to match".
+// ⚠️ FIXTURE_WIF is a PUBLIC throwaway TEST key — its private key is the trivial
+// value 0xabc (2748), so ANYONE can derive it. It is not secret, not "owned", and
+// NOT connected to OpenCook or any user's wallet. Never send funds to its address —
+// anything sent there is instantly swept and LOST. It exists ONLY to pin the
+// derivation math with a known keypair (known-answer test).
 const FIXTURE_WIF = "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFUWdoAJVPCU";
 const FIXTURE_PUBKEY_HEX = "023ef30130654689a64c864d6dd38760481c55fc525e2c6c7084e2d2d3d4d51be9";
 // Base payment address (NOT produced by this module) — used only to prove the
