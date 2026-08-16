@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { ordAddressFromPubkey } from "@/lib/ord-derivation";
 import type {
@@ -98,16 +98,16 @@ export function Collectibles(): React.JSX.Element | null {
   const [state, setState] = useState<LoadState>("loading");
   const [collectibles, setCollectibles] = useState<CollectibleItem[]>([]);
   const [tokens, setTokens] = useState<TokenBalance[]>([]);
-  // Guards the fetch-once contract across the component's lifetime.
-  const fetchedRef = useRef(false);
-
   const pubkey = identity?.pubkey;
 
   useEffect(() => {
-    // Fetch-once, lazily on first mount (the parent only mounts this when the
-    // section is expanded). No polling, no interval.
-    if (!pubkey || fetchedRef.current) return;
-    fetchedRef.current = true;
+    // Fetch lazily when the section mounts (the parent only mounts this on
+    // expand). No polling, no interval. NB: no "already-fetched" ref-guard here
+    // on purpose — under React StrictMode the dev double-mount cancels the first
+    // fetch, and such a guard would then skip the second, leaving the UI stuck
+    // on the loading skeleton. The `cancelled` cleanup flag is the sole guard;
+    // dev re-fetches once (harmless, the route is cached), prod fetches once.
+    if (!pubkey) return;
 
     let cancelled = false;
     // Derive the receive address inside the effect — never at module scope or
@@ -162,7 +162,9 @@ export function Collectibles(): React.JSX.Element | null {
 
   // Load failure with nothing cached to show — quiet, non-alarming.
   if (state === "error" && isEmpty) {
-    return <p className="text-[11px] text-zinc-600 leading-relaxed">Couldn&rsquo;t load right now.</p>;
+    return (
+      <p className="text-[11px] text-zinc-600 leading-relaxed">Couldn&rsquo;t load right now.</p>
+    );
   }
 
   if (isEmpty) {

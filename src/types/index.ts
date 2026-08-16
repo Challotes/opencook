@@ -143,5 +143,7 @@ export interface FairnessContributor {
 /** Shape of the `/api/fairness` JSON response (contributors sorted desc). */
 export interface FairnessResponse {
   totalPosts: number;
+  // ISO-8601 UTC timestamp of when this snapshot was computed (cache-build time).
+  generatedAt: string;
   contributors: FairnessContributor[];
 }

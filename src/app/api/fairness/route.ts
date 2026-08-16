@@ -25,7 +25,17 @@ export const dynamic = "force-dynamic";
 // fan-out, short enough that new posts show up promptly. Both serializations
 // are cached together so JSON and CSV can never disagree within a window.
 const CACHE_TTL_MS = 30_000;
-let cache: { json: string; csv: string; expires: number } | null = null;
+let cache: { json: string; csv: string; generatedAt: number; expires: number } | null = null;
+
+/** Timestamped CSV download filename, e.g. "opencook-contributors-2026-08-17-143005.csv"
+ *  — UTC, derived from the snapshot's generatedAt so the filename reflects WHEN the
+ *  data was computed (not merely when it was downloaded). */
+function csvFilename(generatedAtMs: number): string {
+  const d = new Date(generatedAtMs);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+  return `opencook-contributors-${stamp}.csv`;
+}
 
 /** Latest display name per pubkey — kept out of `buildContributionList` so the
  *  CSV path stays name-free and byte-identical to the script. */
@@ -44,7 +54,8 @@ function latestNamesByPubkey(): Map<string, string> {
   return map;
 }
 
-function buildSnapshot(): { json: string; csv: string } {
+function buildSnapshot(): { json: string; csv: string; generatedAt: number } {
+  const generatedAt = Date.now();
   const { rows, totalPosts } = buildContributionList(db);
 
   const csv = toContributionCsv(rows, totalPosts);
@@ -59,8 +70,12 @@ function buildSnapshot(): { json: string; csv: string } {
     }))
     .sort((a, b) => b.sharePct - a.sharePct);
 
-  const response: FairnessResponse = { totalPosts, contributors };
-  return { json: JSON.stringify(response), csv };
+  const response: FairnessResponse = {
+    totalPosts,
+    generatedAt: new Date(generatedAt).toISOString(),
+    contributors,
+  };
+  return { json: JSON.stringify(response), csv, generatedAt };
 }
 
 export async function GET(req: NextRequest) {
@@ -75,15 +90,15 @@ export async function GET(req: NextRequest) {
 
   const now = Date.now();
   if (!cache || now >= cache.expires) {
-    const { json, csv } = buildSnapshot();
-    cache = { json, csv, expires: now + CACHE_TTL_MS };
+    const snap = buildSnapshot();
+    cache = { ...snap, expires: now + CACHE_TTL_MS };
   }
 
   if (req.nextUrl.searchParams.get("format") === "csv") {
     return new NextResponse(cache.csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="opencook-contributions.csv"',
+        "Content-Disposition": `attachment; filename="${csvFilename(cache.generatedAt)}"`,
       },
     });
   }

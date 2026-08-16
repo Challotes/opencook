@@ -20,8 +20,16 @@ function formatPct(pct: number): string {
   return `${pct.toFixed(1)}%`;
 }
 
+/** Human-readable "when this snapshot was taken" from the ISO timestamp. */
+function formatUpdated(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 /**
- * Live "Contribution shares" panel. Reads GET /api/fairness and shows the
+ * Live "Contributors" panel. Reads GET /api/fairness and shows the
  * current user's share plus a ranked top list, with the long tail behind an
  * expander and a public CSV download pinned at the bottom.
  *
@@ -35,6 +43,7 @@ export function FairnessModal({ onClose }: FairnessModalProps): React.JSX.Elemen
 
   const [state, setState] = useState<LoadState>("loading");
   const [contributors, setContributors] = useState<FairnessContributor[]>([]);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async () => {
@@ -46,6 +55,7 @@ export function FairnessModal({ onClose }: FairnessModalProps): React.JSX.Elemen
       // Defensive client-side sort — never trust the response ordering.
       const sorted = [...(data.contributors ?? [])].sort((a, b) => b.sharePct - a.sharePct);
       setContributors(sorted);
+      setGeneratedAt(data.generatedAt ?? null);
       setState("ready");
     } catch {
       setState("error");
@@ -68,6 +78,7 @@ export function FairnessModal({ onClose }: FairnessModalProps): React.JSX.Elemen
   const you = identity ? contributors.find((c) => c.pubkey === identity.pubkey) : undefined;
   const topContributors = contributors.slice(0, TOP_COUNT);
   const tail = contributors.slice(TOP_COUNT);
+  const updatedLabel = formatUpdated(generatedAt);
 
   return (
     <>
@@ -90,7 +101,7 @@ export function FairnessModal({ onClose }: FairnessModalProps): React.JSX.Elemen
 
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-amber-400/10 shrink-0">
-            <p className="text-sm font-semibold text-zinc-100">Contribution shares</p>
+            <p className="text-sm font-semibold text-zinc-100">Contributors</p>
             <button
               type="button"
               onClick={onClose}
@@ -241,11 +252,16 @@ export function FairnessModal({ onClose }: FairnessModalProps): React.JSX.Elemen
                 )}
               </div>
 
-              {/* Download — pinned at bottom (public, no auth gate) */}
-              <div className="px-5 py-4 border-t border-amber-400/10 shrink-0">
+              {/* Download — pinned at bottom (public, no auth gate). The server
+                  sets a timestamped Content-Disposition filename (date+time); the
+                  empty `download` attribute lets that server name win. */}
+              <div className="px-5 py-4 border-t border-amber-400/10 shrink-0 space-y-2">
+                {updatedLabel && (
+                  <p className="text-[11px] text-zinc-500 text-center">Updated {updatedLabel}</p>
+                )}
                 <a
                   href="/api/fairness?format=csv"
-                  download="opencook-fairness.csv"
+                  download=""
                   className="block w-full text-center bg-amber-400 text-black rounded-lg px-4 py-2.5 text-sm font-medium hover:bg-amber-300 transition-colors"
                 >
                   Download data
