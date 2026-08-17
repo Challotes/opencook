@@ -333,7 +333,7 @@ Lets a partner airdrop 1Sat Ordinals / BSV-21 tokens to contributors, and lets u
 - [x] `gen-contribution-list.mts` recipient-address generator (safety rails; imports the derivation constant)
 - [x] `Collectibles.tsx` read-only grid + IdentityBar dropdown mount + CSP `img-src` widen
 - [ ] Owner browser QA (render, image load, empty state) on the running app
-- [ ] OPTIONAL: `value>1` backstop in `selectUtxos` (money-path; address-segregation is the real guard)
+- [x] `value>1` backstop in `selectUtxos` — BUILT 2026-08-17 (`excludeOrdinalDust`; a 1-sat ordinal/token can never be spent as a boost fee input; auditor-verified, 219 tests green). Address-segregation is still the real guard; this covers a token mis-sent to the identity address.
 - [ ] DEFERRED: native send / key-export, on-chain address registry, full locked-state visibility
 
 ## Agentic Fairness panel + contribution list — BUILT 2026-08-16

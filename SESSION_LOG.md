@@ -2,6 +2,12 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-08-17 — value>1 boost-selector backstop (ordinal-burn defense-in-depth)
+
+- **Added the `value > 1` floor to the paid-boost spend path** (`client-boot.ts`) so a 1-sat output (a 1Sat Ordinal / BSV-21 token mis-landed on a user's identity/payment address) can NEVER be selected as a fee input and burned. Pure helper `excludeOrdinalDust` (filter `value > 1`), applied BOTH at the UTXO fetch site (so displayed balance + `needs_consolidation` + selection all agree on the spendable set) AND inside `selectUtxos` (defense-in-depth + the unit-test seam; `selectUtxos` now exported). **Address segregation stays the REAL guard** — tokens land at the separate DERIVED address the spend path never reads; this backstop only covers a token mis-sent to the IDENTITY address, and a >1-sat inscribed output there is still burnable (`value` alone can't classify a token).
+- **Verified (implement → independent adversarial audit):** +10 unit tests (1-sat coin never selected; normal boosts still fund; 1-sat-only wallet → insufficient_funds, no crash/underpay; 2–15 sat change stays spendable). Full unit **181** + integration **38** green, tsc clean; auditor PASS — byte-identical for ≥2-sat wallets, only effect is a 1-sat-only wallet now reports 0 spendable (safe direction, never overpays/burns). Scope contained to `client-boot.ts`; consolidation/`DUST_THRESHOLD`, fee math, payout split, server wallet untouched; no network call added to the spend path.
+- Context: the partner sending the tokens independently flagged the burn vector; it had been designed around since 2026-06-18 (separate derived address) and documented 2026-08-16. This is the belt-and-suspenders that was parked as optional. The airdrop still must go to each contributor's `ord_address`.
+
 ## 2026-08-16 — Display-only Collectibles + contribution-list foundation
 
 - **Feature (new):** a partner wants to airdrop 1Sat Ordinals / BSV-21 tokens to contributors. Built a **display-only** path (see, not send) + a recipient-address generator, WITHOUT touching the single-key identity model or the recovery file. Each user's receive address is DERIVED from their existing key via BRC-42/Type-42 ("anyone" counterparty, no server secret) — decided after an agent walkthrough of the two crypto choices (invoice-string permanence, "anyone" vs a secret key). See DECISIONS "Display-only Collectibles + derived ordinals-receive address".

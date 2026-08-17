@@ -239,6 +239,28 @@ function estimateFee(inputCount: number, outputCount: number): number {
 }
 
 /**
+ * Exclude 1-satoshi outputs from a working UTXO set.
+ *
+ * A 1-sat output is the canonical carrier for a 1Sat Ordinal / BSV-21 token.
+ * If such a token mis-lands on the user's identity/payment address, spending it
+ * as a fee/payment input would irreversibly BURN it. This floor guarantees a
+ * 1-sat output can NEVER be selected as an input.
+ *
+ * Threshold is exactly `value > 1` (only 1-sat outputs are excluded): 2–15 sat
+ * coins are legitimate spendable change and MUST stay usable. (Consolidation
+ * separately refuses anything below DUST_THRESHOLD = 16, so it is already safe;
+ * this keeps the *selection* path consistent — neither path spends a 1-sat coin.)
+ *
+ * Applied at BOTH the point the working set is first obtained (so `balance` and
+ * the `needs_consolidation` decision agree with what is actually selectable) AND
+ * inside `selectUtxos` itself (defense-in-depth: the selector is safe regardless
+ * of caller). Pure + no network — safe to unit test in isolation.
+ */
+export function excludeOrdinalDust(utxos: ClientUtxo[]): ClientUtxo[] {
+  return utxos.filter((u) => u.value > 1);
+}
+
+/**
  * Select UTXOs to cover the target amount, opportunistically consolidating extras.
  *
  * Strategy:
@@ -249,17 +271,22 @@ function estimateFee(inputCount: number, outputCount: number): number {
  *
  * Effect: users with many tiny UTXOs consolidate ~20 per boot for free.
  * Users with a single large UTXO select just that one (unchanged behaviour).
+ *
+ * Exported for unit testing.
  */
-function selectUtxos(
+export function selectUtxos(
   utxos: ClientUtxo[],
   bootPriceSats: number,
   outputCount: number
 ): { selected: ClientUtxo[]; total: number; estimatedFee: number } | null {
-  if (utxos.length === 0) return null;
+  // Never let a 1-sat ordinal/token output enter the candidate set (defense-in-depth;
+  // the caller also pre-filters at fetch time so balance/needs_consolidation agree).
+  const candidates = excludeOrdinalDust(utxos);
+  if (candidates.length === 0) return null;
 
   // Separate large UTXOs (can cover boot alone) from tiny ones
   // Smallest-first so tiny UTXOs get consumed on each boot
-  const sorted = [...utxos].sort((a, b) => a.value - b.value);
+  const sorted = [...candidates].sort((a, b) => a.value - b.value);
 
   const selected: ClientUtxo[] = [];
   let total = 0;
@@ -363,7 +390,12 @@ async function _clientSideBootInner(
     const worstCaseFee = estimateFee(MAX_CONSOLIDATION_INPUTS, outputCount);
     const totalNeeded = bootPriceSats + worstCaseFee;
 
-    const utxos = await fetchUtxos(userAddress, totalNeeded);
+    // Exclude 1-sat ordinal/token outputs ONCE, at the point the working set is
+    // first obtained, so `balance` (below), the `needs_consolidation` decision, and
+    // `selectUtxos` all operate on the SAME spendable set — they can't disagree by a
+    // few sats. A wallet whose ONLY coins are 1-sat now correctly reports 0 spendable
+    // → insufficient_funds (it can't fund a boot without burning the token anyway).
+    const utxos = excludeOrdinalDust(await fetchUtxos(userAddress, totalNeeded));
 
     if (utxos.length === 0) {
       console.warn(
