@@ -58,20 +58,23 @@ function buildSnapshot(): { json: string; csv: string; generatedAt: number } {
   const generatedAt = Date.now();
   const { rows, totalPosts } = buildContributionList(db);
 
-  const csv = toContributionCsv(rows, totalPosts);
+  // Public CSV omits post_count (keep the method private); the offline payout
+  // generator keeps it via the default.
+  const csv = toContributionCsv(rows, totalPosts, { includePostCount: false });
 
   const names = latestNamesByPubkey();
   const contributors: FairnessContributor[] = rows
     .map((r) => ({
       name: names.get(r.pubkey) ?? "",
       pubkey: r.pubkey,
-      postCount: r.postCount,
+      // postCount is computed here ONLY to derive sharePct — it is deliberately
+      // NOT exposed in the public payload (see FairnessContributor). Exposing it
+      // with totalPosts would reveal share = count ÷ total and the exact climb.
       sharePct: sharePct(r.postCount, totalPosts),
     }))
     .sort((a, b) => b.sharePct - a.sharePct);
 
   const response: FairnessResponse = {
-    totalPosts,
     generatedAt: new Date(generatedAt).toISOString(),
     contributors,
   };

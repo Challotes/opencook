@@ -138,12 +138,29 @@ export function sharePct(count: number, total: number, dp = 4): number {
  * Serialize the validated rows to the contribution CSV. Shares the `totalPosts`
  * denominator with the JSON path so both sum to ~100%. Trailing newline for
  * POSIX-friendly file output.
+ *
+ * `includePostCount` (default true) controls the raw `post_count` column. The
+ * offline payout generator keeps it (default); the PUBLIC `/api/fairness?format=csv`
+ * download passes `false` to omit it — exposing raw counts would reveal the
+ * drop is a flat post-count (share = count ÷ total) and let anyone read the
+ * exact "posts to overtake". See DECISIONS "Agentic Fairness".
  */
-export function toContributionCsv(rows: ContributionRow[], totalPosts: number): string {
-  const lines = ["pubkey,ord_address,payment_address,post_count,share_pct"];
+export function toContributionCsv(
+  rows: ContributionRow[],
+  totalPosts: number,
+  opts: { includePostCount?: boolean } = {}
+): string {
+  const includePostCount = opts.includePostCount ?? true;
+  const header = includePostCount
+    ? "pubkey,ord_address,payment_address,post_count,share_pct"
+    : "pubkey,ord_address,payment_address,share_pct";
+  const lines = [header];
   for (const r of rows) {
+    const share = sharePct(r.postCount, totalPosts);
     lines.push(
-      `${r.pubkey},${r.ordAddress},${r.paymentAddress},${r.postCount},${sharePct(r.postCount, totalPosts)}`
+      includePostCount
+        ? `${r.pubkey},${r.ordAddress},${r.paymentAddress},${r.postCount},${share}`
+        : `${r.pubkey},${r.ordAddress},${r.paymentAddress},${share}`
     );
   }
   return `${lines.join("\n")}\n`;

@@ -128,21 +128,20 @@ export interface TokenBalance {
 // posts. Consumed by <FairnessModal>. The share basis is intentionally NOT
 // surfaced in UI copy (methodology-silent); these are just the numbers.
 
-/** One contributor row in the fairness panel. */
+/** One contributor row in the fairness panel (PUBLIC — no raw counts). */
 export interface FairnessContributor {
   // Latest display name (anon_XXXX) seen for this pubkey.
   name: string;
   // Signing pubkey (hex) — the stable contributor identity.
   pubkey: string;
-  // Number of attributed posts by this pubkey.
-  postCount: number;
-  // Share of total attributed posts, as a percentage (e.g. 47.2).
+  // Share as a percentage (e.g. 47.2). Raw post counts are deliberately NOT
+  // exposed publicly: postCount + totalPosts would reveal share = count ÷ total
+  // (the drop method) and the exact "posts to overtake". See DECISIONS "Agentic Fairness".
   sharePct: number;
 }
 
 /** Shape of the `/api/fairness` JSON response (contributors sorted desc). */
 export interface FairnessResponse {
-  totalPosts: number;
   // ISO-8601 UTC timestamp of when this snapshot was computed (cache-build time).
   generatedAt: string;
   contributors: FairnessContributor[];

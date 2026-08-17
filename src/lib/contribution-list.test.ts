@@ -98,4 +98,21 @@ describe("contribution-list / toContributionCsv", () => {
     // Header + 3 data rows.
     expect(lines).toHaveLength(4);
   });
+
+  it("omits post_count when includePostCount is false (public CSV)", () => {
+    const db = makeDb();
+    const { rows, totalPosts } = buildContributionList(db);
+    const csv = toContributionCsv(rows, totalPosts, { includePostCount: false });
+    const lines = csv.trimEnd().split("\n");
+
+    expect(lines[0]).toBe("pubkey,ord_address,payment_address,share_pct");
+    expect(lines[0]).not.toContain("post_count");
+    // Same top row, minus the raw count column; share_pct still present.
+    expect(lines[1]).toBe(
+      `${PUB_A},${ordAddressFromPubkey(PUB_A)},${PublicKey.fromString(PUB_A)
+        .toAddress()
+        .toString()},50`
+    );
+    expect(lines).toHaveLength(4);
+  });
 });
