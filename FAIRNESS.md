@@ -12,6 +12,8 @@ When someone pays to boot a post, that payment goes directly to every contributo
 
 This is a demo model. It's simple enough to understand, fair enough to not be gameable, and transparent enough to build trust. It will be replaced as better contribution signals emerge.
 
+> **Note — two different "contribution" numbers.** The in-app **"Agentic Fairness" panel** + `/api/fairness` CSV show each contributor's **RAW per-post share** (each post = one unit) — a display / token-airdrop metric (`src/lib/contribution-list.ts`). This is DISTINCT from the **boost-pool weighting** documented below (`sqrt × decay × engagement`, launch-cutoff-gated, `weights.ts`), which governs revenue splits. Don't conflate them. See DECISIONS "Agentic Fairness = live contribution-share panel".
+
 ### The Formula
 
 ```

@@ -141,6 +141,15 @@ Goal: prove the deploy MECHANICS with no real domain, no funded key, a junk DB. 
 - [ ] `wallet.ts` invalid-WIF handler: log `e.message` only (avoid echoing key material on misconfig).
 - [ ] Reconcile SECURITY_AUDIT.md (H3 effectively resolved). Tracked debt: PBKDF2 100k→600k, CSP nonce, authenticated financial reads.
 
+## Before the next push / the token drop (Collectibles + airdrop)
+
+> The site is already live (quiet launch). These are pre-next-push / pre-token-drop verifications for the Collectibles + airdrop work, NOT launch blockers.
+
+- [ ] Smoke-test the GorillaPool indexer endpoints (`/txos/address/{addr}/unspent` and `/bsv20/{addr}/balance`) against a known-funded address — confirm they still return data.
+- [ ] Confirm the partner's token is INDEXED on GorillaPool before the drop (an unindexed token won't display in Collectibles).
+- [ ] The airdrop MUST be sent to each contributor's `ord_address` (derived) — NEVER `payment_address` (identity), which would be burnable.
+- [ ] Gate the `/api/fairness` CSV download to signed-in users (currently fully public) — deferred hardening.
+
 ---
 
 *When every box is ticked and you're live: `git rm LAUNCH_CHECKLIST.md` and commit — the launch is closed.*
