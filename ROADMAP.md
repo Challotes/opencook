@@ -346,6 +346,15 @@ Clicking "Agentic Fairness" opens a live contribution-share panel (your-share he
 - [ ] Owner browser QA (click "Agentic Fairness")
 - [ ] Follow-up: gate the CSV download to signed-in users (currently fully public)
 
+## Reward Everyone — distribute to contributors — SCOPED 2026-08-18
+
+Turn the Contributors board into an action: any user rewards every contributor at once (cash / token / collectible), split by contribution share, funded by their OWN wallet (non-custodial), with a verifiable on-chain stamp. Full design + phased plan + open questions in **FUTURE.md → "Reward Everyone"**. Reuses the boost tx engine (~70–80%) + the OP_RETURN audit envelope + the Collectibles derived address.
+
+- [x] Method-privacy: public `/api/fairness` no longer exposes raw counts (2026-08-17, `9686f1b`)
+- [ ] Phase 0 — "Reward everyone" button + download list (build-ready, no money-path)
+- [ ] Phase 1 — in-app cash split + on-chain stamp (money-path → auditor + owner sign-off; needs a short decisions pass first — see FUTURE + memory)
+- [ ] Phases 2–4 — connect-a-wallet (Yours/1Sat), token split, collectibles (new deps, later)
+
 ## Phase 7: The Recursive Model — PLANNED
 
 - [ ] Post-to-project spawning

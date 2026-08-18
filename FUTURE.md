@@ -104,3 +104,31 @@ Boot signals can be gamed. These are detection approaches to explore:
 - **Collusion rings** — graph community detection on boot patterns
 - **Economic irrationality** — spending more on booting than possible fairness return
 - **Best approach:** make gaming data public. Transparency as deterrent.
+
+## Reward Everyone — Distribute to Contributors
+
+Scoped design (2026-08-17/18) for turning the Contributors board from a read-out into an action: any user can reward **every contributor at once**, split by contribution share, funded and signed by **their own wallet** — non-custodial, the server never holds funds. Named **"Reward everyone"** in the UI (not "distribute"/"airdrop" — jargon-free). Reuses the existing boost transaction engine, the OP_RETURN audit envelope, the Collectibles derived-address, and the Contributors panel. A boost is already a split-payment to contributors, so a cash split is ~70–80% reuse.
+
+**Three send types, one modal flow** (entry in the Contributors panel → choose → amount + live split → review → send → receipt):
+- **Cash** → each contributor's spending address.
+- **Token** → each contributor's separate collectibles address.
+- **Collectible** → collectibles address, assigned to the top of the list (unique items can't be split).
+- **Address routing is automatic and safety-critical:** cash to the spending address, tokens/collectibles to the collectibles address — sending a token to the spending address would burn it (the same separation the Collectibles feature relies on; guarded by the `value>1` floor already shipped).
+
+**Verifiable on-chain stamp (the keystone).** Each distribution stamps itself on-chain in the *sender's own* transaction (so the sender pays — one extra 0-sat OP_RETURN, like every boost today), reusing `onchainRecord` with a new `type:"distribution"`. The transaction **outputs are the receipt** (each output = exactly what an address received); the stamp carries metadata (asset, total, count, the weighting **basis + version**, an optional snapshot height) plus a **single hash commitment** over the full recipient list / fairness report. Anyone can verify: read the outputs, re-hash the published list, match the commitment, trust the block's timestamp — no server trust. This turns a distribution into a contestable, auditable artifact: the chain settles the numbers, so a dispute is only ever about whether the *formula* is fair — "Agentic Fairness" made literally checkable.
+
+**Pluggable weighting.** The split reads one interface — `getContributorWeights()` — so the contribution basis can evolve behind it without touching the distribution or transaction code. A **past-block snapshot** basis is the anti-gaming path for any real-value, self-serve distribution (freeze the inputs so a drop can't be chased after it's announced).
+
+**Phased build (smallest first; money-path phases gate on auditor + owner sign-off):**
+1. **Download the contributor list** — a button on the existing CSV (zero transaction code; a partner distributes externally). Build-ready today.
+2. **In-app cash split + the stamp** — a new `splitAmount()` (100%-to-contributors, distinct from the boost split's platform/creator logic) feeding a generalized transaction builder; the live preview uses the same split so shown = sent.
+3. **Connect a wallet** — a signer façade (BRC-100 / Yours / 1Sat) so an external wallet can sign asset sends; cash still signs with the in-app account.
+4. **Token split** — token-aware transactions (new dependency).
+5. **Collectible hand-out** — assign unique items to top contributors.
+
+**Open questions:**
+- Platform cut — currently 0% (100% to contributors); a cut is a possible later decision.
+- Which connect wallet ships first (Yours vs 1Sat)?
+- When does a self-serve, real-value tool require a snapshot basis rather than a live one?
+- The receipt's exact hash recipe + where the full recipient list is durably published (so the on-chain commitment stays verifiable in detail).
+- Remainder + dust policy for a split (where the rounding leftover goes; whether to skip sub-dust recipients).
