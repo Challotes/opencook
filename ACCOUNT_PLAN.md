@@ -19,11 +19,23 @@ Everything below is a point on one dial the user turns as they grow, or a capabi
 
 > **Frictionless** (auto-key, 2 taps, no wallet) → **Secured** (money auto-moves somewhere safe) → **Sovereign** (your own wallet *is* your identity)
 
+## Where we are — resume point (2026-08-19)
+
+Walked the layers as **discussion**, not building — validating the structure first. Current read:
+
+- **Layer 1 — parked, not dropped.** Current save/deposit flows judged acceptable for now; no changes made. Revisit at real-money time.
+- **Layer 2 — folded into Layer 3.** No standalone user value; it's just step one of the send engine, not its own layer.
+- **Layer 3 — parked; two open questions before it's "next":** (a) how soon airdrop recipients actually need to *move* tokens (display-only already covers *seeing* them), and (b) is "send" a user-facing feature (a Send button per collectible) or just plumbing under Layers 4–5? First genuinely-new crypto build — needs `@1sat/actions` + an auditor pass.
+- **Layer 4 — the crux may be dissolved.** Reframe: auto-secure isn't a day-one default, it's the **graduation moment** — money piling up IS the reason a no-crypto user finally sets up a real wallet, so "auto-secure" and "get your first wallet" become the same step, framed as *"protect your earnings."* Broke users need nothing; by the time they do, they're motivated. *(Owner reaction still pending.)*
+- **Layers 5 (reward everyone) & 6 (guardian key) — not yet walked.**
+
+**Next session:** pick up at the Layer 4 reaction → walk Layers 5 & 6 → then decide the first thing actually worth building.
+
 ## Build order — each layer depends on the one before
 
 **Layer 0 — Done / live.** The board, on-chain posts, fairness/Contributors panel, display-only collectibles, quiet launch on Railway.
 
-**Layer 1 — Make the *current* account safe & smooth, before real money flows. ← WE ARE HERE**
+**Layer 1 — Make the *current* account safe & smooth, before real money flows. (reviewed 2026-08-19 — parked, no changes now)**
 Cheap, high-value, no new surface — just tightening what exists:
 - Security hardening: "your passphrase (not the recovery file) is the master key" messaging; raise the encryption strength (PBKDF2 100k→600k) — *note: existing-file migration must be handled, not assumed trivial.*
 - Journey simplifications (all preserve the security model — no gate removed, passphrase stays mandatory):

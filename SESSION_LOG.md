@@ -2,6 +2,13 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-08-19 (later) — Consolidated the plan + walked the layers (discussion only)
+
+- **Owner felt lost across the sprawl → converged everything into one anchor: `ACCOUNT_PLAN.md`** (North Star, the "account is a dial" spine, a 6-layer build order, the Layer-4 crux, the working method). Committed `39aeba7`. Purpose: stop the direction living scattered across FUTURE/DECISIONS/ROADMAP/memory.
+- **Built a private journey artifact** ("The OpenCook Journey", https://claude.ai/code/artifact/8a022cc7-7fad-43d2-bfb4-153c4260301d) — every user event mapped from live code, friction hotspots flagged, the multisig-vs-auto-secure verdict visual. Not committed (artifact).
+- **Multisig brainstorm resolved:** a co-signature protects money only (not login/authorship); BSV killed the clean multisig address in 2020; auto-secure (sweep to a wallet you already secure) gets ~90% of the safety for ~10% of the complexity → auto-secure (money) + guardian key (identity) beats in-app multisig. Captured in ACCOUNT_PLAN + memory.
+- **Walked the layers as discussion (NOTHING built):** Layer 1 parked (flows judged fine now); Layer 2 folds into Layer 3; Layer 3 parked with 2 open questions; Layer 4 crux likely dissolved by the "auto-secure = the graduation moment" reframe (owner reaction pending); Layers 5–6 not yet walked. Full state in `ACCOUNT_PLAN.md` → "Where we are — resume point". Session ended for rest; resume at Layer 4 reaction.
+
 ## 2026-08-19 — Account architecture, security/recovery & settings-IA (design only)
 
 - **Account model synthesized (design/discussion — nothing built):** OpenCook builds against ONE wallet interface (BRC-100-shaped); today's auto-key is one implementation, an ambient/BRC-100 wallet adapter is another. The account is a **spectrum** — frictionless auto-key (default) → auto-secured float (opt-in, excess auto-forwards to the user's own cold address) → the user's real wallet as identity (power). Build the interface seam BEFORE the token-send/distribute work. Stay compatible with ambient BSV browsers, don't design *for* them (early/low-adoption); never ship a wallet-required wall. Documented in FUTURE.md "The OpenCook Account".
