@@ -132,3 +132,28 @@ Scoped design (2026-08-17/18) for turning the Contributors board from a read-out
 - When does a self-serve, real-value tool require a snapshot basis rather than a live one?
 - The receipt's exact hash recipe + where the full recipient list is durably published (so the on-chain commitment stays verifiable in detail).
 - Remainder + dust policy for a split (where the rounding leftover goes; whether to skip sub-dust recipients).
+
+## The OpenCook Account — one wallet interface, secured by default
+
+Direction (2026-08-19) for how the account itself should work — the spine that unifies funding, receiving, sending, and custody. Nothing fixed; exploration.
+
+**One wallet interface (the spine).** OpenCook talks to a single internal wallet interface (BRC-100-shaped: *who am I* / *sign this* / *build a payment*) for everything — posts, boosts, rewards, sends. Today's auto-generated in-app key is just ONE implementation of it. A second implementation lights up automatically when the user has a real BSV wallet (a browser extension like Yours, or a wallet-native browser) via `@bsv/sdk`'s `WalletClient` — same code, capability-detected. This is a low-regret refactor that keeps the app portable across a plain browser, a wallet-native browser, and a connected wallet, and it should land *before* the token-send / distribute work (writing those against one "build a payment" call keeps them clean and free-upgrades to real wallets later).
+
+**The account as a spectrum** — the user slides along it as their needs grow, all behind that one interface:
+- **Frictionless (default):** the auto-generated account — 2 taps, no wallet, no download. Non-negotiable; this is the onboarding wedge.
+- **Auto-secured (opt-in, when value arrives):** the account becomes a *working float*, not a vault. You set a secure address you control (a hardware/main wallet) and a threshold; anything above the float auto-forwards there. "Money on a browser key" becomes "money passing through on its way to your cold storage." Custody becomes a *setting*, not a warning — and the backup blast-radius shrinks from *everything* to *a small float*. Cash sweeps reuse the existing spend path; item (token/collectible) auto-forwarding uses the in-app send engine.
+- **Power (opt-in):** the user's own wallet IS the identity — OpenCook holds nothing, custody-free. Never forced (it needs a wallet install); always available.
+
+**Stay compatible, don't design *for*.** The wallet-native BSV browsers this points at are early and low-adoption today, so OpenCook builds the interface *seam* (cheap, useful regardless) but keeps the auto-key default and never puts up a "connect a wallet" wall that would break onboarding.
+
+**The in-app send engine is the enabler.** Sending tokens/ordinals from the account lets a user *use* what they receive (airdrops, gifts) without exporting their key — the missing half of the already-shipped receive feature — AND it powers item auto-forwarding. Justified three ways: use received items · auto-secure them · distribute them.
+
+**Phased spine:** (1) the wallet-interface seam → (2) the token/ordinal send engine (airdrop-relevant; secures receivers) → (3) auto-secure (cash sweep + item forward) → (4) distribute-to-contributors → (5) the wallet/browser adapter as a silent enhancement.
+
+**Security & recovery (explored 2026-08-19).** The key = identity + money + attached work, so compromise has no "reset password". The honest model:
+- **Money:** *auto-secure* caps the loss — only the small float is ever exposed; swept earnings sit on the user's own cold address.
+- **Identity:** the only honest way to reclaim a *compromised* identity is a **pre-committed, opt-in guardian key** — a second key set up while healthy and published on-chain as the sole thing that can supersede the identity. Rotation *alone* fails (the attacker holds the same key and wins the supersession race). This is the "opt-in rare reclaim" door DECISIONS already left open — NOT reopening the removed key-rotation. Post-launch, opt-in, no third party.
+- **Phone/email 2FA is rejected:** theatre against the real threat, re-introduces a trusted party + PII/de-anonymization, and can't stop a key-holder anyway (paid boosts broadcast client-side, bypassing any server gate).
+- **Cheap, high-value, near-term:** make blunt that the **passphrase — not the recovery file — is the master secret** (forgetting it locks a user out of *both* the device store *and* the file, since the file is encrypted with it — the highest-probability real-world stranding); and **raise PBKDF2 100k→600k** now that real funds (airdropped tokens) flow.
+
+**Settings home & editing.** OpenCook already has the two-tier structure: the **"You" panel** (money hub — earnings/balance/collectibles, read-mostly) + the **gear→"Manage" modal** (already behind the passphrase manage-gate). Formalize the Manage modal as **"Account & security"** and give the gear a visible label (undiscoverable today); group into *Money & wallet* (auto-save, your wallet, currency) + *Security & recovery* (backup, passphrase, restore, guardian/recovery slot). Rule: *look at it → You panel; change it → Account & security.* Send/gift a collectible hangs off the Collectibles grid (a "do"), not settings. **Auto-secure reads as a "spending jar + safe"** ("keep $5 here to boot posts; the rest goes to your own wallet automatically") with a friendly *verify-it's-yours test-send* (hard-blocked until confirmed) and collectibles default-to-keep. **Progressive disclosure:** a new broke user sees only "back up"; auto-save is *offered* only after backup + a balance; settings rows exist quietly, only prompts are earn-in-gated. (Full detail in memory `project_distribution_and_reward_model`.)

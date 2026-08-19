@@ -355,6 +355,15 @@ Turn the Contributors board into an action: any user rewards every contributor a
 - [ ] Phase 1 — in-app cash split + on-chain stamp (money-path → auditor + owner sign-off; needs a short decisions pass first — see FUTURE + memory)
 - [ ] Phases 2–4 — connect-a-wallet (Yours/1Sat), token split, collectibles (new deps, later)
 
+## The OpenCook Account — one wallet interface, secured by default — EXPLORED 2026-08-19
+
+Direction for the account itself (design only). One wallet interface (BRC-100-shaped) as the spine; the account as a spectrum (frictionless auto-key → auto-secured float → real wallet as identity); a security/recovery model (auto-secure caps money loss, an opt-in guardian key reclaims a compromised identity, blunt "passphrase is the master secret" UX, PBKDF2→600k, no phone/email 2FA); and a settings home (formalize the gear→Manage modal as "Account & security"). Full write-up in **FUTURE.md → "The OpenCook Account"**.
+
+- [ ] Near-term security: passphrase-is-master comms fix (cheap) · PBKDF2 100k→600k (airdropped tokens = real funds)
+- [ ] The `OpenCookWallet` interface seam (refactor auto-key behind it; land before token-send/distribute)
+- [ ] Token/ordinal send engine (airdrop-critical; needs `@1sat/actions` + auditor) → auto-secure → BRC-100 adapter
+- [ ] Opt-in guardian key for identity recovery (post-launch; the sanctioned "rare reclaim" door)
+
 ## Phase 7: The Recursive Model — PLANNED
 
 - [ ] Post-to-project spawning
