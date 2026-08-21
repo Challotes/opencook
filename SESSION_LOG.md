@@ -2,6 +2,13 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-08-20→22 — Commit review + fairness-governance direction (design only; specifics in memory)
+
+- **Reviewed unpushed commits #1–#7 one-by-one** to re-establish what's built — the clean, working, tested deliverable (Collectibles + Contributors panel + CSV + ordinal-burn protection + public-payload privacy); no issues raised. The review **PAUSED at #8** (we branched into the fairness-governance exploration and never resumed) — so **#8–#13 were NOT walked**. They are the design-doc commits (Reward-Everyone scope, account architecture, ACCOUNT_PLAN, the layer-walk checkpoints, the covenant note) — known from git log, but not reviewed. Commit-by-commit notes for #1–#7 kept in the session scratchpad.
+- **Consolidated the sprawling account design** — recognised it as ~independent tracks, not a linear dependency chain; the near-term reality is small (partner airdrop off the existing CSV · a Phase-0 "download the list" button · a couple of security items). ACCOUNT_PLAN.md keeps the layer detail; a proposed flat-board rewrite was NOT applied (owner kept the detail).
+- **Explored the fairness-governance / transparency DIRECTION** and settled four owner-level design decisions (snapshot→announce→publish sequencing · public advisory proposals run as posts · fork "honour" tiers · on-chain stamp as a governance primitive, fully on-chain). Per the keep-strategic-vision-off-public-repo discipline, **all specifics + decisions are captured PRIVATELY in memory** (`project_agentic_fairness_vision.md`) — direction only, needs owner sign-off, nothing built, nothing added to public docs. Honest skeptic-pass note: today's fairness is a transparent formula; the *agentic* model is the direction, not yet a description — never present a formula or an illustrative mockup as a working agent. Two private mockups (journey map + Agentic Fairness preview) published as artifacts.
+- **No code changed this session.** Reverted a stray uncommitted FUTURE.md edit (its content already lives in ACCOUNT_PLAN + memory).
+
 ## 2026-08-19 (later) — Consolidated the plan + walked the layers (discussion only)
 
 - **Owner felt lost across the sprawl → converged everything into one anchor: `ACCOUNT_PLAN.md`** (North Star, the "account is a dial" spine, a 6-layer build order, the Layer-4 crux, the working method). Committed `39aeba7`. Purpose: stop the direction living scattered across FUTURE/DECISIONS/ROADMAP/memory.
