@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { screenContent } from "@/lib/content-filter";
+import { contentId } from "@/lib/content-id";
 import { db } from "@/lib/db";
 import { tryConsumeFreeBootForIp } from "@/lib/free-boot-cap";
 import { rateLimit } from "@/lib/rate-limit";
@@ -96,22 +97,29 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
   if (isServerSpendDisabled()) return { ok: false, reason: "paused" };
   if (!hasDailyBudget(POST_LOG_COST_SATS)) return { ok: false, reason: "paused" };
 
-  const result = db
-    .prepare("INSERT INTO posts (content, author_name, signature, pubkey) VALUES (?, ?, ?, ?)")
-    .run(
-      content.trim(),
-      authorName,
-      typeof signature === "string" ? signature : null,
-      typeof pubkey === "string" ? pubkey : null
-    );
-
-  // Fire-and-forget: log on-chain, update tx_id if successful
-  const postId = result.lastInsertRowid as number;
   const trimmedContent = content.trim();
   const sigStr = typeof signature === "string" ? signature : null;
   const pkStr = typeof pubkey === "string" ? pubkey : null;
+  // Chain-reproducible content id (sha256_hex(pubkey \n content)). pkStr is
+  // always non-null here — createPost rejects a missing pubkey above.
+  const cid = pkStr !== null ? contentId(pkStr, trimmedContent) : null;
 
-  logPostOnChain({ content: trimmedContent, author: authorName, signature: sigStr, pubkey: pkStr })
+  const result = db
+    .prepare(
+      "INSERT INTO posts (content, author_name, signature, pubkey, content_id) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(trimmedContent, authorName, sigStr, pkStr, cid);
+
+  // Fire-and-forget: log on-chain, update tx_id if successful
+  const postId = result.lastInsertRowid as number;
+
+  logPostOnChain({
+    content: trimmedContent,
+    author: authorName,
+    signature: sigStr,
+    pubkey: pkStr,
+    cid,
+  })
     .then((txid) => {
       if (txid) {
         db.prepare("UPDATE posts SET tx_id = ? WHERE id = ?").run(txid, postId);

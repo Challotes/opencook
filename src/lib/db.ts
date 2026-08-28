@@ -1,5 +1,6 @@
 import path from "node:path";
 import Database from "better-sqlite3";
+import { contentId } from "./content-id";
 
 let db: ReturnType<typeof Database>;
 
@@ -78,6 +79,25 @@ try {
   // posts.signature / posts.pubkey — added after the original posts schema.
   addColumnIfMissing("posts", "signature", "signature TEXT");
   addColumnIfMissing("posts", "pubkey", "pubkey TEXT");
+
+  // posts.content_id — chain-reproducible content identifier
+  // (sha256_hex(pubkey \n content), see lib/content-id.ts). Additive; links a
+  // boost to the post it boosted from the chain alone. One-time backfill runs
+  // only when the column is freshly added; the WHERE predicate makes any re-run
+  // a cheap no-op. Posts with NULL pubkey can't be boosted → stay NULL (correct).
+  if (addColumnIfMissing("posts", "content_id", "content_id TEXT")) {
+    const rows = db
+      .prepare(
+        "SELECT id, pubkey, content FROM posts WHERE content_id IS NULL AND pubkey IS NOT NULL"
+      )
+      .all() as { id: number; pubkey: string; content: string }[];
+    const setCid = db.prepare("UPDATE posts SET content_id = ? WHERE id = ?");
+    db.transaction(() => {
+      for (const row of rows) {
+        setCid.run(contentId(row.pubkey, row.content), row.id);
+      }
+    })();
+  }
 
   // Boot grants — free boot tracking per user (no custody)
   db.exec(`

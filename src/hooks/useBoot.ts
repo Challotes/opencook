@@ -117,7 +117,8 @@ export function useBoot(opts: UseBootOptions = {}) {
             postId,
             sharesData.shares,
             sharesData.bootPrice,
-            (status) => setStatus(status)
+            (status) => setStatus(status),
+            sharesData.postCid
           );
 
           // Wallet too fragmented — consolidate first, then retry
@@ -141,7 +142,8 @@ export function useBoot(opts: UseBootOptions = {}) {
               postId,
               sharesData.shares,
               sharesData.bootPrice,
-              (status) => setStatus(status)
+              (status) => setStatus(status),
+              sharesData.postCid
             );
           }
 

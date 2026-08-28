@@ -20,7 +20,7 @@ function createTestDb() {
   const db = new Database(":memory:");
   db.exec(`CREATE TABLE posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT NOT NULL, author_name TEXT NOT NULL,
-    signature TEXT, pubkey TEXT, tx_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+    signature TEXT, pubkey TEXT, content_id TEXT, tx_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
   db.exec(`CREATE TABLE bootboard (
     id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, boosted_by TEXT NOT NULL,
     booted_at TEXT NOT NULL DEFAULT (datetime('now')), held_until TEXT, boosted_by_name TEXT,
@@ -97,7 +97,8 @@ describe("executeBoot — free-boot idempotency (Step 8)", () => {
     // not collide on the boot_grants PK or double-count.
     expect(grant(db, booter)).toEqual({ free_boots_used: 1, total_boots: 1 });
     // Step 9: the booter is threaded into the on-chain audit record (3rd arg).
-    expect(buildSplitTransaction).toHaveBeenCalledWith(expect.anything(), 1, booter);
+    // 4th arg is the post's content_id (undefined here — this test post has none).
+    expect(buildSplitTransaction).toHaveBeenCalledWith(expect.anything(), 1, booter, undefined);
   });
 
   it("refuses a free boot when the server wallet is unconfigured — no grant burned, no phantom boot (Finding 4)", async () => {

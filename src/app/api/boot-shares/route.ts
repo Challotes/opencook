@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Validate the post exists and is boostable
-  const post = db.prepare("SELECT id, pubkey FROM posts WHERE id = ?").get(postId) as
-    | { id: number; pubkey: string | null }
+  const post = db.prepare("SELECT id, pubkey, content_id FROM posts WHERE id = ?").get(postId) as
+    | { id: number; pubkey: string | null; content_id: string | null }
     | undefined;
 
   if (!post) {
@@ -84,5 +84,8 @@ export async function GET(req: NextRequest) {
     isFree,
     freeRemaining,
     shares,
+    // Chain-reproducible id of the boosted post — echoed into the client-built
+    // boot audit record as post_cid (see lib/content-id.ts / lib/boot-audit.ts).
+    postCid: post.content_id ?? undefined,
   });
 }

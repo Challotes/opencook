@@ -24,6 +24,11 @@ export interface BootAuditInput {
   total: number;
   recipients?: number;
   formulaVersion?: string; // semver string from FAIRNESS_CONFIG (e.g. "0.1.0")
+  // Chain-reproducible id of the boosted post (sha256_hex(pubkey \n content),
+  // see lib/content-id.ts). Additive metadata that makes the boost→post link
+  // reconstructable from the chain alone. Omitted when undefined (mirrors
+  // recipients/formula_version). Existing `post_id` is retained unchanged.
+  postCid?: string;
 }
 
 export function bootAuditPayload(input: BootAuditInput): string {
@@ -35,5 +40,6 @@ export function bootAuditPayload(input: BootAuditInput): string {
   };
   if (input.recipients !== undefined) body.recipients = input.recipients;
   if (input.formulaVersion !== undefined) body.formula_version = input.formulaVersion;
+  if (input.postCid !== undefined) body.post_cid = input.postCid;
   return onchainRecord("boot_split", body);
 }

@@ -13,6 +13,7 @@ interface PostData {
   author: string;
   signature: string | null;
   pubkey: string | null;
+  cid: string | null;
 }
 
 /**
@@ -28,6 +29,7 @@ export async function logPostOnChain(postData: PostData): Promise<string | null>
       author: postData.author,
       sig: postData.signature,
       pubkey: postData.pubkey,
+      cid: postData.cid,
     });
 
     // Build OP_FALSE OP_RETURN script (BSV standard — provably unspendable)

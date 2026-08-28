@@ -26,6 +26,7 @@ interface OrphanRow {
   author_name: string;
   signature: string | null;
   pubkey: string | null;
+  content_id: string | null;
 }
 
 // Only sweep posts old enough that their inline first attempt (up to a 30s
@@ -52,7 +53,7 @@ export async function sweepOrphans(db: DB = defaultDb): Promise<void> {
   try {
     const rows = db
       .prepare(
-        `SELECT id, content, author_name, signature, pubkey
+        `SELECT id, content, author_name, signature, pubkey, content_id
          FROM posts
          WHERE tx_id IS NULL AND created_at < datetime('now', ?)
          ORDER BY id ASC
@@ -68,6 +69,9 @@ export async function sweepOrphans(db: DB = defaultDb): Promise<void> {
         author: row.author_name,
         signature: row.signature,
         pubkey: row.pubkey,
+        // Re-anchor with the SAME cid already stored on the row — the OP_RETURN
+        // stays chain-reproducible from (pubkey, content).
+        cid: row.content_id,
       });
       if (txid) {
         db.prepare("UPDATE posts SET tx_id = ? WHERE id = ?").run(txid, row.id);

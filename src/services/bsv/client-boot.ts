@@ -223,18 +223,19 @@ const MAX_CONSOLIDATION_INPUTS = 20;
 
 /**
  * Estimate the fee for a transaction with N inputs and M outputs (P2PKH).
- * Byte formula: 10 (overhead) + 148 * inputs + 34 * outputs + 200 (OP_RETURN est.)
- * The OP_RETURN carries a JSON boot-audit record (~157 bytes); 200 leaves
- * margin. NOTE: this estimate only sizes UTXO selection — the actual fee is the
- * SDK's exact `tx.fee()` on the built tx, so the payload size can't underpay.
+ * Byte formula: 10 (overhead) + 148 * inputs + 34 * outputs + 280 (OP_RETURN est.)
+ * The OP_RETURN carries a JSON boot-audit record. Adding the `post_cid` field
+ * (a 64-hex string) grew that payload ~157 → ~232 bytes, so the reserve was
+ * raised 200 → 280 to keep input-selection margin. NOTE: this estimate only
+ * sizes UTXO selection — the actual fee is the SDK's exact `tx.fee()` on the
+ * built tx, so the payload size can't underpay (this reserve only prevents a
+ * spurious insufficient_funds at a balance edge; it is NOT a security change).
  * If a future field is added to the boot-audit record (see lib/boot-audit.ts)
- * and the payload grows past ~180 bytes, RAISE this 200 constant so selection
- * keeps its margin (otherwise a wallet right at the balance edge could select
- * one input too few and spuriously hit insufficient_funds).
+ * and the payload grows further, RAISE this 280 constant to keep the margin.
  * Rate: 0.1 sat/byte (100 sat/kb) to match ARC's minimum policy.
  */
 function estimateFee(inputCount: number, outputCount: number): number {
-  const bytes = 10 + 148 * inputCount + 34 * outputCount + 200;
+  const bytes = 10 + 148 * inputCount + 34 * outputCount + 280;
   return Math.max(100, Math.ceil(bytes * 0.1));
 }
 
@@ -334,6 +335,8 @@ export function selectUtxos(
  * @param shares     - Contributor payout shares (must sum to bootPriceSats)
  * @param bootPriceSats - Total boot price in satoshis
  * @param onStatus   - Optional callback for status updates ("sending" | "retrying")
+ * @param postCid    - Chain-reproducible id of the boosted post (see
+ *   lib/content-id.ts); echoed into the boot audit record as post_cid.
  */
 export async function clientSideBoot(
   wif: string,
@@ -341,7 +344,8 @@ export async function clientSideBoot(
   postId: number,
   shares: BootShare[],
   bootPriceSats: number,
-  onStatus?: (status: "sending" | "retrying") => void
+  onStatus?: (status: "sending" | "retrying") => void,
+  postCid?: string
 ): Promise<ClientBootResult> {
   // ── Validate inputs ─────────────────────────────────────
   const validationError = validateShares(shares, bootPriceSats);
@@ -353,7 +357,15 @@ export async function clientSideBoot(
   const release = await acquireTxMutex();
 
   try {
-    return await _clientSideBootInner(wif, userAddress, postId, shares, bootPriceSats, onStatus);
+    return await _clientSideBootInner(
+      wif,
+      userAddress,
+      postId,
+      shares,
+      bootPriceSats,
+      onStatus,
+      postCid
+    );
   } finally {
     release();
   }
@@ -368,7 +380,8 @@ async function _clientSideBootInner(
   postId: number,
   shares: BootShare[],
   bootPriceSats: number,
-  onStatus?: (status: "sending" | "retrying") => void
+  onStatus?: (status: "sending" | "retrying") => void,
+  postCid?: string
 ): Promise<ClientBootResult> {
   try {
     const { Transaction, PrivateKey, P2PKH, Script, OP, SatoshisPerKilobyte } = await getBsvSdk();
@@ -494,6 +507,7 @@ async function _clientSideBootInner(
       booter: userAddress,
       funded: "booter",
       total: bootPriceSats,
+      postCid,
     });
     opReturnScript.writeBin(Array.from(new TextEncoder().encode(auditPayload)));
 

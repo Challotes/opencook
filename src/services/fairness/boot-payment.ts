@@ -17,11 +17,15 @@ import type { SplitResult } from "./split";
  * @param booterAddress  Address that performed the boot — recorded in the
  *   on-chain audit record (this is a server-funded boot, so the tx inputs are
  *   the server wallet's; without this the booter would not appear on-chain).
+ * @param postCid  Chain-reproducible id of the boosted post (see lib/content-id.ts).
+ *   Echoed into the boot audit record as `post_cid` so the boost→post link is
+ *   reconstructable from the chain alone. Omitted when the post has no cid.
  */
 export async function buildSplitTransaction(
   split: SplitResult,
   postId: number,
-  booterAddress: string
+  booterAddress: string,
+  postCid?: string
 ): Promise<BroadcastResult> {
   const p2pkh = new P2PKH();
 
@@ -74,6 +78,7 @@ export async function buildSplitTransaction(
     total: split.totalDistributed,
     recipients: outputsByAddress.size,
     formulaVersion: FAIRNESS_CONFIG.formulaVersion,
+    postCid,
   });
 
   const opReturnScript = new Script();

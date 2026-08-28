@@ -58,8 +58,10 @@ export async function executeBoot(
   booterName: string
 ): Promise<BootResult> {
   // 1. Validate the post exists and is boostable (has pubkey)
-  const post = db.prepare("SELECT id, pubkey, author_name FROM posts WHERE id = ?").get(postId) as
-    | { id: number; pubkey: string | null; author_name: string }
+  const post = db
+    .prepare("SELECT id, pubkey, author_name, content_id FROM posts WHERE id = ?")
+    .get(postId) as
+    | { id: number; pubkey: string | null; author_name: string; content_id: string | null }
     | undefined;
 
   if (!post)
@@ -211,7 +213,12 @@ export async function executeBoot(
     recipientCount = split.recipientCount;
 
     // 7. Build and broadcast the BSV split transaction
-    const result = await buildSplitTransaction(split, postId, booterAddress);
+    const result = await buildSplitTransaction(
+      split,
+      postId,
+      booterAddress,
+      post.content_id ?? undefined
+    );
 
     if (result.status === "success") {
       txid = result.txid;

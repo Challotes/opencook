@@ -16,6 +16,7 @@ function makeDb() {
     author_name TEXT NOT NULL,
     signature TEXT,
     pubkey TEXT,
+    content_id TEXT,
     tx_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
