@@ -3,6 +3,8 @@
 > **Purpose of this file:** ONE place that holds the whole account/security/funding direction, so it stops living scattered across FUTURE.md, DECISIONS.md, ROADMAP.md, and memory. This is the map we work from. Design-stage — most of it is not built. Nothing here overrides DECISIONS.md; where they touch, DECISIONS wins.
 >
 > Created 2026-08-19 after a long exploration arc (distribution tool → funding model → account spectrum → security/recovery → multisig → journey map). This file is the convergence of all of it.
+>
+> **⚠ Evolved since (2026-09):** the account-*security* direction below (Layer 4 auto-secure / Layer 6 guardian key) has since **converged into a single opt-in "Safety Key" model** — one backup file serving two roles (where earnings forward + the authority that recovers the account), with the default earnings destination reshaped toward a wallet the user already owns. The detailed evolved design is held privately (design-stage, pending sign-off), so treat the security layers here as the earlier framing — directionally right, since superseded.
 
 ## North Star
 
