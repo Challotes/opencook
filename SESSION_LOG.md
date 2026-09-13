@@ -8,6 +8,7 @@
 - **One genuine anti-gaming leak found + fixed:** `ACCOUNT_PLAN.md` disclosed the first-drop distribution method ("raw per-post") in a public file, contradicting its own off-repo clause + the `feedback_airdrop_allocation_private` discipline. Redacted the parenthetical (method now stays off-repo, per memory).
 - **Soft business-detail redaction:** softened "partner airdrop is imminent" / "partner airdrop off the existing CSV" → "an airdrop off the existing (contributor list / CSV)" in `ACCOUNT_PLAN.md` + `SESSION_LOG.md` (removed the "partner" + timing detail from public files).
 - **Still NOT pushed** — 17 unpushed commits now; the pre-push checklist stands (back up the Railway DB → push → post-deploy boost + verify cid/post_cid on-chain). Everything else in #10–#14 was clean (no personal info, no local paths, no allocation numbers).
+- **Boost-provenance capability documented (owner reversed the "keep off-repo" stance for this item):** added a reward-NEUTRAL note to `FUTURE.md` ("Boot Signals…") — the on-chain boost record captures `booter`+`post_cid`+amount+time, trackable, could inform future features; NO reward mechanism committed. Safe because `booter` is already public on-chain. The specific curation-REWARD mechanism + allocation still stays off-repo (wash-boost gaming risk). Memory `project_curation_attribution_idea` updated to reflect the reversal.
 
 ## 2026-08-28 — On-chain reconstructability rule + content-id fix (built on branch, NOT pushed)
 

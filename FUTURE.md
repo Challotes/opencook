@@ -41,6 +41,8 @@ Boots are the first permissionless, Sybil-resistant, AI-readable economic prefer
 - Never auto-adjust: platform cut, gaming penalties
 - Boot signals are one input into governance, alongside project owners and human oversight
 
+**Boost provenance is recorded.** Every boost's on-chain record captures *who boosted* (`booter`), *which post* (`post_cid`), the amount, and the time. This is neutral, public metadata; because it's on-chain it's permanently trackable and could inform future features — for example, recognising users who consistently boost content that later does well. No reward mechanism is committed here; noted so the capability is understood and the `booter`/`post_cid` fields aren't treated as vestigial.
+
 ## Agentic Fairness Protocol (AFP) — Cross-Project Royalties
 
 Early thinking on how revenue could flow between parent and child projects.
