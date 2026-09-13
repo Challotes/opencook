@@ -9,7 +9,7 @@
 OpenCook: a platform that builds itself and lets anyone do the same. Anonymous, on-chain (BSV), **2-tap onboarding**, contributors share in the value. The account work exists to serve four concrete goals without breaking the frictionless wedge:
 
 1. **Launch** (quiet launch already live on Railway).
-2. **Reward contributors** (a partner airdrop is imminent; a distribute-to-contributors tool follows).
+2. **Reward contributors** (an airdrop off the existing contributor list, then a distribute-to-contributors tool).
 3. **Make the account safe enough for real money to flow to it** (security & recovery).
 4. **Keep onboarding frictionless** — the 2-tap, no-wallet auto-key is non-negotiable.
 
@@ -80,7 +80,7 @@ The same reasoning sinks the **destination-locked covenant** (evaluated 2026-08-
 
 ## Kept private (NOT in this file, by decision)
 
-The first-drop distribution **method** (raw per-post) and specific allocation percentages stay off-repo (anti-gaming) — see memory. This file documents the *tool/architecture*, never the drop method.
+The first-drop distribution **method** and specific allocation percentages stay off-repo (anti-gaming) — see memory. This file documents the *tool/architecture*, never the drop method.
 
 ## Related
 
