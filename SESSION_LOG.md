@@ -2,6 +2,16 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-10-07 — Pre-push: hide not-yet-ready UI (Fairness panel + Collectibles) + logo→vision
+
+- **Category:** UI launch-gating (reversible), owner-requested before an imminent push — don't show features that don't yet fully function.
+- **Process:** an agent mapped the wiring read-only first; owner approved the plan before any edit.
+- **Changes (2 code files):** `src/app/Header.tsx` — the "Agentic Fairness" subtitle is now a non-interactive `<span>` (kept as branding) so `FairnessModal` (the splits panel) can't be opened; and the "OpenCook" wordmark (previously inert) now calls `onScrollToGenesis` → ORIGIN/vision, same as the Genesis arrow. `src/app/IdentityBar.tsx` — the Collectibles grid in the You dropdown is gated behind `const SHOW_COLLECTIBLES = false;`.
+- **Reversible:** no files/API deleted; `FairnessModal` + `showFairness` mount in `Feed.tsx` + `/api/fairness` + `/api/ordinals` + `contribution-list.ts`/`ord-derivation.ts` all intact. Re-enable = span→button / flip the flag. `onOpenFairness` stays in `HeaderProps` so `Feed.tsx` is untouched.
+- **Why:** show the Contributors/splits panel only once it reflects the real Agentic Fairness engine (not today's temporary raw-per-post basis); Collectibles isn't a finished flow yet.
+- **Verified:** Biome clean + `tsc --noEmit` clean; no component tests exist for these surfaces. DECISIONS.md entry added ("Launch-gated UI: Fairness panel + Collectibles entry hidden").
+- **Still NOT pushed** — 21 unpushed commits now, incl. the content-id live-DB migration; the pre-push checklist stands (back up the Railway DB → push → post-deploy boost + verify cid/post_cid on-chain).
+
 ## 2026-10-07 — Fix: multi-line posts failed ("Failed to post") + post limit 1000 → 2000
 
 - **Category:** bug fix (posting) + limit change. Reported by users: pasted multi-paragraph ideas failed; typed single-line posts worked.

@@ -15,7 +15,6 @@ export function Header({
   genesisHydrated,
   genesisVisited,
   onScrollToGenesis,
-  onOpenFairness,
 }: HeaderProps) {
   return (
     <header className="shrink-0 border-b border-zinc-800 bg-black">
@@ -26,16 +25,21 @@ export function Header({
           preserved. */}
       <div className="relative mx-auto flex max-w-2xl items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight leading-none">
-            <span className="text-amber-400">Open</span>Cook
-          </h1>
           <button
             type="button"
-            onClick={onOpenFairness}
-            className="text-[11px] text-zinc-500 tracking-wide hover:text-amber-400 transition-colors duration-150"
+            onClick={onScrollToGenesis}
+            className="block text-left leading-none"
+            title="OpenCook — back to the vision"
           >
-            Agentic Fairness
+            <h1 className="text-lg font-semibold tracking-tight leading-none hover:text-amber-400 transition-colors duration-150">
+              <span className="text-amber-400">Open</span>Cook
+            </h1>
           </button>
+          {/* "Agentic Fairness" kept as branding; the splits panel entry is disabled
+              for launch until real Agentic Fairness splits exist. Re-enable: turn this
+              span back into a <button type="button" onClick={onOpenFairness}> (the prop
+              is still declared in HeaderProps). */}
+          <span className="block text-[11px] text-zinc-500 tracking-wide">Agentic Fairness</span>
         </div>
 
         <div className="absolute left-1/2 -translate-x-1/2">
