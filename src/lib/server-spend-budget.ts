@@ -27,6 +27,17 @@ const DEFAULT_DAILY_SPEND_SATS = 1_721_170;
 export const POST_LOG_COST_SATS = 70; // typical post OP_RETURN fee (~66 verified 2026-06-19)
 export const FREE_BOOT_COST_SATS = 1300; // floor split (1000) + ~300 network fee
 
+/**
+ * Size-aware post-log cost: the OP_RETURN fee scales with the JSON-encoded content
+ * (posts can be up to 2000 chars — ~290 sats ASCII, ~730 CJK). ~650 bytes covers the
+ * record envelope (sig/pubkey/cid/ts) + tx overhead; 0.11 sat/byte mirrors the wallet's
+ * 110 sat/kB rate. Floored at POST_LOG_COST_SATS so short posts budget as before.
+ */
+export function postLogCostSats(content: string): number {
+  const contentBytes = new TextEncoder().encode(JSON.stringify(content)).length;
+  return Math.max(POST_LOG_COST_SATS, Math.ceil((contentBytes + 650) * 0.11));
+}
+
 function dailyLimitSats(): number {
   const v = Number(process.env.SERVER_DAILY_SPEND_SATS);
   return Number.isFinite(v) && v > 0 ? v : DEFAULT_DAILY_SPEND_SATS;

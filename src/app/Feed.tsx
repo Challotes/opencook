@@ -13,6 +13,7 @@ import { IdentityProvider, useIdentityContext } from "@/contexts/IdentityContext
 import { InstallProvider } from "@/contexts/InstallContext";
 import { useFeedPolling } from "@/hooks/useFeedPolling";
 import { useScrollTracker } from "@/hooks/useScrollTracker";
+import { MAX_POST_LENGTH } from "@/lib/post-content";
 import { timeAgo } from "@/lib/utils";
 import type { BootboardData, Post } from "@/types";
 import { getForwardPosts, getOlderPosts, getOldestPosts } from "./actions";
@@ -544,7 +545,9 @@ function FeedContent({
                                   ? "Posting briefly paused"
                                   : op.failReason === "rejected_content"
                                     ? "Can't be posted"
-                                    : "Failed to post"}
+                                    : op.failReason === "too_long"
+                                      ? `Too long — ${MAX_POST_LENGTH} character max`
+                                      : "Failed to post"}
                           </span>
                         )}
                       </div>

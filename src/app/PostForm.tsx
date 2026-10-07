@@ -5,6 +5,7 @@ import { InstallBookmark } from "@/components/InstallBookmark";
 import { PermanenceGate } from "@/components/PermanenceGate";
 import { useIdentityContext } from "@/contexts/IdentityContext";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
+import { MAX_POST_LENGTH, normalizePostContent } from "@/lib/post-content";
 import { AgentChat } from "./AgentChat";
 import { createPost } from "./actions";
 
@@ -23,6 +24,11 @@ export function PostForm({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isPending, startTransition] = useTransition();
   const [hasContent, setHasContent] = useState(false);
+  // Length of the canonical (LF-normalized, trimmed) content — drives the counter
+  // and blocks send over MAX_POST_LENGTH. No textarea maxLength: it silently
+  // truncated pastes, hiding that the post was over the limit.
+  const [charCount, setCharCount] = useState(0);
+  const overLimit = charCount > MAX_POST_LENGTH;
   const [justPosted, setJustPosted] = useState(false);
   const [resumeNudge, setResumeNudge] = useState(false);
   const { identity, needsUnlock, sign, requireIdentity } = useIdentityContext();
@@ -90,6 +96,7 @@ export function PostForm({
       onPostCreated?.(content, currentIdentity.name, tempId);
       formRef.current.reset();
       setHasContent(false);
+      setCharCount(0);
       setJustPosted(true);
       setTimeout(() => setJustPosted(false), 1500);
       if (textareaRef.current) {
@@ -120,10 +127,10 @@ export function PostForm({
 
   function submitForm(): void {
     if (!formRef.current) return;
-    const formData = new FormData(formRef.current);
-    const content = formData.get("content");
-    if (typeof content !== "string" || !content.trim()) return;
-    const trimmed = content.trim();
+    // Canonical LF form (see lib/post-content.ts) — the server re-derives this exact
+    // string before verifying the signature.
+    const trimmed = normalizePostContent(textareaRef.current?.value ?? "");
+    if (!trimmed || trimmed.length > MAX_POST_LENGTH) return;
 
     if (!requireIdentity() || !identity) {
       wantedToPostRef.current = true;
@@ -191,7 +198,6 @@ export function PostForm({
           placeholder={
             !identity && !needsUnlock ? "Setting up your identity..." : "Share an idea..."
           }
-          maxLength={1000}
           disabled={!identity && !needsUnlock}
           onKeyDown={handleKeyDown}
           className={`block w-full bg-zinc-900 border rounded-3xl pl-4 pr-14 py-3 sm:pl-5 sm:py-4 text-sm sm:text-base resize-none focus:outline-none placeholder:text-zinc-600 min-h-[48px] sm:min-h-[56px] max-h-[200px] disabled:opacity-50 scrollbar-hide ${
@@ -211,15 +217,18 @@ export function PostForm({
             const el = e.currentTarget;
             el.style.height = "auto";
             el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-            setHasContent(el.value.trim().length > 0);
+            const normalized = normalizePostContent(el.value);
+            setHasContent(normalized.length > 0);
+            setCharCount(normalized.length);
           }}
         />
         {hasContent ? (
           <button
             type="button"
             onClick={submitForm}
-            className="compose-send absolute right-3 bottom-[7px] sm:bottom-[11px] bg-amber-500 text-black rounded-full p-2.5 transition-colors hover:bg-amber-400"
-            title="Post"
+            disabled={overLimit}
+            className="compose-send absolute right-3 bottom-[7px] sm:bottom-[11px] bg-amber-500 text-black rounded-full p-2.5 transition-colors hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-400 disabled:cursor-not-allowed"
+            title={overLimit ? `Too long — ${MAX_POST_LENGTH} character max` : "Post"}
           >
             <svg
               width="18"
@@ -299,6 +308,18 @@ export function PostForm({
           </button>
         )}
       </div>
+      {charCount >= MAX_POST_LENGTH * 0.9 && (
+        <p
+          className={`mt-1 mr-4 text-right text-[11px] tabular-nums ${
+            overLimit ? "text-red-400" : "text-zinc-500"
+          }`}
+          aria-live="polite"
+        >
+          {overLimit
+            ? `${charCount - MAX_POST_LENGTH} over the ${MAX_POST_LENGTH} character limit`
+            : `${charCount} / ${MAX_POST_LENGTH}`}
+        </p>
+      )}
       {voiceError && (
         <button
           type="button"

@@ -139,10 +139,43 @@ describe("createPost — integration", () => {
     expect(result.reason).toBe("bad_input");
   });
 
-  it("bad_input: content over 1000 chars returns bad_input", async () => {
-    const longContent = "x".repeat(1001);
+  it("too_long: content over 2000 chars returns too_long", async () => {
+    const longContent = "x".repeat(2001);
     const { fd } = await makeSignedFormData(longContent);
 
+    const result = await createPost(fd);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("too_long");
+  });
+
+  it("multi-line: LF-signed content arriving as CRLF (multipart transport) verifies + stores LF", async () => {
+    const content = "line one\n\nline two\nline three";
+    const { fd } = await makeSignedFormData(content);
+    // Simulate the server-action multipart encoding, which turns LF into CRLF.
+    fd.set("content", content.replace(/\n/g, "\r\n"));
+
+    const result = await createPost(fd);
+    expect(result.ok).toBe(true);
+
+    const row = db.prepare("SELECT content FROM posts WHERE content = ?").get(content);
+    expect(row).toBeDefined();
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM posts WHERE instr(content, char(13)) > 0").get()
+    ).toEqual({ n: 0 });
+  });
+
+  it("limit counts the LF form: 2000 chars with newlines + CRLF transport is accepted", async () => {
+    const content = `${"y".repeat(989)}${"\n".repeat(22)}${"z".repeat(989)}`;
+    expect(content.length).toBe(2000);
+    const { fd } = await makeSignedFormData(content);
+    fd.set("content", content.replace(/\n/g, "\r\n")); // 2022 chars on the wire
+
+    const result = await createPost(fd);
+    expect(result.ok).toBe(true);
+  });
+
+  it("bad_input: control characters are rejected (not stripped)", async () => {
+    const { fd } = await makeSignedFormData("hello\u0001world");
     const result = await createPost(fd);
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("bad_input");
@@ -224,7 +257,7 @@ describe("createPost — integration", () => {
   it("paused: budget exhausted returns paused", async () => {
     // Set the daily spend limit so low that even one post exceeds it
     const orig = process.env.SERVER_DAILY_SPEND_SATS;
-    process.env.SERVER_DAILY_SPEND_SATS = "1"; // 1 sat limit — well under POST_LOG_COST_SATS (70)
+    process.env.SERVER_DAILY_SPEND_SATS = "1"; // 1 sat limit — well under postLogCostSats() (>= 70)
     try {
       const { fd } = await makeSignedFormData(`budget test ${Date.now()}`);
       const result = await createPost(fd);

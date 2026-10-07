@@ -5,11 +5,16 @@ import { screenContent } from "@/lib/content-filter";
 import { contentId } from "@/lib/content-id";
 import { db } from "@/lib/db";
 import { tryConsumeFreeBootForIp } from "@/lib/free-boot-cap";
+import {
+  hasDisallowedControlChars,
+  MAX_POST_LENGTH,
+  normalizePostContent,
+} from "@/lib/post-content";
 import { rateLimit } from "@/lib/rate-limit";
 import {
   FREE_BOOT_COST_SATS,
   hasDailyBudget,
-  POST_LOG_COST_SATS,
+  postLogCostSats,
   recordDailySpend,
 } from "@/lib/server-spend-budget";
 import { generateAnonName } from "@/lib/utils";
@@ -30,6 +35,7 @@ export interface CreatePostResult {
   ok: boolean;
   reason?:
     | "bad_input"
+    | "too_long"
     | "missing_pubkey"
     | "rate_limited"
     | "daily_limit"
@@ -39,10 +45,20 @@ export interface CreatePostResult {
 }
 
 export async function createPost(formData: FormData): Promise<CreatePostResult> {
-  const content = formData.get("content");
-  if (typeof content !== "string" || content.trim().length === 0)
-    return { ok: false, reason: "bad_input" };
-  if (content.length > 1000) return { ok: false, reason: "bad_input" };
+  const raw = formData.get("content");
+  if (typeof raw !== "string") return { ok: false, reason: "bad_input" };
+  // Cheap pre-normalize bound (worst case every char is a newline → doubled by CRLF).
+  if (raw.length > MAX_POST_LENGTH * 2) return { ok: false, reason: "too_long" };
+  // Canonical LF + trimmed form — the multipart transport turns LF into CRLF, and the
+  // client signed the LF string. This ONE string is verified, screened, stored and
+  // logged on-chain. See lib/post-content.ts.
+  const content = normalizePostContent(raw);
+  if (content.length === 0) return { ok: false, reason: "bad_input" };
+  if (content.length > MAX_POST_LENGTH) return { ok: false, reason: "too_long" };
+  // Reject (never strip — the client signed these bytes) invisible C0/DEL control
+  // chars other than tab/newline: no legit client sends them, and each expands to a
+  // 6-byte JSON escape in the immutable on-chain record.
+  if (hasDisallowedControlChars(content)) return { ok: false, reason: "bad_input" };
 
   const author = formData.get("author");
   const authorName =
@@ -60,7 +76,7 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
   if (typeof signature !== "string") return { ok: false, reason: "invalid_signature" };
   try {
     const { PublicKey, Signature } = await getBsvSdk();
-    const messageBytes = Array.from(new TextEncoder().encode(content.trim()));
+    const messageBytes = Array.from(new TextEncoder().encode(content));
     const verified = PublicKey.fromString(pubkey).verify(
       messageBytes,
       Signature.fromDER(signature, "hex")
@@ -74,7 +90,7 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
   // ONLY point that can stop content reaching the immutable chain — the OP_RETURN is
   // broadcast fire-and-forget right after the insert below. Best-effort + extensible;
   // permissive when CONTENT_DENYLIST is unset. See lib/content-filter.ts.
-  if (!screenContent(content.trim()).ok) return { ok: false, reason: "rejected_content" };
+  if (!screenContent(content).ok) return { ok: false, reason: "rejected_content" };
 
   // Phase 4 abuse/cost gates — ALL run BEFORE the DB insert, so a refused post is
   // never inserted (the all-posts-on-chain invariant: never store a post we won't
@@ -95,26 +111,25 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
   // post we can't fund on-chain must not exist). The durable sweep still anchors
   // already-accepted posts; these gates only block NEW acceptance.
   if (isServerSpendDisabled()) return { ok: false, reason: "paused" };
-  if (!hasDailyBudget(POST_LOG_COST_SATS)) return { ok: false, reason: "paused" };
+  if (!hasDailyBudget(postLogCostSats(content))) return { ok: false, reason: "paused" };
 
-  const trimmedContent = content.trim();
   const sigStr = typeof signature === "string" ? signature : null;
   const pkStr = typeof pubkey === "string" ? pubkey : null;
   // Chain-reproducible content id (sha256_hex(pubkey \n content)). pkStr is
   // always non-null here — createPost rejects a missing pubkey above.
-  const cid = pkStr !== null ? contentId(pkStr, trimmedContent) : null;
+  const cid = pkStr !== null ? contentId(pkStr, content) : null;
 
   const result = db
     .prepare(
       "INSERT INTO posts (content, author_name, signature, pubkey, content_id) VALUES (?, ?, ?, ?, ?)"
     )
-    .run(trimmedContent, authorName, sigStr, pkStr, cid);
+    .run(content, authorName, sigStr, pkStr, cid);
 
   // Fire-and-forget: log on-chain, update tx_id if successful
   const postId = result.lastInsertRowid as number;
 
   logPostOnChain({
-    content: trimmedContent,
+    content,
     author: authorName,
     signature: sigStr,
     pubkey: pkStr,
@@ -123,7 +138,7 @@ export async function createPost(formData: FormData): Promise<CreatePostResult> 
     .then((txid) => {
       if (txid) {
         db.prepare("UPDATE posts SET tx_id = ? WHERE id = ?").run(txid, postId);
-        recordDailySpend(POST_LOG_COST_SATS);
+        recordDailySpend(postLogCostSats(content));
       } else {
         console.error(`OpenCook: on-chain logging returned null for post ${postId}`);
       }

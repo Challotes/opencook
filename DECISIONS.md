@@ -78,6 +78,16 @@
 - Server-side enforcement (pubkey + IP + session token), not chain-only
 - Optional: proof-of-work for free posts
 
+## Post content is LF-normalized; 2000-char limit (settled 2026-10-07)
+
+- **Bug:** every post containing a line break failed ("Failed to post"). The client signs the LF text, but the server-action transport (multipart/form-data) converts LF→CRLF in transit, so the server verified the signature over different bytes → `invalid_signature`. The 1000-char check also ran on the CRLF-inflated raw string, and the textarea `maxLength` silently truncated over-long pastes.
+- **Rule:** the canonical post content is `normalizePostContent(raw)` = CRLF/lone-CR → LF, then trim (`src/lib/post-content.ts`). Client and server both call it; the server normalizes BEFORE verifying, and that one string is verified, screened, stored, content-id'd and logged on-chain. Stored/on-chain content is always LF. Do NOT add Unicode (NFC/NFKC) normalization — that would be a separate breaking change to signed bytes.
+- **Security:** signature verification stays mandatory (normalize-then-verify, auditor GO). Many raw encodings of the same text map to one signature — grants nothing; replay is unchanged (see the pending canonical-envelope item). `contentId` still hashes stored bytes with no extra normalization. Existing data has 0 CR posts → no cid changes.
+- **Limit raised 1000 → 2000** (`MAX_POST_LENGTH`), counted on the normalized string. New `too_long` reason → "Too long — 2000 character max". Compose box: no `maxLength` (no silent truncation); counter from 90%, send disabled when over.
+- **Control chars:** C0/DEL other than tab/newline are REJECTED (`bad_input`), never stripped (stripping after signing would break verification). They're invisible junk and each expands to a 6-byte JSON escape on-chain.
+- **Spend budget:** post-log cost is now size-aware (`postLogCostSats(content)`, ~72 sats short → ~290 ASCII / ~730 CJK at 2000 chars) at the accept check, inline record and sweep record.
+- **Known follow-up (not done):** the server wallet's UTXO-selection buffer (`SERVER_FEE_BUFFER_SATS` = 500, `wallet.ts`) is fixed; a very long multi-byte post whose fee exceeds 500 sats could, only if the selected UTXOs barely cover, produce an underpaid tx that ARC rejects (liveness, no money lost; the sweep keeps retrying). Fix = size the buffer to the outputs inside `_buildAndBroadcastInner`. Pending owner approval (wallet tx logic).
+
 ## Launch generous, tighten with scale (settled 2026-07-20)
 
 - **Strategy:** launch with deliberately generous economics — free posting, every post earns a pool share, free boosts — to bootstrap the network (the classic marketplace "free to start" playbook). Tighten as the platform grows and there is a network worth protecting + users who can carry their own cost.

@@ -20,3 +20,13 @@ describe("server-spend-budget", () => {
     expect(dailySpendStatus().spentSats).toBe(before);
   });
 });
+
+describe("postLogCostSats", () => {
+  it("floors short posts at POST_LOG_COST_SATS and scales with content bytes", async () => {
+    const { postLogCostSats, POST_LOG_COST_SATS } = await import("./server-spend-budget");
+    expect(postLogCostSats("hi")).toBeGreaterThanOrEqual(POST_LOG_COST_SATS);
+    expect(postLogCostSats("hi")).toBeLessThan(100);
+    expect(postLogCostSats("x".repeat(2000))).toBeGreaterThan(250);
+    expect(postLogCostSats("界".repeat(2000))).toBeGreaterThan(postLogCostSats("x".repeat(2000)));
+  });
+});

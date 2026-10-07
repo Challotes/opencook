@@ -2,6 +2,15 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-10-07 — Fix: multi-line posts failed ("Failed to post") + post limit 1000 → 2000
+
+- **Category:** bug fix (posting) + limit change. Reported by users: pasted multi-paragraph ideas failed; typed single-line posts worked.
+- **Root cause (agent-verified):** the server-action transport (multipart/form-data) converts LF→CRLF, so the server verified the signature over different bytes than the client signed → `invalid_signature` for EVERY post with a line break. Secondary: the length check ran on the CRLF-inflated raw string, and the textarea `maxLength` silently truncated over-long pastes. Integration tests missed it (they call `createPost` directly, no transport).
+- **Files:** new `src/lib/post-content.ts` (+test) — `normalizePostContent`, `MAX_POST_LENGTH`=2000, `hasDisallowedControlChars`; `src/app/actions.ts` (normalize before verify; `too_long` reason; reject control chars; size-aware spend); `src/app/PostForm.tsx` (sign the normalized textarea value; no `maxLength`; counter from 90%; send disabled when over); `src/app/Feed.tsx` ("Too long — 2000 character max"); `src/lib/server-spend-budget.ts` (+test) `postLogCostSats(content)`; `src/services/bsv/anchor-sweep.ts` (size-aware record); integration tests for CRLF transport, 2000-with-newlines, control chars. DECISIONS/CLAUDE.md/LAUNCH_CHECKLIST updated.
+- **Audit:** bsv auditor GO on normalize-then-verify (no forgery/replay change, no SECURITY_AUDIT regression, content-id consistent, 0 existing CR posts).
+- **Deferred:** server-wallet UTXO-selection fee buffer (`wallet.ts`, fixed 500 sats) can under-cover the fee for a very long multi-byte post if selected UTXOs barely cover — liveness-only. Pending owner approval (wallet tx logic). See DECISIONS "Post content is LF-normalized".
+- **Next:** owner device-test a multi-line post + a ~1500-char paste; push only when approved (pre-push checklist in memory still applies).
+
 ## 2026-09-13 — Finished the unpushed-commit review (#10–#14) + pre-push privacy redaction
 
 - **Completed the commit walk paused earlier:** reviewed unpushed commits #10–#14 (all DOCS — the ACCOUNT_PLAN.md consolidation + layer-walk checkpoints + destination-locked-covenant-parked note + a session-log entry). No code among them; #1–#9 were reviewed previously, #15–#16 (`321d6d0` anchoring-rule + `be55131` content-id) were authored + audited earlier this session.
