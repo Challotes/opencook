@@ -2,6 +2,14 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-10-08 — Fix: post-deploy "Something went wrong" (stale-tab skew) → self-healing error screen
+
+- **Context:** after the 2026-10-07 push/deploy, users (and the owner) with a tab open from BEFORE the deploy hit "Something went wrong" on their first post. Diagnosed (agent + live checks) as Next.js deploy **skew** — the old client bundle called a server-action ID the new Railway deploy no longer serves; the rejection bubbled to the bare error boundary. NOT a code bug (fresh loads fine; `/api/posts` served `content_id`-stamped posts, `/api/health` green) and there's **no service worker**, so it self-heals on refresh. The post path has no try/catch (the boost path does → toast, which is why it presented as a *post* failure).
+- **Fix (`src/app/error.tsx` only):** on skew-signature errors (`ChunkLoadError` / "Loading chunk" / "Failed to fetch dynamically imported module" / "Failed to find Server Action") the boundary now **auto-reloads once** (time-based `sessionStorage` guard `oc_skew_reload_at`, 10s, so a genuine error can't loop) → shows "Updating to the latest version…". Any other error shows the manual screen: "Something went wrong" + guidance ("Refreshing the page usually fixes it. If it keeps happening, close this tab and open OpenCook again.") + a **"Refresh"** button doing `window.location.reload()` (replaces the old "Try again"/`reset()`, which re-rendered the same stale bundle and couldn't fix skew).
+- **Deliberately NOT touched:** `actions.ts`/`PostForm`/`useBoot` (money-path). The fix keys on skew error identities and *reloads*, never swallows a real post/boost failure; raw `error.message`/`digest` are never shown to users.
+- **Verified:** Biome + `tsc --noEmit` clean. Rank-2 "new version available" nudge + Next `deploymentId` considered and deferred/skipped (deploymentId is a no-op on Railway, which discards old build assets).
+- **Note:** the fix itself ships via a deploy, so tabs open at THAT moment still won't have it; every deploy after this one self-heals. NOT yet pushed at time of writing.
+
 ## 2026-10-07 — Pre-push: hide not-yet-ready UI (Fairness panel + Collectibles) + logo→vision
 
 - **Category:** UI launch-gating (reversible), owner-requested before an imminent push — don't show features that don't yet fully function.
