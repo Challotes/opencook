@@ -112,6 +112,8 @@ OpenCook is the first proof that this works — the seed planted before anyone e
 - [FAIRNESS.md](FAIRNESS.md) — the full revenue model, formula, gaming analysis, phase progression
 - [FUTURE.md](FUTURE.md) — ideas the code is quietly becoming
 - [ROADMAP.md](ROADMAP.md) — what's done, what's next
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute (fork, PR) and how credit is recorded
+- [SECURITY.md](SECURITY.md) — report a vulnerability privately
 
 ---
 

@@ -2,6 +2,15 @@
 
 > Short summaries of each working session. AI agents: add an entry before ending any significant session.
 
+## 2026-11-21 — Outside contributions: accept-and-credit process set up (three-agent reviewed)
+
+- **Category:** process / governance / repo security. No app code changed.
+- **Why:** outside people want to contribute code (first one sent a UI mockup; two forks exist). Owner wants no-rules fork+PR, with a record good enough to fairly measure contributions LATER (incl. removed/superseded work). Architecture, security-ops and legal agents reviewed the plan.
+- **GitHub settings applied (via gh CLI):** squash + rebase merge disabled (merge commits only, default "Merge pull request #N from user/branch" title kept — GitHub disallows that title with the PR body); `master` protected against force-push + deletion (enforced for admins); Dependabot alerts, secret scanning + push protection, and private vulnerability reporting enabled. Repo-local git email set to the GitHub noreply address (all prior commits had a blank email).
+- **Files:** new `CONTRIBUTING.md` (fork/PR, optional `OpenCook: <address>` bio label, requests, MIT + no-promise reward wording) and `SECURITY.md` (private reporting); `LICENSE` copyright → "OpenCook contributors (formerly BSVibes)"; `DECISIONS.md` new entry "Outside code contributions"; `CLAUDE.md` new "Reviewing outside PRs" section (diff-first, separate clone outside OneDrive, `npm ci --ignore-scripts`, deep-audit paths, never rewrite merged history); `README.md` links.
+- **Ruled out / deferred:** DCO sign-off, staging branch, squash merges (see DECISIONS). Scoring formula deliberately undecided. Next: signed commits + on-chain anchor of the history head hash (owner-run, auditor first).
+- **Owner to-dos:** confirm whether Railway auto-deploys on push to master + disable PR preview environments; enable GitHub 2FA. Not pushed at time of writing.
+
 ## 2026-10-08 — Fix: post-deploy "Something went wrong" (stale-tab skew) → self-healing error screen
 
 - **Context:** after the 2026-10-07 push/deploy, users (and the owner) with a tab open from BEFORE the deploy hit "Something went wrong" on their first post. Diagnosed (agent + live checks) as Next.js deploy **skew** — the old client bundle called a server-action ID the new Railway deploy no longer serves; the rejection bubbled to the bare error boundary. NOT a code bug (fresh loads fine; `/api/posts` served `content_id`-stamped posts, `/api/health` green) and there's **no service worker**, so it self-heals on refresh. The post path has no try/catch (the boost path does → toast, which is why it presented as a *post* failure).

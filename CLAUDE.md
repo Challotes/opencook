@@ -233,6 +233,16 @@ npm run lint     # Biome linting
 npm run format   # Biome formatting
 ```
 
+## Reviewing outside PRs
+
+Outside contributors fork + PR (see `CONTRIBUTING.md`; credit model in DECISIONS "Outside code contributions"). When asked to review a PR:
+
+1. **Read the diff BEFORE running anything** (`gh pr diff N`). Look hardest at `package.json`, `package-lock.json`, `scripts/`, `next.config.ts`, `Dockerfile`, `railway.toml` and any `.github/workflows/*` — a PR that adds a workflow, or a new dependency, is its own review item (reject by default unless justified).
+2. **Never run PR code in the main OneDrive folder** — `.env.local` there holds real secrets. Use a separate clone outside OneDrive (e.g. `C:\review\opencook`) with no real keys (dummy/throwaway values only; never the real `BSV_SERVER_WIF`). Install with `npm ci --ignore-scripts` (then `npm rebuild better-sqlite3` if needed), never `npm install`.
+3. **Deep audit (code-auditor) for any change touching** `src/services/bsv/`, `src/services/fairness/`, `src/app/api/boot-confirm/`, `src/app/actions.ts`, the `src/lib/` security helpers (rate-limit, free-boot-cap, server-spend-budget, content-filter, boot-message, content-id, post-content), `next.config.ts`, identity UI (IdentityBar, ProtectModal, SignInModal), `Dockerfile`/`railway.toml`/`scripts/seed-if-empty.mjs`, or `seed/genesis.db` (binary — can't be diff-reviewed).
+4. **Explain the PR to the owner in plain English**, run tests, let them try it. Owner edits go in as separate commits. Merge with a merge commit only (squash/rebase are disabled). **Never rebase, amend, squash or force-push merged history** — it destroys contributor credit.
+5. Merging to `master` likely deploys to production (Railway) — only merge reviewed PRs. Never use `pull_request_target` if CI is ever added.
+
 ## Context Files
 
 Read these to understand the full picture:
