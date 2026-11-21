@@ -634,7 +634,7 @@ Both captured in SECURITY_AUDIT.md as OBS-N1 and OBS-N2; full fix detail in memo
 
 Each fix is small (~5 lines) but touches a critical path (rate limiting / boot single-flight), so each should get its own auditor pass and its own commit.
 
-**Push status:** 16 commits unpushed pre-push, then everything pushed to origin at end of session per Nige's explicit approval (Hard Rule #8 satisfied).
+**Push status:** 16 commits unpushed pre-push, then everything pushed to origin at end of session per the owner's explicit approval (Hard Rule #8 satisfied).
 
 ## 2026-06-02 / 2026-06-03 — E32 install pitch overhaul + Android device fixes + MD audit
 
@@ -1054,7 +1054,7 @@ Diagnostic console.warns in PostForm.tsx (E24 leftover, mic-flow parked) intenti
 
 Category: iOS bugfix — recovery file rendering in iOS Files / Quick Look.
 
-**The bug.** Nige opened an encrypted recovery file on iPhone via iOS Files preview. The `<noscript>` banner that's meant to explain "your keys are safe — but this preview can't decrypt them" was not visible. Separately, long-press-to-copy on the address row didn't work in Quick Look.
+**The bug.** The owner opened an encrypted recovery file on iPhone via iOS Files preview. The `<noscript>` banner that's meant to explain "your keys are safe — but this preview can't decrypt them" was not visible. Separately, long-press-to-copy on the address row didn't work in Quick Look.
 
 **The diagnosis.** Researcher agent confirmed two iOS Quick Look quirks. (1) `<noscript>` content doesn't render in Quick Look because the WHATWG spec ties `<noscript>` visibility to whether the *engine* reports scripting as "disabled," not whether scripts actually run. iOS Quick Look's sandboxed WebKit reports scripting as "enabled" even though it never executes. (2) `user-select: all` is intercepted by Quick Look's preview UI layer, so the long-press copy gesture doesn't fire on `<div>` / `<span>` elements.
 
@@ -1072,7 +1072,7 @@ CLAUDE.md backup-template entry rewritten with the new pattern + explicit "do no
 
 Biome clean, tsc clean, 11/11 backup-template-related tests pass (`restore-from-file.test.ts`). File-format data shape unchanged — only the HTML rendering layer differs. App-side decrypt/restore paths untouched.
 
-Approved end-to-end by Nige before each edit (per `feedback_ask_before_code_change` rule).
+Approved end-to-end by the owner before each edit (per `feedback_ask_before_code_change` rule).
 
 ## 2026-05-16 — E24: iPhone mic, Safari password save, PWA "Done" flow
 

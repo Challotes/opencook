@@ -605,7 +605,7 @@ Per memory `project_launch_plan_lifecycle.md`, the agent will handle this at lau
 3. The welcome gate four-causes note (#3) lives in DECISIONS.md under a new "Platform & Distribution" heading
 4. The locked-state You modal pattern (DECISIONS.md 2026-05-01) is preserved through the bottom-sheet refactor
 5. SESSION_LOG.md gets an entry summarizing this two-round planning session and the final state
-6. **LAUNCH_PLAN.md gets deleted via `git rm`** with Nige's confirmation per Hard Rule #2
+6. **LAUNCH_PLAN.md gets deleted via `git rm`** with the owner's confirmation per Hard Rule #2
 
 **End of synthesis. Ready for build.**
 
